@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --plex-bg: #1a1a1a;
+  --plex-card: #252525;
+  --plex-accent: #e5a00d;
+}
+
+body {
+  background-color: var(--plex-bg);
+  color: #e5e7eb;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #e5a00d;
+}
+
+/* Plex accent glow for download progress */
+@keyframes pulse-amber {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.plex-pulse {
+  animation: pulse-amber 2s ease-in-out infinite;
+}

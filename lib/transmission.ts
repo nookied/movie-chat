@@ -1,0 +1,110 @@
+import { DownloadStatus } from '@/types';
+
+const TRANSMISSION_BASE_URL =
+  process.env.TRANSMISSION_BASE_URL || 'http://localhost:9091';
+const TRANSMISSION_USERNAME = process.env.TRANSMISSION_USERNAME || '';
+const TRANSMISSION_PASSWORD = process.env.TRANSMISSION_PASSWORD || '';
+
+const RPC_URL = `${TRANSMISSION_BASE_URL}/transmission/rpc`;
+
+function authHeader(): Record<string, string> {
+  if (!TRANSMISSION_USERNAME && !TRANSMISSION_PASSWORD) return {};
+  return {
+    Authorization: `Basic ${Buffer.from(
+      `${TRANSMISSION_USERNAME}:${TRANSMISSION_PASSWORD}`
+    ).toString('base64')}`,
+  };
+}
+
+// Transmission requires a session ID obtained from a 409 response
+async function getSessionId(): Promise<string> {
+  const res = await fetch(RPC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify({ method: 'session-get' }),
+    signal: AbortSignal.timeout(5000),
+  });
+
+  if (res.status === 409) {
+    const id = res.headers.get('X-Transmission-Session-Id');
+    if (id) return id;
+  }
+
+  // Try again if we happen to have gotten through without a 409
+  return res.headers.get('X-Transmission-Session-Id') ?? '';
+}
+
+async function rpc(
+  sessionId: string,
+  method: string,
+  args: Record<string, unknown>
+): Promise<unknown> {
+  const res = await fetch(RPC_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Transmission-Session-Id': sessionId,
+      ...authHeader(),
+    },
+    body: JSON.stringify({ method, arguments: args }),
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!res.ok) throw new Error(`Transmission RPC error: ${res.status}`);
+
+  const data = await res.json();
+  if (data.result !== 'success') {
+    throw new Error(`Transmission returned: ${data.result}`);
+  }
+
+  return data.arguments;
+}
+
+export async function addTorrent(magnet: string): Promise<number> {
+  const sessionId = await getSessionId();
+  const downloadDir = process.env.TRANSMISSION_DOWNLOAD_DIR;
+
+  const args: Record<string, unknown> = { filename: magnet };
+  if (downloadDir) args['download-dir'] = downloadDir;
+
+  const result = (await rpc(sessionId, 'torrent-add', args)) as Record<
+    string,
+    unknown
+  >;
+
+  // Result is either torrent-added or torrent-duplicate
+  const torrent =
+    (result['torrent-added'] as Record<string, unknown>) ??
+    (result['torrent-duplicate'] as Record<string, unknown>);
+
+  if (!torrent) throw new Error('No torrent info in response');
+
+  return Number(torrent.id);
+}
+
+export async function getTorrentStatus(id: number): Promise<DownloadStatus> {
+  const sessionId = await getSessionId();
+
+  const result = (await rpc(sessionId, 'torrent-get', {
+    ids: [id],
+    fields: [
+      'id',
+      'name',
+      'percentDone',
+      'status',
+      'eta',
+      'rateDownload',
+      'files',
+    ],
+  })) as Record<string, unknown>;
+
+  const torrents = result.torrents as DownloadStatus[];
+  if (!torrents?.length) throw new Error('Torrent not found');
+
+  return torrents[0];
+}
+
+export async function removeTorrent(id: number): Promise<void> {
+  const sessionId = await getSessionId();
+  await rpc(sessionId, 'torrent-remove', { ids: [id], 'delete-local-data': false });
+}
