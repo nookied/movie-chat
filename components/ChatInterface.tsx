@@ -6,40 +6,69 @@ import Message from './Message';
 import RecommendationCard from './RecommendationCard';
 import DownloadTracker from './DownloadTracker';
 
-// Parse all <recommendation>{...}</recommendation> blocks from a string
+// Parse recommendation tags from a string.
+// Handles both the canonical format: <recommendation>{"json"}</recommendation>
+// and the malformed self-closing variant: <recommendation{"json"}> some models emit.
 function extractRecommendations(text: string): Recommendation[] {
-  const regex = /<recommendation>([\s\S]*?)<\/recommendation>/g;
   const results: Recommendation[] = [];
-  let match;
-  while ((match = regex.exec(text)) !== null) {
+  const seen = new Set<string>();
+
+  function tryAdd(json: string) {
     try {
-      const parsed = JSON.parse(match[1]);
+      const parsed = JSON.parse(json);
       if (parsed.title && parsed.year) {
-        results.push({
-          title: String(parsed.title),
-          year: Number(parsed.year),
-          type: parsed.type === 'tv' ? 'tv' : 'movie',
-        });
+        const key = `${String(parsed.title)}-${Number(parsed.year)}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({
+            title: String(parsed.title),
+            year: Number(parsed.year),
+            type: parsed.type === 'tv' ? 'tv' : 'movie',
+          });
+        }
       }
     } catch { /* skip malformed */ }
   }
+
+  let match;
+  const r1 = /<recommendation>([\s\S]*?)<\/recommendation>/g;
+  while ((match = r1.exec(text)) !== null) tryAdd(match[1]);
+  const r2 = /<recommendation(\{[\s\S]*?\})>/g;
+  while ((match = r2.exec(text)) !== null) tryAdd(match[1]);
+
   return results;
 }
 
-// Parse all <download>{...}</download> blocks from a string
+// Parse download tags from a string. Same dual-format tolerance as above.
 function extractDownloadActions(text: string): Array<{ title: string; year: number }> {
-  const regex = /<download>([\s\S]*?)<\/download>/g;
   const results: Array<{ title: string; year: number }> = [];
-  let match;
-  while ((match = regex.exec(text)) !== null) {
+  const seen = new Set<string>();
+
+  function tryAdd(json: string) {
     try {
-      const parsed = JSON.parse(match[1]);
+      const parsed = JSON.parse(json);
       if (parsed.title && parsed.year) {
-        results.push({ title: String(parsed.title), year: Number(parsed.year) });
+        const key = `${String(parsed.title)}-${Number(parsed.year)}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({ title: String(parsed.title), year: Number(parsed.year) });
+        }
       }
     } catch { /* skip malformed */ }
   }
+
+  let match;
+  const r1 = /<download>([\s\S]*?)<\/download>/g;
+  while ((match = r1.exec(text)) !== null) tryAdd(match[1]);
+  const r2 = /<download(\{[\s\S]*?\})>/g;
+  while ((match = r2.exec(text)) !== null) tryAdd(match[1]);
+
   return results;
+}
+
+// Strip torrent noise: "Dead Mans Wire (2025) [1080p] [WEBRip]..." → "Dead Mans Wire"
+function cleanTorrentName(raw: string): string {
+  return raw.replace(/\s*[\[(]?\d{4}[\])]?.*$/s, '').trim() || raw;
 }
 
 function recKey(r: Recommendation) {
@@ -50,17 +79,48 @@ function torrentKey(title: string, year: number) {
   return `${title.toLowerCase()}-${year}`;
 }
 
+// crypto.randomUUID() is only available in secure contexts (HTTPS / localhost).
+// When accessed over plain HTTP via a local IP (e.g. from a phone), it's undefined.
+// This helper falls back to a Math.random-based v4 UUID in that case.
+function randomId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 const WELCOME: ChatMessage = {
   id: 'welcome',
   role: 'assistant',
   content: "Hey! I'm your Plex movie assistant. Tell me what you're in the mood for — a genre, a vibe, an actor — and I'll find you something to watch.",
 };
 
+const CHAT_STORAGE_KEY = 'movie-chat-history';
+const MAX_STORED_MESSAGES = 200;
+const APP_TORRENT_IDS_KEY = 'movie-chat-app-torrents';
+
+function loadAppTorrentIds(): Set<number> {
+  try {
+    const stored = localStorage.getItem(APP_TORRENT_IDS_KEY);
+    if (!stored) return new Set();
+    return new Set(JSON.parse(stored) as number[]);
+  } catch { return new Set(); }
+}
+
+function saveAppTorrentIds(ids: Set<number>) {
+  try {
+    localStorage.setItem(APP_TORRENT_IDS_KEY, JSON.stringify(Array.from(ids)));
+  } catch { }
+}
+
 export default function ChatInterface() {
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [activeDownload, setActiveDownload] = useState<ActiveDownload | null>(null);
+  const [activeDownloads, setActiveDownloads] = useState<ActiveDownload[]>([]);
 
   // Stores the best torrent for each recommended movie (keyed by "title-year")
   const pendingTorrents = useRef<Map<string, TorrentOption>>(new Map());
@@ -73,11 +133,54 @@ export default function ChatInterface() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Restore chat history from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(CHAT_STORAGE_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as ChatMessage[];
+      // Drop any empty messages left over from an interrupted stream
+      const valid = parsed.filter((m) => m.id && m.role && m.content);
+      if (valid.length > 0) setMessages(valid);
+    } catch { /* localStorage unavailable or corrupt — keep welcome */ }
+  }, []);
+
+  // Persist chat history whenever messages settle (not while streaming)
+  useEffect(() => {
+    if (isStreaming) return;
+    try {
+      const toStore = messages
+        .filter((m) => m.content) // skip empty streaming placeholders
+        .slice(-MAX_STORED_MESSAGES);
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(toStore));
+    } catch { /* storage full or unavailable */ }
+  }, [messages, isStreaming]);
+
+  // On mount, pick up any app-initiated downloads already in progress in Transmission
+  useEffect(() => {
+    fetch('/api/transmission/status')
+      .then((r) => r.json())
+      .then((torrents) => {
+        if (!Array.isArray(torrents) || torrents.length === 0) return;
+        const appIds = loadAppTorrentIds();
+        const downloads: ActiveDownload[] = torrents
+          .filter((t: { id: number }) => appIds.has(t.id))
+          .map((t: { id: number; name: string }) => ({
+            torrentId: t.id,
+            torrentName: cleanTorrentName(t.name),
+            addedAt: Date.now(),
+            fromApp: true,
+          }));
+        if (downloads.length > 0) setActiveDownloads(downloads);
+      })
+      .catch(() => { /* Transmission not reachable — no-op */ });
+  }, []);
+
   // Inject a system info message visible in chat and included in LLM history
   const addInfoMessage = useCallback((content: string) => {
     setMessages((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), role: 'info', content },
+      { id: randomId(), role: 'info', content },
     ]);
   }, []);
 
@@ -115,11 +218,14 @@ export default function ChatInterface() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Failed to add torrent');
 
-      setActiveDownload({
-        torrentId: data.id,
-        torrentName: title,
-        addedAt: Date.now(),
-      });
+      const appIds = loadAppTorrentIds();
+      appIds.add(data.id);
+      saveAppTorrentIds(appIds);
+
+      setActiveDownloads((prev) => [
+        ...prev.filter((d) => d.torrentId !== data.id),
+        { torrentId: data.id, torrentName: title, addedAt: Date.now(), fromApp: true },
+      ]);
     } catch (err) {
       addInfoMessage(`[System] Download failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
@@ -131,15 +237,18 @@ export default function ChatInterface() {
 
     setInput('');
 
-    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text };
-    const assistantMsg: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '' };
+    const userMsg: ChatMessage = { id: randomId(), role: 'user', content: text };
+    const assistantMsg: ChatMessage = { id: randomId(), role: 'assistant', content: '' };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setIsStreaming(true);
 
-    // Info messages become 'assistant' role so the LLM sees them as context
+    // Build LLM history — exclude the static welcome message (id:'welcome') and empty messages.
+    // The welcome message is a pre-written UI string, not a real model turn; including it as
+    // an assistant message at position 0 creates an invalid system→assistant→user pattern
+    // that causes some models to return an empty response.
     const history = [...messages, userMsg]
-      .filter((m) => m.content)
+      .filter((m) => m.content && m.id !== 'welcome')
       .map((m) => ({
         role: m.role === 'info' ? 'assistant' : m.role,
         content: m.content,
@@ -173,6 +282,11 @@ export default function ChatInterface() {
         );
       }
 
+      // Guard: if the model returned nothing, surface it as an error instead of silent blank
+      if (!fullContent.trim()) {
+        throw new Error('No response received. Please try again.');
+      }
+
       // Extract recommendation tags → attach to message
       const recs = extractRecommendations(fullContent);
       if (recs.length > 0) {
@@ -195,7 +309,7 @@ export default function ChatInterface() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsg.id
-            ? { ...m, content: `Sorry, I ran into an error: ${errMsg}. Make sure Ollama is running.` }
+            ? { ...m, content: `Sorry, I ran into an error: ${errMsg}` }
             : m
         )
       );
@@ -219,10 +333,10 @@ export default function ChatInterface() {
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-5">
+      <div className="flex-1 overflow-y-auto overscroll-none px-4 py-6 space-y-5">
         {messages.map((msg) => (
           <div key={msg.id}>
-            <Message message={msg} />
+            <Message message={msg} thinking={isStreaming && msg.role === 'assistant' && msg.content === ''} />
             {msg.role === 'assistant' && msg.recommendation && (
               <RecommendationCard
                 key={recKey(msg.recommendation)}
@@ -234,10 +348,24 @@ export default function ChatInterface() {
             )}
           </div>
         ))}
+        {activeDownloads.map((dl) => (
+          <DownloadTracker
+            key={dl.torrentId}
+            download={dl}
+            onComplete={() => {
+              setActiveDownloads((prev) => prev.filter((d) => d.torrentId !== dl.torrentId));
+              const appIds = loadAppTorrentIds();
+              appIds.delete(dl.torrentId);
+              saveAppTorrentIds(appIds);
+            }}
+          />
+        ))}
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-plex-border bg-plex-card px-4 py-3">
+      {/* pt-3 always; pb grows to cover iPhone home-indicator via safe-area-inset-bottom */}
+      <div className="border-t border-plex-border bg-plex-card px-4 pt-3"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
         <div className="flex items-end gap-3 max-w-4xl mx-auto">
           <textarea
             ref={inputRef}
@@ -248,7 +376,7 @@ export default function ChatInterface() {
             rows={1}
             disabled={isStreaming}
             className="flex-1 resize-none bg-gray-800 text-gray-100 placeholder-gray-500 rounded-xl px-4 py-3
-              text-sm border border-gray-700 focus:outline-none focus:border-plex-accent
+              text-base sm:text-sm border border-gray-700 focus:outline-none focus:border-plex-accent
               disabled:opacity-50 transition-colors"
             style={{ minHeight: '48px', maxHeight: '160px' }}
           />
@@ -269,17 +397,11 @@ export default function ChatInterface() {
             )}
           </button>
         </div>
-        <p className="text-center text-gray-600 text-xs mt-2">
+        <p className="hidden sm:block text-center text-gray-600 text-xs mt-2">
           Enter to send · Shift+Enter for new line
         </p>
       </div>
 
-      {activeDownload && (
-        <DownloadTracker
-          download={activeDownload}
-          onComplete={() => setActiveDownload(null)}
-        />
-      )}
     </>
   );
 }

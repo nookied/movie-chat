@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AppConfig, cfg, readConfig, writeConfig } from '@/lib/config';
 
 const SENSITIVE: Array<keyof AppConfig> = [
+  'openRouterApiKey',
   'plexToken',
   'tmdbApiKey',
   'omdbApiKey',
@@ -11,8 +12,8 @@ const SENSITIVE: Array<keyof AppConfig> = [
 /** GET — return effective config; sensitive fields masked as "set" or "" */
 export async function GET() {
   const effective: Record<string, string> = {
-    ollamaBaseUrl:          cfg('ollamaBaseUrl',          'OLLAMA_BASE_URL',          'http://localhost:11434'),
-    ollamaModel:            cfg('ollamaModel',            'OLLAMA_MODEL',             'llama3.2'),
+    openRouterApiKey:       cfg('openRouterApiKey',       'OPENROUTER_API_KEY'),
+    openRouterModel:        cfg('openRouterModel',        'OPENROUTER_MODEL',         'openrouter/free'),
     plexBaseUrl:            cfg('plexBaseUrl',            'PLEX_BASE_URL',            'http://localhost:32400'),
     plexToken:              cfg('plexToken',              'PLEX_TOKEN'),
     tmdbApiKey:             cfg('tmdbApiKey',             'TMDB_API_KEY'),
@@ -22,6 +23,8 @@ export async function GET() {
     transmissionPassword:   cfg('transmissionPassword',   'TRANSMISSION_PASSWORD'),
     transmissionDownloadDir:cfg('transmissionDownloadDir','TRANSMISSION_DOWNLOAD_DIR'),
     libraryDir:             cfg('libraryDir',             'LIBRARY_DIR'),
+    ollamaBaseUrl:          cfg('ollamaBaseUrl',          'OLLAMA_BASE_URL',          'http://localhost:11434'),
+    ollamaModel:            cfg('ollamaModel',            'OLLAMA_MODEL'),
   };
 
   // Mask sensitive fields — client only needs to know if they are set or not
@@ -40,11 +43,12 @@ export async function POST(req: NextRequest) {
   const updated: AppConfig = { ...existing };
 
   const fields: Array<keyof AppConfig> = [
-    'ollamaBaseUrl', 'ollamaModel',
+    'openRouterApiKey', 'openRouterModel',
     'plexBaseUrl', 'plexToken',
     'tmdbApiKey', 'omdbApiKey',
     'transmissionBaseUrl', 'transmissionUsername', 'transmissionPassword',
     'transmissionDownloadDir', 'libraryDir',
+    'ollamaBaseUrl', 'ollamaModel',
   ];
 
   for (const key of fields) {

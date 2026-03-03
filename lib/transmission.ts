@@ -102,6 +102,32 @@ export async function getTorrentStatus(id: number): Promise<DownloadStatus> {
   return torrents[0];
 }
 
+export async function listActiveTorrents(): Promise<DownloadStatus[]> {
+  const sessionId = await getSessionId();
+
+  const result = (await rpc(sessionId, 'torrent-get', {
+    fields: ['id', 'name', 'percentDone', 'status', 'eta', 'rateDownload', 'files'],
+  })) as Record<string, unknown>;
+
+  const torrents = result.torrents as DownloadStatus[];
+  if (!torrents?.length) return [];
+
+  // Include: actively downloading/checking (percentDone < 1, not stopped)
+  // Also include: fully done but not yet removed (percentDone = 1, status 0 = stopped/seeding-done)
+  // so the app can complete the move even if the page was closed during download
+  return torrents.filter((t) => t.status !== 0 || t.percentDone >= 1);
+}
+
+export async function pauseTorrent(id: number): Promise<void> {
+  const sessionId = await getSessionId();
+  await rpc(sessionId, 'torrent-stop', { ids: [id] });
+}
+
+export async function resumeTorrent(id: number): Promise<void> {
+  const sessionId = await getSessionId();
+  await rpc(sessionId, 'torrent-start', { ids: [id] });
+}
+
 export async function removeTorrent(id: number): Promise<void> {
   const sessionId = await getSessionId();
   await rpc(sessionId, 'torrent-remove', { ids: [id], 'delete-local-data': false });

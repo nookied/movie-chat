@@ -4,37 +4,39 @@ import { ChatMessage } from '@/types';
 
 interface Props {
   message: ChatMessage;
+  thinking?: boolean;
 }
 
-// Strip action tags from display text — they are handled by the app silently
+// Strip action tags from display text — they are handled by the app silently.
+// Handles both the canonical format <recommendation>{...}</recommendation>
+// and the malformed self-closing variant <recommendation{...}> some models emit.
+// Also strips partial tags that are still arriving mid-stream.
 function cleanContent(content: string): string {
   return content
+    // Complete canonical tags
     .replace(/<recommendation>[\s\S]*?<\/recommendation>/g, '')
     .replace(/<download>[\s\S]*?<\/download>/g, '')
+    // Malformed self-closing opening: <recommendation{...}>
+    .replace(/<recommendation\s*\{[^>]*\}>/g, '')
+    .replace(/<download\s*\{[^>]*\}>/g, '')
+    // Orphaned opening/closing tags left when model mixes formats
+    .replace(/<\/?recommendation>/g, '')
+    .replace(/<\/?download>/g, '')
+    // Partial tag still mid-stream at end of content
+    .replace(/<(recommendation|download)[^>]*$/g, '')
     .trim();
 }
 
-export default function Message({ message }: Props) {
+export default function Message({ message, thinking = false }: Props) {
   const { role } = message;
 
-  // Info messages are rendered as a centered system notice
-  if (role === 'info') {
-    return (
-      <div className="flex justify-center my-1">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-950/40 border border-amber-800/40 text-amber-400/80 text-xs italic max-w-[90%] text-center">
-          <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 flex-shrink-0">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
-          </svg>
-          {message.content}
-        </div>
-      </div>
-    );
-  }
+  // Info messages are kept in state for LLM context but not shown in the chat UI
+  if (role === 'info') return null;
 
   const isUser = role === 'user';
   const displayText = cleanContent(message.content);
 
-  if (!displayText && !isUser) return null;
+  if (!displayText && !isUser && !thinking) return null;
 
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>

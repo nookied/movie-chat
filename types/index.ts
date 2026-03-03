@@ -65,4 +65,6 @@ export interface ActiveDownload {
   torrentId: number;
   torrentName: string;
   addedAt: number;
+  /** true = added through this app; false = picked up from Transmission externally */
+  fromApp: boolean;
 }

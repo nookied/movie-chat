@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { DownloadStatus, ActiveDownload } from '@/types';
 
 interface Props {
@@ -10,7 +10,7 @@ interface Props {
 
 // Transmission status codes
 const STATUS_LABELS: Record<number, string> = {
-  0: 'Stopped',
+  0: 'Paused',
   1: 'Checking queue',
   2: 'Checking files',
   3: 'Download queue',
@@ -38,29 +38,45 @@ export default function DownloadTracker({ download, onComplete }: Props) {
   const [moving, setMoving] = useState(false);
   const [moved, setMoved] = useState(false);
   const [moveError, setMoveError] = useState('');
+  const [controlLoading, setControlLoading] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const consecutiveErrors = useRef(0);
+
+  function stopPolling() {
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }
 
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch(`/api/transmission/status?id=${download.torrentId}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      consecutiveErrors.current = 0;
       setStatus(data);
       setError('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Cannot reach Transmission');
+      const msg = err instanceof Error ? err.message : 'Cannot reach Transmission';
+      setError(msg);
+      consecutiveErrors.current += 1;
+      // Stop polling if the torrent is gone, or after 3 consecutive errors (e.g. Transmission down)
+      if (msg.toLowerCase().includes('not found') || consecutiveErrors.current >= 3) {
+        stopPolling();
+      }
     }
-  }, [download.torrentId]);
+  }, [download.torrentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
-    return () => clearInterval(interval);
+    intervalRef.current = setInterval(fetchStatus, 5000);
+    return () => stopPolling();
   }, [fetchStatus]);
 
   async function handleMove() {
     setMoving(true);
     setMoveError('');
-
     try {
       const res = await fetch('/api/files/move', {
         method: 'POST',
@@ -68,9 +84,7 @@ export default function DownloadTracker({ download, onComplete }: Props) {
         body: JSON.stringify({ torrentId: download.torrentId }),
       });
       const data = await res.json();
-
       if (!res.ok || data.error) throw new Error(data.error || 'Move failed');
-
       setMoved(true);
     } catch (err) {
       setMoveError(err instanceof Error ? err.message : 'Move failed');
@@ -78,12 +92,34 @@ export default function DownloadTracker({ download, onComplete }: Props) {
     }
   }
 
+  async function handleControl(action: 'pause' | 'resume' | 'remove') {
+    setControlLoading(true);
+    try {
+      await fetch('/api/transmission/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: download.torrentId, action }),
+      });
+      if (action === 'remove') {
+        onComplete();
+      } else {
+        await fetchStatus();
+      }
+    } catch {
+      // silently fail — next poll will reflect real state
+    } finally {
+      setControlLoading(false);
+    }
+  }
+
   const percent = status ? Math.round(status.percentDone * 100) : 0;
   const isDone = percent >= 100;
+  const isPaused = status?.status === 0 && !isDone;
 
-  // Auto-move as soon as the download finishes
+  // Auto-move as soon as the download finishes — only for app-initiated downloads.
+  // External downloads (fromApp: false) are left alone; user can dismiss them.
   useEffect(() => {
-    if (isDone && !moved && !moving) {
+    if (isDone && !moved && !moving && download.fromApp) {
       handleMove();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,17 +127,17 @@ export default function DownloadTracker({ download, onComplete }: Props) {
 
   if (moved) {
     return (
-      <div className="fixed bottom-4 right-4 w-80 bg-green-900/80 border border-green-600 rounded-xl p-4 shadow-xl">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-green-300 font-medium text-sm">Moved to library</p>
-            <p className="text-green-400/70 text-xs mt-0.5 truncate">{download.torrentName}</p>
+      <div className="mx-4 rounded-xl border border-green-700/50 bg-green-900/20 px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-green-400 font-medium text-sm">Added to library</p>
+            <p className="text-green-400/60 text-xs mt-0.5 truncate">{download.torrentName}</p>
           </div>
           <button
             onClick={onComplete}
-            className="text-green-400 hover:text-white transition-colors"
+            className="text-green-600 hover:text-green-300 flex-shrink-0 transition-colors"
           >
-            <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
               <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
             </svg>
           </button>
@@ -111,49 +147,126 @@ export default function DownloadTracker({ download, onComplete }: Props) {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 w-80 bg-plex-card border border-plex-border rounded-xl p-4 shadow-xl">
+    <div className="mx-4 rounded-xl border border-plex-border bg-plex-card px-4 py-3">
       {/* Header */}
-      <div className="flex items-start justify-between gap-2 mb-3">
+      <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex-1 min-w-0">
           <p className="text-white text-sm font-medium leading-tight truncate">
             {download.torrentName}
           </p>
-          {status && (
-            <p className="text-gray-400 text-xs mt-0.5">
+          {status && !error && (
+            <p className="text-gray-500 text-xs mt-0.5">
               {STATUS_LABELS[status.status] ?? 'Unknown'}
             </p>
           )}
         </div>
-        <span className="text-plex-accent font-bold text-sm flex-shrink-0">{percent}%</span>
+        {!error && (
+          <span className="text-plex-accent font-bold text-sm flex-shrink-0 tabular-nums">{percent}%</span>
+        )}
       </div>
 
       {/* Progress bar */}
-      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden mb-3">
-        <div
-          className="h-full bg-plex-accent rounded-full transition-all duration-500"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-
-      {/* Stats */}
-      {status && !isDone && (
-        <div className="flex justify-between text-xs text-gray-400 mb-3">
-          <span>{formatSpeed(status.rateDownload)}</span>
-          <span>ETA {formatEta(status.eta)}</span>
+      {!error && (
+        <div className="h-1 bg-gray-800 rounded-full overflow-hidden mb-2">
+          <div
+            className="h-full bg-plex-accent rounded-full transition-all duration-500"
+            style={{ width: `${percent}%` }}
+          />
         </div>
       )}
 
+      {/* Stats + controls row */}
+      {!error && !isDone && status && (
+        <div className="flex items-center justify-between mt-1">
+          <div className="flex gap-3 text-xs text-gray-500">
+            <span>{formatSpeed(status.rateDownload)}</span>
+            <span>ETA {formatEta(status.eta)}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Pause / Resume */}
+            <button
+              onClick={() => handleControl(isPaused ? 'resume' : 'pause')}
+              disabled={controlLoading}
+              title={isPaused ? 'Resume' : 'Pause'}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-white transition-colors disabled:opacity-40"
+            >
+              {isPaused ? (
+                <>
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                  Resume
+                </>
+              ) : (
+                <>
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                  </svg>
+                  Pause
+                </>
+              )}
+            </button>
+            {/* Cancel */}
+            <button
+              onClick={() => handleControl('remove')}
+              disabled={controlLoading}
+              title="Cancel download"
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-400 transition-colors disabled:opacity-40"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+              </svg>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error state */}
       {error && (
-        <p className="text-red-400 text-xs mb-2">{error}</p>
+        <div className="flex items-center justify-between gap-2 mt-1">
+          <p className="text-red-400 text-xs">{error}</p>
+          <button
+            onClick={onComplete}
+            className="text-xs text-gray-400 hover:text-white transition-colors flex-shrink-0 underline"
+          >
+            Clean up
+          </button>
+        </div>
       )}
 
-      {/* Auto-move status */}
-      {moving && (
-        <p className="text-xs text-gray-400 animate-pulse">Moving to library…</p>
+      {/* External download — done but not auto-moved */}
+      {isDone && !download.fromApp && !moving && !moveError && (
+        <div className="flex items-center justify-between gap-2 mt-1">
+          <p className="text-gray-400 text-xs">Download complete</p>
+          <button
+            onClick={onComplete}
+            className="text-xs text-gray-400 hover:text-white transition-colors flex-shrink-0 underline"
+          >
+            Dismiss
+          </button>
+        </div>
       )}
 
+      {moving && <p className="text-xs text-gray-500 mt-1 animate-pulse">Moving to library…</p>}
       {moveError && (
-        <p className="text-red-400 text-xs">{moveError}</p>
+        <div className="flex items-center justify-between gap-2 mt-1">
+          <p className="text-red-400 text-xs">{moveError}</p>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <button
+              onClick={() => { setMoveError(''); handleMove(); }}
+              className="text-xs text-plex-accent hover:text-plex-accent-hover transition-colors underline"
+            >
+              Retry
+            </button>
+            <button
+              onClick={onComplete}
+              className="text-xs text-gray-400 hover:text-white transition-colors underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -2,8 +2,8 @@ import fs from 'fs';
 import path from 'path';
 
 export interface AppConfig {
-  ollamaBaseUrl?: string;
-  ollamaModel?: string;
+  openRouterApiKey?: string;
+  openRouterModel?: string;
   plexBaseUrl?: string;
   plexToken?: string;
   tmdbApiKey?: string;
@@ -13,6 +13,8 @@ export interface AppConfig {
   transmissionPassword?: string;
   transmissionDownloadDir?: string;
   libraryDir?: string;
+  ollamaBaseUrl?: string;
+  ollamaModel?: string;
 }
 
 const CONFIG_PATH = path.join(process.cwd(), 'config.local.json');

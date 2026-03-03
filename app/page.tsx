@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import ChatInterface from '@/components/ChatInterface';
+import NewChatButton from '@/components/NewChatButton';
 
 export default function Home() {
   return (
-    <main className="flex flex-col h-screen bg-plex-bg">
+    <main className="flex flex-col h-screen h-dvh bg-plex-bg">
       {/* Header */}
       <header className="flex items-center gap-3 px-6 py-4 border-b border-plex-border bg-plex-card">
         <div className="w-8 h-8 rounded bg-plex-accent flex items-center justify-center">
@@ -13,8 +14,9 @@ export default function Home() {
         </div>
         <div className="flex-1">
           <h1 className="text-white font-semibold text-lg leading-none">Movie Chat</h1>
-          <p className="text-gray-400 text-xs mt-0.5">Plex · Ollama · Transmission</p>
+          <p className="hidden sm:block text-gray-400 text-xs mt-0.5">Get your movie night recommendation!</p>
         </div>
+        <NewChatButton />
         <Link
           href="/settings"
           className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-700 transition-colors"
