@@ -1,5 +1,6 @@
+import { cfg } from '@/lib/config';
+
 const OMDB_BASE = 'http://www.omdbapi.com';
-const OMDB_API_KEY = process.env.OMDB_API_KEY || '';
 
 interface OmdbRating {
   Source: string;
@@ -16,10 +17,11 @@ export async function getOmdbRatings(
   title: string,
   year?: number
 ): Promise<{ imdbScore?: string; rtScore?: string }> {
-  if (!OMDB_API_KEY) return {};
+  const omdbApiKey = cfg('omdbApiKey', 'OMDB_API_KEY');
+  if (!omdbApiKey) return {};
 
   const url = new URL(OMDB_BASE);
-  url.searchParams.set('apikey', OMDB_API_KEY);
+  url.searchParams.set('apikey', omdbApiKey);
   url.searchParams.set('t', title);
   url.searchParams.set('type', 'movie');
   if (year) url.searchParams.set('y', String(year));

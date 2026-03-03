@@ -1,7 +1,7 @@
 import { ReviewData } from '@/types';
+import { cfg } from '@/lib/config';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
-const TMDB_API_KEY = process.env.TMDB_API_KEY || '';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 
 interface TmdbSearchResult {
@@ -28,11 +28,12 @@ interface TmdbDetails {
 }
 
 export async function getMovieDetails(title: string, year?: number): Promise<Partial<ReviewData>> {
-  if (!TMDB_API_KEY) return {};
+  const tmdbApiKey = cfg('tmdbApiKey', 'TMDB_API_KEY');
+  if (!tmdbApiKey) return {};
 
   // Step 1: Search for the movie
   const searchUrl = new URL(`${TMDB_BASE}/search/movie`);
-  searchUrl.searchParams.set('api_key', TMDB_API_KEY);
+  searchUrl.searchParams.set('api_key', tmdbApiKey);
   searchUrl.searchParams.set('query', title);
   if (year) searchUrl.searchParams.set('year', String(year));
 
@@ -49,7 +50,7 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
 
   // Step 2: Fetch full details including credits
   const detailUrl = new URL(`${TMDB_BASE}/movie/${movie.id}`);
-  detailUrl.searchParams.set('api_key', TMDB_API_KEY);
+  detailUrl.searchParams.set('api_key', tmdbApiKey);
   detailUrl.searchParams.set('append_to_response', 'credits');
 
   const detailRes = await fetch(detailUrl.toString(), {

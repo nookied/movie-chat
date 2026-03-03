@@ -81,6 +81,14 @@ export default function DownloadTracker({ download, onComplete }: Props) {
   const percent = status ? Math.round(status.percentDone * 100) : 0;
   const isDone = percent >= 100;
 
+  // Auto-move as soon as the download finishes
+  useEffect(() => {
+    if (isDone && !moved && !moving) {
+      handleMove();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDone]);
+
   if (moved) {
     return (
       <div className="fixed bottom-4 right-4 w-80 bg-green-900/80 border border-green-600 rounded-xl p-4 shadow-xl">
@@ -139,21 +147,13 @@ export default function DownloadTracker({ download, onComplete }: Props) {
         <p className="text-red-400 text-xs mb-2">{error}</p>
       )}
 
-      {/* Move button */}
-      {isDone && (
-        <button
-          onClick={handleMove}
-          disabled={moving}
-          className="w-full py-2 rounded-lg bg-plex-accent text-black text-sm font-semibold
-            hover:bg-plex-accent-hover disabled:opacity-50 disabled:cursor-not-allowed
-            transition-colors plex-pulse"
-        >
-          {moving ? 'Moving to library...' : 'Move to Library'}
-        </button>
+      {/* Auto-move status */}
+      {moving && (
+        <p className="text-xs text-gray-400 animate-pulse">Moving to library…</p>
       )}
 
       {moveError && (
-        <p className="text-red-400 text-xs mt-2">{moveError}</p>
+        <p className="text-red-400 text-xs">{moveError}</p>
       )}
     </div>
   );

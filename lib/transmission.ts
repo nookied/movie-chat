@@ -1,24 +1,22 @@
 import { DownloadStatus } from '@/types';
+import { cfg } from '@/lib/config';
 
-const TRANSMISSION_BASE_URL =
-  process.env.TRANSMISSION_BASE_URL || 'http://localhost:9091';
-const TRANSMISSION_USERNAME = process.env.TRANSMISSION_USERNAME || '';
-const TRANSMISSION_PASSWORD = process.env.TRANSMISSION_PASSWORD || '';
-
-const RPC_URL = `${TRANSMISSION_BASE_URL}/transmission/rpc`;
+function rpcUrl() {
+  return `${cfg('transmissionBaseUrl', 'TRANSMISSION_BASE_URL', 'http://localhost:9091')}/transmission/rpc`;
+}
 
 function authHeader(): Record<string, string> {
-  if (!TRANSMISSION_USERNAME && !TRANSMISSION_PASSWORD) return {};
+  const username = cfg('transmissionUsername', 'TRANSMISSION_USERNAME');
+  const password = cfg('transmissionPassword', 'TRANSMISSION_PASSWORD');
+  if (!username && !password) return {};
   return {
-    Authorization: `Basic ${Buffer.from(
-      `${TRANSMISSION_USERNAME}:${TRANSMISSION_PASSWORD}`
-    ).toString('base64')}`,
+    Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
   };
 }
 
 // Transmission requires a session ID obtained from a 409 response
 async function getSessionId(): Promise<string> {
-  const res = await fetch(RPC_URL, {
+  const res = await fetch(rpcUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeader() },
     body: JSON.stringify({ method: 'session-get' }),
@@ -39,7 +37,7 @@ async function rpc(
   method: string,
   args: Record<string, unknown>
 ): Promise<unknown> {
-  const res = await fetch(RPC_URL, {
+  const res = await fetch(rpcUrl(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -62,7 +60,7 @@ async function rpc(
 
 export async function addTorrent(magnet: string): Promise<number> {
   const sessionId = await getSessionId();
-  const downloadDir = process.env.TRANSMISSION_DOWNLOAD_DIR;
+  const downloadDir = cfg('transmissionDownloadDir', 'TRANSMISSION_DOWNLOAD_DIR');
 
   const args: Record<string, unknown> = { filename: magnet };
   if (downloadDir) args['download-dir'] = downloadDir;

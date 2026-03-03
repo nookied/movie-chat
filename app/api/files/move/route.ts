@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTorrentStatus, removeTorrent } from '@/lib/transmission';
 import { promises as fs } from 'fs';
 import path from 'path';
-
-const LIBRARY_DIR = process.env.LIBRARY_DIR || '';
-const DOWNLOAD_DIR = process.env.TRANSMISSION_DOWNLOAD_DIR || '';
+import { cfg } from '@/lib/config';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -13,6 +11,9 @@ export async function POST(req: NextRequest) {
   if (!torrentId || typeof torrentId !== 'number') {
     return NextResponse.json({ error: 'torrentId required' }, { status: 400 });
   }
+
+  const LIBRARY_DIR  = cfg('libraryDir',             'LIBRARY_DIR');
+  const DOWNLOAD_DIR = cfg('transmissionDownloadDir', 'TRANSMISSION_DOWNLOAD_DIR');
 
   if (!LIBRARY_DIR) {
     return NextResponse.json(

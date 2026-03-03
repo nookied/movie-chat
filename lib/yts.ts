@@ -50,14 +50,14 @@ export async function searchTorrents(
   const data = await res.json();
   const movies: YtsMovie[] = data?.data?.movies ?? [];
 
-  // Find the best matching movie
-  const match = movies.find((m) => {
-    const titleMatch =
-      m.title.toLowerCase().includes(title.toLowerCase()) ||
-      title.toLowerCase().includes(m.title.toLowerCase());
-    const yearMatch = year === undefined || Math.abs(m.year - year) <= 1;
-    return titleMatch && yearMatch;
-  }) ?? movies[0];
+  // Find the best matching movie — exact title required to avoid false positives
+  // (e.g. "Food and Shelter" matching a search for "Shelter")
+  const lc = title.toLowerCase();
+  const exactWithYear = movies.find(
+    (m) => m.title.toLowerCase() === lc && (year === undefined || Math.abs(m.year - year) <= 1)
+  );
+  const exactAnyYear = movies.find((m) => m.title.toLowerCase() === lc);
+  const match = exactWithYear ?? exactAnyYear;
 
   if (!match?.torrents || match.torrents.length === 0) {
     return { torrents: [], noSuitableQuality: false };

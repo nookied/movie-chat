@@ -185,11 +185,11 @@ export default function RecommendationCard({
             <div className="mt-3">
               {torrentState === 'idle' ? null : torrentState === 'loading' ? (
                 <span className="text-xs text-gray-600 animate-pulse">Checking availability...</span>
-              ) : noSuitableQuality ? (
-                <span className="text-xs text-amber-600">No 1080p on YTS</span>
               ) : torrentSummary ? (
-                <span className="text-xs text-gray-500">{torrentSummary}</span>
-              ) : null}
+                <span className="text-xs text-green-500">Available to download</span>
+              ) : (
+                <span className="text-xs text-gray-500">Not available to download</span>
+              )}
             </div>
           )}
         </div>

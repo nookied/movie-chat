@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
+import { cfg } from '@/lib/config';
 
 const SYSTEM_PROMPT = `You are a friendly movie and TV show assistant for a personal Plex media library.
 Help the user find something to watch. Be conversational, concise, and natural — like a friend recommending a film.
@@ -32,6 +30,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'messages array required' }, { status: 400 });
   }
 
+  const ollamaBaseUrl = cfg('ollamaBaseUrl', 'OLLAMA_BASE_URL', 'http://localhost:11434');
+  const ollamaModel   = cfg('ollamaModel',   'OLLAMA_MODEL',   'llama3.2');
+
   const ollamaMessages = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...messages,
@@ -39,11 +40,11 @@ export async function POST(req: NextRequest) {
 
   let ollamaRes: Response;
   try {
-    ollamaRes = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+    ollamaRes = await fetch(`${ollamaBaseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: OLLAMA_MODEL,
+        model: ollamaModel,
         messages: ollamaMessages,
         stream: true,
       }),
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
     });
   } catch {
     return NextResponse.json(
-      { error: 'Cannot reach Ollama. Make sure it is running on ' + OLLAMA_BASE_URL },
+      { error: 'Cannot reach Ollama. Make sure it is running on ' + ollamaBaseUrl },
       { status: 502 }
     );
   }
