@@ -113,7 +113,11 @@ export default function DownloadTracker({ download, onComplete }: Props) {
   }
 
   const percent = status ? Math.round(status.percentDone * 100) : 0;
-  const isDone = percent >= 100;
+  // percent=100 alone isn't enough — Transmission stays at status 4 (Downloading) while it flushes
+  // the last bytes and verifies the hash. The file doesn't exist on disk until status transitions to
+  // 0 (Stopped), 5 (Queued to seed), or 6 (Seeding). Triggering the move on status 4 causes ENOENT.
+  const isFinalizing = percent >= 100 && status !== null && status.status === 4;
+  const isDone = percent >= 100 && status !== null && (status.status === 0 || status.status === 5 || status.status === 6);
   const isPaused = status?.status === 0 && !isDone;
 
   // Auto-move as soon as the download finishes — only for app-initiated downloads.
@@ -124,6 +128,13 @@ export default function DownloadTracker({ download, onComplete }: Props) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDone]);
+
+  // Auto-dismiss the "Added to library" card 3 seconds after a successful move
+  useEffect(() => {
+    if (!moved) return;
+    const timer = setTimeout(() => onComplete(), 3000);
+    return () => clearTimeout(timer);
+  }, [moved, onComplete]);
 
   if (moved) {
     return (
@@ -156,7 +167,7 @@ export default function DownloadTracker({ download, onComplete }: Props) {
           </p>
           {status && !error && (
             <p className="text-gray-500 text-xs mt-0.5">
-              {STATUS_LABELS[status.status] ?? 'Unknown'}
+              {isFinalizing ? 'Finalizing…' : (STATUS_LABELS[status.status] ?? 'Unknown')}
             </p>
           )}
         </div>
@@ -176,7 +187,7 @@ export default function DownloadTracker({ download, onComplete }: Props) {
       )}
 
       {/* Stats + controls row */}
-      {!error && !isDone && status && (
+      {!error && !isDone && !isFinalizing && status && (
         <div className="flex items-center justify-between mt-1">
           <div className="flex gap-3 text-xs text-gray-500">
             <span>{formatSpeed(status.rateDownload)}</span>

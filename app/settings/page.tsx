@@ -17,6 +17,7 @@ interface ConfigFields {
   libraryDir: string;
   ollamaBaseUrl: string;
   ollamaModel: string;
+  ollamaOnly: string;  // 'true' | ''
 }
 
 const EMPTY: ConfigFields = {
@@ -26,7 +27,7 @@ const EMPTY: ConfigFields = {
   transmissionBaseUrl: '', transmissionUsername: '',
   transmissionPassword: '', transmissionDownloadDir: '',
   libraryDir: '',
-  ollamaBaseUrl: '', ollamaModel: '',
+  ollamaBaseUrl: '', ollamaModel: '', ollamaOnly: '',
 };
 
 const SENSITIVE = new Set(['openRouterApiKey', 'plexToken', 'tmdbApiKey', 'omdbApiKey', 'transmissionPassword']);
@@ -166,6 +167,41 @@ function ModelSelectField({ label, value, models, placeholder = 'Type a model na
   );
 }
 
+function Toggle({ label, description, enabled, onChange }: {
+  label: string;
+  description?: string;
+  enabled: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="px-4 py-3">
+      <div className="flex items-center gap-4">
+        <div className="hidden sm:block w-44 flex-shrink-0" />
+        <div className="flex-1 min-w-0 flex items-center justify-between gap-4">
+          <div>
+            <span className="text-gray-200 text-sm">{label}</span>
+            {description && <p className="text-gray-500 text-xs mt-0.5">{description}</p>}
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            onClick={() => onChange(!enabled)}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full
+              border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none
+              ${enabled ? 'bg-plex-accent' : 'bg-gray-600'}`}
+          >
+            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full
+              bg-white shadow ring-0 transition duration-200 ease-in-out
+              ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+          </button>
+        </div>
+        <div className="w-5 flex-shrink-0 hidden sm:block" />
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -179,6 +215,8 @@ export default function SettingsPage() {
   const [openRouterModels, setOpenRouterModels] = useState<string[]>([]);
   const [ollamaStatus, setOllamaStatus] = useState<ServiceStatus>('idle');
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [ollamaTestStatus, setOllamaTestStatus] = useState<'idle' | 'running' | 'ok' | 'error'>('idle');
+  const [ollamaTestOutput, setOllamaTestOutput] = useState('');
   const [plexStatus, setPlexStatus] = useState<ServiceStatus>('idle');
   const [tmdbStatus, setTmdbStatus] = useState<ServiceStatus>('idle');
   const [omdbStatus, setOmdbStatus] = useState<ServiceStatus>('idle');
@@ -238,6 +276,40 @@ export default function SettingsPage() {
         }
       }),
     ]);
+  }, []);
+
+  const testOllamaFallback = useCallback(async () => {
+    setOllamaTestStatus('running');
+    setOllamaTestOutput('');
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: 'Say hello in exactly one sentence.' }],
+          forceOllama: true,
+        }),
+      });
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        setOllamaTestOutput((err as { error?: string }).error ?? `HTTP ${res.status}`);
+        setOllamaTestStatus('error');
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let text = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        text += decoder.decode(value, { stream: true });
+        setOllamaTestOutput(text);
+      }
+      setOllamaTestStatus(text ? 'ok' : 'error');
+    } catch {
+      setOllamaTestOutput('Connection failed — is Ollama running?');
+      setOllamaTestStatus('error');
+    }
   }, []);
 
   useEffect(() => {
@@ -342,6 +414,39 @@ export default function SettingsPage() {
           <ModelSelectField label="Model" value={form.ollamaModel}
             placeholder="e.g. llama3.2:3b — run ollama pull first"
             models={ollamaModels} onChange={(v) => handleChange('ollamaModel', v)} />
+          <Toggle
+            label="Use Ollama exclusively"
+            description="Skip OpenRouter entirely — all chat goes through Ollama"
+            enabled={form.ollamaOnly === 'true'}
+            onChange={(v) => handleChange('ollamaOnly', v ? 'true' : '')}
+          />
+          {/* Fallback test — bypasses OpenRouter so you can verify Ollama responds */}
+          <div className="px-4 py-3">
+            <div className="flex items-start gap-4">
+              <span className="hidden sm:block w-44 flex-shrink-0 text-gray-400 text-xs pt-1.5">Fallback test</span>
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="sm:hidden text-gray-400 text-xs mb-1.5">Fallback test</div>
+                <button
+                  onClick={testOllamaFallback}
+                  disabled={ollamaTestStatus === 'running'}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700 text-gray-200
+                    hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {ollamaTestStatus === 'running' ? 'Testing…' : 'Send test message'}
+                </button>
+                {ollamaTestOutput && (
+                  <div className={`text-xs rounded-lg px-3 py-2 font-mono leading-relaxed whitespace-pre-wrap
+                    ${ollamaTestStatus === 'error' ? 'bg-red-900/30 text-red-300' : 'bg-gray-800/80 text-gray-300'}`}>
+                    {ollamaTestOutput}
+                  </div>
+                )}
+              </div>
+              <div className="hidden sm:flex w-5 flex-shrink-0 items-center justify-center pt-1.5">
+                {ollamaTestStatus === 'ok' && <StatusIcon status="ok" />}
+                {ollamaTestStatus === 'error' && <StatusIcon status="error" />}
+              </div>
+            </div>
+          </div>
         </Section>
 
         <Section title="Plex" description="Media server">

@@ -126,6 +126,12 @@ export default function ChatInterface() {
   const pendingTorrents = useRef<Map<string, TorrentOption>>(new Map());
   const shownRecs = useRef<Set<string>>(new Set());
 
+  // True during the very first effect invocation — prevents the save effect from
+  // clobbering localStorage with [WELCOME] before the load effect's setMessages has settled.
+  // Without this guard, React Strict Mode's double-invoke of effects causes the save to run
+  // with stale messages=[WELCOME], corrupting storage before the load reads the correct history.
+  const firstSaveRef = useRef(true);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -145,8 +151,14 @@ export default function ChatInterface() {
     } catch { /* localStorage unavailable or corrupt — keep welcome */ }
   }, []);
 
-  // Persist chat history whenever messages settle (not while streaming)
+  // Persist chat history whenever messages settle (not while streaming).
+  // Skip the very first invocation — on mount, messages is still [WELCOME] while the load
+  // effect's setMessages is pending. Saving at that point would clobber the stored history.
   useEffect(() => {
+    if (firstSaveRef.current) {
+      firstSaveRef.current = false;
+      return;
+    }
     if (isStreaming) return;
     try {
       const toStore = messages
@@ -207,6 +219,19 @@ export default function ChatInterface() {
     if (!torrent) {
       addInfoMessage(`[System] No download ready for "${title}". Try asking again after the availability check completes.`);
       return;
+    }
+
+    // Hard guard: never download something already in the Plex library,
+    // regardless of what the LLM requested.
+    try {
+      const plexCheck = await fetch(`/api/plex/check?title=${encodeURIComponent(title)}&year=${year}`);
+      const plexData = await plexCheck.json();
+      if (plexData.found) {
+        addInfoMessage(`[System] "${title}" is already in your Plex library — download skipped.`);
+        return;
+      }
+    } catch {
+      // Plex unreachable — proceed with download rather than blocking
     }
 
     try {
@@ -287,12 +312,12 @@ export default function ChatInterface() {
         throw new Error('No response received. Please try again.');
       }
 
-      // Extract recommendation tags → attach to message
+      // Extract recommendation tags → attach all to message
       const recs = extractRecommendations(fullContent);
       if (recs.length > 0) {
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantMsg.id ? { ...m, content: fullContent, recommendation: recs[0] } : m
+            m.id === assistantMsg.id ? { ...m, content: fullContent, recommendations: recs } : m
           )
         );
         recs.forEach((r) => shownRecs.current.add(recKey(r)));
@@ -337,15 +362,15 @@ export default function ChatInterface() {
         {messages.map((msg) => (
           <div key={msg.id}>
             <Message message={msg} thinking={isStreaming && msg.role === 'assistant' && msg.content === ''} />
-            {msg.role === 'assistant' && msg.recommendation && (
+            {msg.role === 'assistant' && msg.recommendations?.map((rec) => (
               <RecommendationCard
-                key={recKey(msg.recommendation)}
-                recommendation={msg.recommendation}
+                key={recKey(rec)}
+                recommendation={rec}
                 onPlexFound={handlePlexFound}
                 onTorrentsReady={handleTorrentsReady}
                 onNoSuitableQuality={handleNoSuitableQuality}
               />
-            )}
+            ))}
           </div>
         ))}
         {activeDownloads.map((dl) => (

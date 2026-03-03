@@ -1,6 +1,37 @@
 import { PlexStatus } from '@/types';
 import { cfg } from '@/lib/config';
 
+// Trigger a metadata refresh on every "movie" library section in Plex.
+// Fires-and-forgets — never throws; call without awaiting from the move route.
+export async function triggerLibraryRefresh(): Promise<void> {
+  const plexBaseUrl = cfg('plexBaseUrl', 'PLEX_BASE_URL', 'http://localhost:32400');
+  const plexToken   = cfg('plexToken',   'PLEX_TOKEN');
+  if (!plexToken) return;
+
+  try {
+    const res = await fetch(`${plexBaseUrl}/library/sections`, {
+      headers: { 'X-Plex-Token': plexToken, Accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const sections: Array<Record<string, unknown>> = data?.MediaContainer?.Directory ?? [];
+    const movieSections = sections.filter((s) => s.type === 'movie');
+
+    await Promise.all(
+      movieSections.map((s) =>
+        fetch(`${plexBaseUrl}/library/sections/${s.key}/refresh`, {
+          headers: { 'X-Plex-Token': plexToken, Accept: 'application/json' },
+          signal: AbortSignal.timeout(5000),
+        }).catch(() => {})
+      )
+    );
+  } catch {
+    // Plex unreachable — not a critical error, move already succeeded
+  }
+}
+
 export async function searchLibrary(title: string, year?: number): Promise<PlexStatus> {
   const plexBaseUrl = cfg('plexBaseUrl', 'PLEX_BASE_URL', 'http://localhost:32400');
   const plexToken   = cfg('plexToken',   'PLEX_TOKEN');
@@ -11,11 +42,10 @@ export async function searchLibrary(title: string, year?: number): Promise<PlexS
 
   const url = new URL(`${plexBaseUrl}/search`);
   url.searchParams.set('query', title);
-  url.searchParams.set('X-Plex-Token', plexToken);
 
   const res = await fetch(url.toString(), {
-    headers: { Accept: 'application/json' },
-    // Plex is on the local network — don't follow redirects blindly
+    // Pass token in header — never in URL query params (leaks to server logs / referrer headers)
+    headers: { Accept: 'application/json', 'X-Plex-Token': plexToken },
     signal: AbortSignal.timeout(5000),
   });
 

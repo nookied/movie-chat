@@ -15,6 +15,7 @@ export interface AppConfig {
   libraryDir?: string;
   ollamaBaseUrl?: string;
   ollamaModel?: string;
+  ollamaOnly?: string;  // 'true' = skip OpenRouter entirely, route all chat through Ollama
 }
 
 const CONFIG_PATH = path.join(process.cwd(), 'config.local.json');

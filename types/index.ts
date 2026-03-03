@@ -4,7 +4,7 @@ export interface ChatMessage {
   id: string;
   role: MessageRole;
   content: string;
-  recommendation?: Recommendation;
+  recommendations?: Recommendation[];
 }
 
 export interface Recommendation {
@@ -54,6 +54,8 @@ export interface DownloadStatus {
   name: string;
   eta: number;
   rateDownload: number;
+  /** Actual download directory reported by Transmission for this torrent */
+  downloadDir?: string;
   files: Array<{
     name: string;
     length: number;

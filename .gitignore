@@ -14,6 +14,7 @@
 .env
 .env.local
 config.local.json
+app-torrents.json
 .env.development.local
 .env.test.local
 .env.production.local

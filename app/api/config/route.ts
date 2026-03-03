@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AppConfig, cfg, readConfig, writeConfig } from '@/lib/config';
 
+// URL fields that are used in server-side fetches must stay on localhost / RFC-1918.
+// This prevents SSRF attacks where a crafted URL redirects our server to internal services.
+const URL_FIELDS: Array<keyof AppConfig> = ['plexBaseUrl', 'transmissionBaseUrl', 'ollamaBaseUrl'];
+
+function isSafeLocalUrl(urlStr: string): boolean {
+  try {
+    const url = new URL(urlStr);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    const host = url.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return true;
+    if (/^10\./.test(host)) return true;                          // 10.0.0.0/8
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;   // 172.16–31.x.x
+    if (/^192\.168\./.test(host)) return true;                    // 192.168.0.0/16
+    return false;
+  } catch { return false; }
+}
+
 const SENSITIVE: Array<keyof AppConfig> = [
   'openRouterApiKey',
   'plexToken',
@@ -25,6 +42,7 @@ export async function GET() {
     libraryDir:             cfg('libraryDir',             'LIBRARY_DIR'),
     ollamaBaseUrl:          cfg('ollamaBaseUrl',          'OLLAMA_BASE_URL',          'http://localhost:11434'),
     ollamaModel:            cfg('ollamaModel',            'OLLAMA_MODEL'),
+    ollamaOnly:             cfg('ollamaOnly',             'OLLAMA_ONLY'),
   };
 
   // Mask sensitive fields — client only needs to know if they are set or not
@@ -48,7 +66,7 @@ export async function POST(req: NextRequest) {
     'tmdbApiKey', 'omdbApiKey',
     'transmissionBaseUrl', 'transmissionUsername', 'transmissionPassword',
     'transmissionDownloadDir', 'libraryDir',
-    'ollamaBaseUrl', 'ollamaModel',
+    'ollamaBaseUrl', 'ollamaModel', 'ollamaOnly',
   ];
 
   for (const key of fields) {
@@ -65,6 +83,17 @@ export async function POST(req: NextRequest) {
       delete updated[key];
     } else {
       (updated as Record<string, string>)[key] = value;
+    }
+  }
+
+  // Validate that service base URLs are restricted to localhost / private network
+  for (const key of URL_FIELDS) {
+    const value = updated[key];
+    if (value && !isSafeLocalUrl(value)) {
+      return NextResponse.json(
+        { error: `${key} must be a local network address (localhost or 192.168.x.x / 10.x.x.x / 172.16–31.x.x)` },
+        { status: 400 }
+      );
     }
   }
 

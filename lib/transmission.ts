@@ -92,6 +92,7 @@ export async function getTorrentStatus(id: number): Promise<DownloadStatus> {
       'status',
       'eta',
       'rateDownload',
+      'downloadDir',
       'files',
     ],
   })) as Record<string, unknown>;
@@ -106,7 +107,7 @@ export async function listActiveTorrents(): Promise<DownloadStatus[]> {
   const sessionId = await getSessionId();
 
   const result = (await rpc(sessionId, 'torrent-get', {
-    fields: ['id', 'name', 'percentDone', 'status', 'eta', 'rateDownload', 'files'],
+    fields: ['id', 'name', 'percentDone', 'status', 'eta', 'rateDownload', 'downloadDir', 'files'],
   })) as Record<string, unknown>;
 
   const torrents = result.torrents as DownloadStatus[];

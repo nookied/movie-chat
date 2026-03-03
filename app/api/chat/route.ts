@@ -59,6 +59,23 @@ Rules:
 - NEVER emit it speculatively or preemptively
 - The title and year in <download> must exactly match the <recommendation> tag you used`;
 
+// Simple in-memory rate limiter: max 30 requests per minute per IP.
+// Protects against runaway OpenRouter spend if the app is accessible on the LAN.
+const RATE_LIMIT = 30;
+const RATE_WINDOW_MS = 60_000;
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= RATE_LIMIT;
+}
+
 // Keep the conversation history from growing too large — sliding window of last N messages
 const MAX_HISTORY_MESSAGES = 20;
 
@@ -73,73 +90,95 @@ function trimHistory(
 const RETRY_DELAYS_MS = [500, 1000, 2000];
 
 export async function POST(req: NextRequest) {
+  // Rate limit by IP — prevents runaway cost if app is exposed on LAN
+  const ip =
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    req.headers.get('x-real-ip') ??
+    'unknown';
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json(
+      { error: 'Too many requests — please wait a moment.' },
+      { status: 429 }
+    );
+  }
+
   const body = await req.json();
-  const { messages } = body as { messages: Array<{ role: string; content: string }> };
+  const { messages, forceOllama } = body as {
+    messages: Array<{ role: string; content: string }>;
+    forceOllama?: boolean;
+  };
 
   if (!messages || !Array.isArray(messages)) {
     return NextResponse.json({ error: 'messages array required' }, { status: 400 });
   }
 
-  const apiKey = cfg('openRouterApiKey', 'OPENROUTER_API_KEY');
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'No API key configured. Add one in Settings.' },
-      { status: 503 }
-    );
-  }
-
-  const model = cfg('openRouterModel', 'OPENROUTER_MODEL', 'mistralai/mistral-small-3.1-24b-instruct:free');
   const trimmedMessages = trimHistory(messages);
 
+  // ollamaOnly = persistent setting in config; forceOllama = one-off test flag from client
+  const ollamaOnly = cfg('ollamaOnly', 'OLLAMA_ONLY') === 'true';
+
   // Attempt the OpenRouter request — retry on network errors, 429, or 5xx
+  // Skip entirely when forceOllama is set (test) or ollamaOnly is enabled (persistent)
   let apiRes: Response | null = null;
   let lastError = 'OpenRouter returned an error';
 
-  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
-    try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': 'http://localhost:3000',
-          'X-Title': 'Movie Chat',
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...trimmedMessages],
-          stream: true,
-          max_tokens: 512,
-          temperature: 0.4,
-        }),
-        signal: AbortSignal.timeout(60000),
-      });
-
-      if (res.ok && res.body) {
-        apiRes = res;
-        break;
-      }
-
-      // Parse error for reporting
-      const errBody = await res.json().catch(() => ({}));
-      lastError =
-        (errBody as { error?: { message?: string } })?.error?.message ??
-        `HTTP ${res.status}`;
-
-      // Non-retryable: 4xx errors except 429 (rate limited)
-      if (res.status >= 400 && res.status < 500 && res.status !== 429) break;
-
-    } catch {
-      lastError = 'Cannot reach OpenRouter API';
+  if (!forceOllama && !ollamaOnly) {
+    const apiKey = cfg('openRouterApiKey', 'OPENROUTER_API_KEY');
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'No API key configured. Add one in Settings.' },
+        { status: 503 }
+      );
     }
 
-    // Wait before the next attempt (skip wait after the final attempt)
-    if (attempt < RETRY_DELAYS_MS.length) {
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+    const model = cfg('openRouterModel', 'OPENROUTER_MODEL', 'mistralai/mistral-small-3.1-24b-instruct:free');
+
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+      try {
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': 'http://localhost:3000',
+            'X-Title': 'Movie Chat',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...trimmedMessages],
+            stream: true,
+            max_tokens: 512,
+            temperature: 0.4,
+          }),
+          signal: AbortSignal.timeout(60000),
+        });
+
+        if (res.ok && res.body) {
+          apiRes = res;
+          break;
+        }
+
+        // Parse error for reporting
+        const errBody = await res.json().catch(() => ({}));
+        lastError =
+          (errBody as { error?: { message?: string } })?.error?.message ??
+          `HTTP ${res.status}`;
+
+        // Non-retryable: 4xx errors except 429 (rate limited)
+        if (res.status >= 400 && res.status < 500 && res.status !== 429) break;
+
+      } catch {
+        lastError = 'Cannot reach OpenRouter API';
+      }
+
+      // Wait before the next attempt (skip wait after the final attempt)
+      if (attempt < RETRY_DELAYS_MS.length) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+      }
     }
   }
 
-  // --- Ollama fallback — used when OpenRouter is unavailable / rate-limited ---
+  // --- Ollama — used as fallback (OpenRouter failed) or as primary (ollamaOnly/forceOllama) ---
   if (!apiRes) {
     const ollamaModel = cfg('ollamaModel', 'OLLAMA_MODEL');
     if (ollamaModel) {
@@ -158,7 +197,12 @@ export async function POST(req: NextRequest) {
           signal: AbortSignal.timeout(60000),
         });
         if (ollamaRes.ok && ollamaRes.body) apiRes = ollamaRes;
-      } catch { /* Ollama not running or not installed — fall through to error */ }
+        else lastError = `Ollama returned HTTP ${ollamaRes.status}`;
+      } catch {
+        lastError = 'Cannot reach Ollama — is it running?';
+      }
+    } else if (forceOllama || ollamaOnly) {
+      lastError = 'No Ollama model configured — add one in Settings.';
     }
   }
 
