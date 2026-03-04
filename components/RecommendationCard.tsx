@@ -7,7 +7,13 @@ import { Recommendation, PlexStatus, ReviewData, TorrentOption } from '@/types';
 interface Props {
   recommendation: Recommendation;
   onPlexFound: (title: string, year: number) => void;
-  onTorrentsReady: (title: string, year: number, torrents: TorrentOption[]) => void;
+  onTorrentsReady: (
+    title: string,
+    year: number,
+    torrents: TorrentOption[],
+    mediaType: 'movie' | 'tv',
+    season?: number
+  ) => void;
   onNoSuitableQuality: (title: string, year: number) => void;
   onDownload: (title: string, year: number) => void;
   isDownloading?: boolean;
@@ -16,6 +22,7 @@ interface Props {
 
 // 'idle' = waiting for Plex result before starting; 'skipped' = on Plex, no need to search
 type CheckState = 'idle' | 'loading' | 'done' | 'skipped' | 'error';
+type TvTorrentState = 'idle' | 'loading' | 'found' | 'nopack' | 'notfound' | 'error';
 
 export default function RecommendationCard({
   recommendation,
@@ -38,20 +45,26 @@ export default function RecommendationCard({
   const [noSuitableQuality, setNoSuitableQuality] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
+  // TV-specific state
+  const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
+  const [tvTorrentState, setTvTorrentState] = useState<TvTorrentState>('idle');
+  const [tvDownloading, setTvDownloading] = useState(false);
+
   // Fire each callback only once
   const plexCallbackSent = useRef(false);
   const torrentCallbackSent = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams({ title, year: String(year) });
+    const typeParam = type === 'tv' ? 'tv' : 'movie';
 
     // Reviews run independently — just metadata, no decision depends on them
-    fetch(`/api/reviews?${params}`)
+    fetch(`/api/reviews?${params}&type=${typeParam}`)
       .then((r) => r.json())
       .then((d) => { setReviews(d); setReviewState('done'); })
       .catch(() => setReviewState('error'));
 
-    // Plex first — then YTS only if the movie is not already in the library
+    // Plex first — then YTS only if movie not in library; TV uses season picker instead
     async function checkSequentially() {
       // Step 1: Plex
       let plexFound = false;
@@ -69,7 +82,7 @@ export default function RecommendationCard({
         setPlexState('error');
       }
 
-      // Step 2: YTS — only runs if movie not on Plex, and only for movies
+      // Step 2: YTS — only for movies not on Plex; TV uses season picker
       if (plexFound || type !== 'movie') {
         setTorrentState('skipped');
         return;
@@ -95,7 +108,7 @@ export default function RecommendationCard({
           setTorrentSummary(`1080p · ${best.codec} · ${best.size}`);
           if (!torrentCallbackSent.current) {
             torrentCallbackSent.current = true;
-            onTorrentsReady(title, year, d.torrents);
+            onTorrentsReady(title, year, d.torrents, 'movie');
           }
         }
       } catch {
@@ -105,6 +118,54 @@ export default function RecommendationCard({
 
     checkSequentially();
   }, [title, year, type, onPlexFound, onTorrentsReady, onNoSuitableQuality]);
+
+  async function handleSeasonSelect(season: number) {
+    setSelectedSeason(season);
+    setTvTorrentState('loading');
+    setTvDownloading(false);
+
+    try {
+      const params = new URLSearchParams({
+        title,
+        year: String(year),
+        type: 'tv',
+        season: String(season),
+      });
+      const r = await fetch(`/api/torrents/search?${params}`);
+      const d: { found: boolean; magnet?: string; quality?: string; sizeBytes?: number; seeders?: number; noSeasonPack?: boolean } = await r.json();
+
+      if (!d.found) {
+        setTvTorrentState('notfound');
+        return;
+      }
+
+      if (d.noSeasonPack) {
+        setTvTorrentState('nopack');
+        return;
+      }
+
+      setTvTorrentState('found');
+
+      // Build a synthetic TorrentOption to reuse the existing download pipeline
+      const syntheticTorrent: TorrentOption = {
+        quality: d.quality ?? '1080p',
+        type: 'web',
+        codec: '',
+        size: d.sizeBytes ? `${(d.sizeBytes / 1e9).toFixed(1)} GB` : '',
+        seeders: d.seeders ?? 0,
+        magnet: d.magnet ?? '',
+        movieTitle: title,
+      };
+
+      // No callback guard for TV — re-selecting a season must overwrite the pending entry
+      onTorrentsReady(title, year, [syntheticTorrent], 'tv', season);
+    } catch {
+      setTvTorrentState('error');
+    }
+  }
+
+  const numberOfSeasons = reviews?.numberOfSeasons;
+  const showPlex = plex?.found || forceInLibrary;
 
   return (
     <div className="mt-2 rounded-xl border border-plex-border bg-plex-card overflow-hidden max-w-[600px]">
@@ -145,7 +206,7 @@ export default function RecommendationCard({
               <span className="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full flex-shrink-0 animate-pulse">
                 Checking Plex...
               </span>
-            ) : plex?.found || forceInLibrary ? (
+            ) : showPlex ? (
               <span className="text-xs bg-green-900/60 text-green-400 border border-green-700 px-2 py-0.5 rounded-full flex-shrink-0">
                 On Plex ✓
               </span>
@@ -187,7 +248,7 @@ export default function RecommendationCard({
             )}
           </div>
 
-          {/* Torrent availability — shown only when Plex doesn't have it */}
+          {/* Movie torrent availability — shown only when Plex doesn't have it */}
           {type === 'movie' && torrentState !== 'skipped' && !forceInLibrary && (
             <div className="mt-3">
               {torrentState === 'idle' ? null : torrentState === 'loading' ? (
@@ -214,8 +275,73 @@ export default function RecommendationCard({
                     </>
                   )}
                 </button>
+              ) : noSuitableQuality ? (
+                <span className="text-xs text-gray-500">Not available in HD</span>
               ) : (
                 <span className="text-xs text-gray-500">Not available to download</span>
+              )}
+            </div>
+          )}
+
+          {/* TV season picker — shown only when not on Plex and numberOfSeasons is known */}
+          {type === 'tv' && !showPlex && numberOfSeasons && numberOfSeasons > 0 && (
+            <div className="mt-3">
+              {/* Season buttons */}
+              <div className="flex flex-wrap gap-1 mb-2">
+                {Array.from({ length: numberOfSeasons }, (_, i) => i + 1).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => handleSeasonSelect(s)}
+                    disabled={tvTorrentState === 'loading' && selectedSeason === s}
+                    className={`text-xs px-2 py-1 rounded font-medium transition-colors
+                      ${selectedSeason === s
+                        ? 'bg-plex-accent text-black'
+                        : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                      }
+                      disabled:opacity-60 disabled:cursor-not-allowed`}
+                  >
+                    S{String(s).padStart(2, '0')}
+                  </button>
+                ))}
+              </div>
+
+              {/* TV torrent state below season row */}
+              {selectedSeason !== null && (
+                <div>
+                  {tvTorrentState === 'loading' ? (
+                    <span className="text-xs text-gray-600 animate-pulse">Checking availability...</span>
+                  ) : tvTorrentState === 'found' ? (
+                    isDownloading ? (
+                      <span className="text-xs text-green-400">Downloading…</span>
+                    ) : (
+                      <button
+                        onClick={() => { setTvDownloading(true); onDownload(title, year); }}
+                        disabled={tvDownloading}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+                          bg-plex-accent text-black font-semibold
+                          hover:bg-yellow-400 transition-colors
+                          disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {tvDownloading ? (
+                          'Starting…'
+                        ) : (
+                          <>
+                            <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                              <path d="M5 20h14v-2H5v2zm7-4l-5-5 1.41-1.41L11 17.17V4h2v13.17l3.59-3.58L18 15l-6 6-6-6z" />
+                            </svg>
+                            Download Season {selectedSeason}
+                          </>
+                        )}
+                      </button>
+                    )
+                  ) : tvTorrentState === 'nopack' ? (
+                    <span className="text-xs text-gray-500">
+                      Season {selectedSeason} isn&apos;t available as a complete pack yet
+                    </span>
+                  ) : tvTorrentState === 'notfound' || tvTorrentState === 'error' ? (
+                    <span className="text-xs text-gray-500">Not available to download</span>
+                  ) : null}
+                </div>
               )}
             </div>
           )}

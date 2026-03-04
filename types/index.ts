@@ -29,6 +29,7 @@ export interface ReviewData {
   runtime?: number;
   director?: string;
   tmdbId?: number;
+  numberOfSeasons?: number;
 }
 
 export interface TorrentOption {
@@ -69,4 +70,6 @@ export interface ActiveDownload {
   addedAt: number;
   /** true = added through this app; false = picked up from Transmission externally */
   fromApp: boolean;
+  mediaType?: 'movie' | 'tv';
+  season?: number;
 }

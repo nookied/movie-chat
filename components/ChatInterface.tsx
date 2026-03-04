@@ -130,8 +130,8 @@ export default function ChatInterface() {
   // Titles successfully moved to the Plex library this session — used to update cards immediately
   const [movedTitles, setMovedTitles] = useState<Set<string>>(new Set());
 
-  // Stores the best torrent for each recommended movie (keyed by "title-year")
-  const pendingTorrents = useRef<Map<string, TorrentOption>>(new Map());
+  // Stores the best torrent for each recommended title (keyed by "title-year")
+  const pendingTorrents = useRef<Map<string, { torrent: TorrentOption; mediaType: 'movie' | 'tv'; season?: number }>>(new Map());
   const shownRecs = useRef<Set<string>>(new Set());
 
   // True during the very first effect invocation — prevents the save effect from
@@ -223,10 +223,20 @@ export default function ChatInterface() {
     addInfoMessage(`[System] "${title}" is already in your Plex library.`);
   }, [addInfoMessage]);
 
-  // Called by RecommendationCard when 1080p torrents are found
-  const handleTorrentsReady = useCallback((title: string, year: number, torrents: TorrentOption[]) => {
-    pendingTorrents.current.set(torrentKey(title, year), torrents[0]);
-    addInfoMessage(`[System] "${title}" is available for download.`);
+  // Called by RecommendationCard when torrents are found (movie or TV season)
+  const handleTorrentsReady = useCallback((
+    title: string,
+    year: number,
+    torrents: TorrentOption[],
+    mediaType: 'movie' | 'tv',
+    season?: number
+  ) => {
+    pendingTorrents.current.set(torrentKey(title, year), { torrent: torrents[0], mediaType, season });
+    if (mediaType === 'tv' && season !== undefined) {
+      addInfoMessage(`[System] "${title}" Season ${season} is available for download.`);
+    } else {
+      addInfoMessage(`[System] "${title}" is available for download.`);
+    }
   }, [addInfoMessage]);
 
   // Called by RecommendationCard when movie is on YTS but no 1080p
@@ -234,14 +244,16 @@ export default function ChatInterface() {
     addInfoMessage(`[System] "${title}" is on YTS but no 1080p version is available.`);
   }, [addInfoMessage]);
 
-  // Triggered when the LLM emits a <download> tag
+  // Triggered when the LLM emits a <download> tag, or when the user clicks Download on a card
   const triggerDownload = useCallback(async (title: string, year: number) => {
-    const torrent = pendingTorrents.current.get(torrentKey(title, year));
+    const entry = pendingTorrents.current.get(torrentKey(title, year));
 
-    if (!torrent) {
+    if (!entry) {
       addInfoMessage(`[System] No download ready for "${title}". Try asking again after the availability check completes.`);
       return;
     }
+
+    const { torrent, mediaType, season } = entry;
 
     // Hard guard: never download something already in the Plex library,
     // regardless of what the LLM requested.
@@ -269,9 +281,13 @@ export default function ChatInterface() {
       appIds.add(data.id);
       saveAppTorrentIds(appIds);
 
+      const displayName = mediaType === 'tv' && season !== undefined
+        ? `${title} — Season ${season}`
+        : title;
+
       setActiveDownloads((prev) => [
         ...prev.filter((d) => d.torrentId !== data.id),
-        { torrentId: data.id, torrentName: title, addedAt: Date.now(), fromApp: true },
+        { torrentId: data.id, torrentName: displayName, addedAt: Date.now(), fromApp: true, mediaType, season },
       ]);
     } catch (err) {
       addInfoMessage(`[System] Download failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -412,7 +428,7 @@ export default function ChatInterface() {
                 key={recKey(rec)}
                 recommendation={rec}
                 onPlexFound={handlePlexFound}
-                onTorrentsReady={handleTorrentsReady}
+                onTorrentsReady={(t, y, torrents, mediaType, season) => handleTorrentsReady(t, y, torrents, mediaType, season)}
                 onNoSuitableQuality={handleNoSuitableQuality}
                 onDownload={triggerDownload}
                 isDownloading={activeDownloads.some(

@@ -17,7 +17,7 @@ export async function triggerLibraryRefresh(): Promise<void> {
 
     const data = await res.json();
     const sections: Array<Record<string, unknown>> = data?.MediaContainer?.Directory ?? [];
-    const movieSections = sections.filter((s) => s.type === 'movie');
+    const movieSections = sections.filter((s) => s.type === 'movie' || s.type === 'show');
 
     await Promise.all(
       movieSections.map((s) =>

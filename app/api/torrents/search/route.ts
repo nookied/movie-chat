@@ -1,16 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchTorrents } from '@/lib/yts';
+import { searchTvSeason } from '@/lib/eztv';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const title = searchParams.get('title');
   const year = searchParams.get('year');
+  const type = searchParams.get('type') ?? 'movie';
+  const season = searchParams.get('season');
 
   if (!title) {
     return NextResponse.json({ error: 'title is required' }, { status: 400 });
   }
 
   try {
+    if (type === 'tv') {
+      if (!season) {
+        return NextResponse.json({ error: 'season is required for TV' }, { status: 400 });
+      }
+      const result = await searchTvSeason(title, Number(season));
+      return NextResponse.json(result);
+    }
+
     const result = await searchTorrents(title, year ? Number(year) : undefined);
     return NextResponse.json(result);
   } catch (err) {

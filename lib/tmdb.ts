@@ -27,6 +27,26 @@ interface TmdbDetails {
   };
 }
 
+interface TmdbTvSearchResult {
+  id: number;
+  name: string;
+  first_air_date: string;
+  vote_average: number;
+  overview: string;
+  poster_path: string | null;
+  genre_ids: number[];
+}
+
+interface TmdbTvDetails {
+  id: number;
+  name: string;
+  vote_average: number;
+  overview: string;
+  poster_path: string | null;
+  number_of_seasons: number;
+  genres: Array<{ id: number; name: string }>;
+}
+
 export async function getMovieDetails(title: string, year?: number): Promise<Partial<ReviewData>> {
   const tmdbApiKey = cfg('tmdbApiKey', 'TMDB_API_KEY');
   if (!tmdbApiKey) return {};
@@ -76,6 +96,55 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
     genres: details.genres.map((g) => g.name),
     runtime: details.runtime,
     director,
+    tmdbId: details.id,
+  };
+}
+
+export async function getTvDetails(title: string, year?: number): Promise<Partial<ReviewData>> {
+  const tmdbApiKey = cfg('tmdbApiKey', 'TMDB_API_KEY');
+  if (!tmdbApiKey) return {};
+
+  // Step 1: Search for the TV show
+  const searchUrl = new URL(`${TMDB_BASE}/search/tv`);
+  searchUrl.searchParams.set('api_key', tmdbApiKey);
+  searchUrl.searchParams.set('query', title);
+  if (year) searchUrl.searchParams.set('first_air_date_year', String(year));
+
+  const searchRes = await fetch(searchUrl.toString(), {
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!searchRes.ok) return {};
+
+  const searchData = await searchRes.json();
+  const results: TmdbTvSearchResult[] = searchData.results ?? [];
+  if (results.length === 0) return {};
+
+  const show = results[0];
+
+  // Step 2: Fetch full TV details
+  const detailUrl = new URL(`${TMDB_BASE}/tv/${show.id}`);
+  detailUrl.searchParams.set('api_key', tmdbApiKey);
+
+  const detailRes = await fetch(detailUrl.toString(), {
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!detailRes.ok) {
+    return {
+      tmdbScore: Math.round(show.vote_average * 10),
+      overview: show.overview,
+      poster: show.poster_path ? `${TMDB_IMAGE_BASE}${show.poster_path}` : undefined,
+      tmdbId: show.id,
+    };
+  }
+
+  const details: TmdbTvDetails = await detailRes.json();
+
+  return {
+    tmdbScore: Math.round(details.vote_average * 10),
+    overview: details.overview,
+    poster: details.poster_path ? `${TMDB_IMAGE_BASE}${details.poster_path}` : undefined,
+    genres: details.genres.map((g) => g.name),
+    numberOfSeasons: details.number_of_seasons,
     tmdbId: details.id,
   };
 }
