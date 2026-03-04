@@ -251,6 +251,34 @@ describe('pickBest()', () => {
     const capBonus = sizebonus(60_000_000_000);
     expect(monsterBonus).toBeCloseTo(capBonus, 5);
   });
+
+  // options field
+  it('options is undefined when only one candidate', () => {
+    const result = pickBest([hit('Show.S01.1080p', 10_000_000_000, 50)]);
+    expect(result.options).toBeUndefined();
+  });
+
+  it('options is present and length ≤ 4 when multiple candidates exist', () => {
+    const candidates = [
+      hit('Show.S01.1080p.A', 40_000_000_000, 100, 'A'),
+      hit('Show.S01.1080p.B', 20_000_000_000, 80,  'B'),
+      hit('Show.S01.720p.C',  10_000_000_000, 200, 'C'),
+      hit('Show.S01.720p.D',  8_000_000_000,  150, 'D'),
+      hit('Show.S01.480p.E',  5_000_000_000,  300, 'E'),
+    ];
+    const result = pickBest(candidates);
+    expect(result.options).toBeDefined();
+    expect(result.options!.length).toBeGreaterThan(1);
+    expect(result.options!.length).toBeLessThanOrEqual(4);
+  });
+
+  it('options[0] matches the auto-picked best result', () => {
+    const small = hit('Show.S01.1080p.x265', 4_500_000_000, 341, 'small');
+    const large = hit('Show.S01.1080p.BluRay', 13_200_000_000, 28,  'large');
+    const result = pickBest([small, large]);
+    expect(result.options![0].magnet).toBe(result.magnet);
+    expect(result.options![0].sizeBytes).toBe(result.sizeBytes);
+  });
 });
 
 // ---------------------------------------------------------------------------

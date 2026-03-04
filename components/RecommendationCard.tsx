@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Recommendation, PlexStatus, ReviewData, TorrentOption } from '@/types';
+import { TvTorrentResult, TvTorrentOption } from '@/lib/eztv';
 
 interface Props {
   recommendation: Recommendation;
@@ -52,6 +53,8 @@ export default function RecommendationCard({
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [tvTorrentState, setTvTorrentState] = useState<TvTorrentState>('idle');
   const [tvDownloading, setTvDownloading] = useState(false);
+  const [tvTorrentOptions, setTvTorrentOptions] = useState<TvTorrentOption[] | null>(null);
+  const [selectedOptionIdx, setSelectedOptionIdx] = useState(0);
 
   // Fire each callback only once
   const plexCallbackSent = useRef(false);
@@ -133,6 +136,8 @@ export default function RecommendationCard({
     setTvTorrentState('loading');
     setTvDownloading(false);
     setTorrentMeta(null);
+    setTvTorrentOptions(null);
+    setSelectedOptionIdx(0);
 
     try {
       const params = new URLSearchParams({
@@ -142,7 +147,7 @@ export default function RecommendationCard({
         season: String(season),
       });
       const r = await fetch(`/api/torrents/search?${params}`);
-      const d: { found: boolean; magnet?: string; quality?: string; sizeBytes?: number; seeders?: number; noSeasonPack?: boolean } = await r.json();
+      const d: TvTorrentResult = await r.json();
 
       if (!d.found) {
         setTvTorrentState('notfound');
@@ -159,6 +164,7 @@ export default function RecommendationCard({
         size: d.sizeBytes ? `${(d.sizeBytes / 1e9).toFixed(1)} GB` : '',
         seeders: d.seeders ?? 0,
       });
+      setTvTorrentOptions(d.options ?? null);
 
       // Build a synthetic TorrentOption to reuse the existing download pipeline
       const syntheticTorrent: TorrentOption = {
@@ -176,6 +182,26 @@ export default function RecommendationCard({
     } catch {
       setTvTorrentState('error');
     }
+  }
+
+  function handleOptionSelect(idx: number) {
+    if (!tvTorrentOptions) return;
+    setSelectedOptionIdx(idx);
+    const opt = tvTorrentOptions[idx];
+    setTorrentMeta({
+      size: `${(opt.sizeBytes / 1e9).toFixed(1)} GB`,
+      seeders: opt.seeders,
+    });
+    const syntheticTorrent: TorrentOption = {
+      quality: opt.quality,
+      type: 'web',
+      codec: '',
+      size: `${(opt.sizeBytes / 1e9).toFixed(1)} GB`,
+      seeders: opt.seeders,
+      magnet: opt.magnet,
+      movieTitle: title,
+    };
+    onTorrentsReady(title, year, [syntheticTorrent], 'tv', selectedSeason!);
   }
 
   const numberOfSeasons = reviews?.numberOfSeasons;
@@ -390,30 +416,50 @@ export default function RecommendationCard({
                     isDownloading ? (
                       <span className="text-xs text-green-400">Downloading…</span>
                     ) : (
-                      <div className="flex items-center gap-2.5">
-                        <button
-                          onClick={() => { setTvDownloading(true); onDownload(title, year); }}
-                          disabled={tvDownloading}
-                          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
-                            bg-plex-accent text-black font-semibold
-                            hover:bg-yellow-400 transition-colors
-                            disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                          {tvDownloading ? (
-                            'Starting…'
-                          ) : (
-                            <>
-                              <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
-                                <path d="M5 20h14v-2H5v2zm7-4l-5-5 1.41-1.41L11 17.17V4h2v13.17l3.59-3.58L18 15l-6 6-6-6z" />
-                              </svg>
-                              {selectedSeason === 0 ? 'Download Complete Series' : `Download Season ${selectedSeason}`}
-                            </>
+                      <div>
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            onClick={() => { setTvDownloading(true); onDownload(title, year); }}
+                            disabled={tvDownloading}
+                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+                              bg-plex-accent text-black font-semibold
+                              hover:bg-yellow-400 transition-colors
+                              disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {tvDownloading ? (
+                              'Starting…'
+                            ) : (
+                              <>
+                                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                                  <path d="M5 20h14v-2H5v2zm7-4l-5-5 1.41-1.41L11 17.17V4h2v13.17l3.59-3.58L18 15l-6 6-6-6z" />
+                                </svg>
+                                {selectedSeason === 0 ? 'Download Complete Series' : `Download Season ${selectedSeason}`}
+                              </>
+                            )}
+                          </button>
+                          {torrentMeta && (
+                            <span className="text-xs text-gray-600">
+                              {torrentMeta.size}{torrentMeta.size && torrentMeta.seeders > 0 ? ' · ' : ''}{torrentMeta.seeders > 0 ? `${torrentMeta.seeders} seeders` : ''}
+                            </span>
                           )}
-                        </button>
-                        {torrentMeta && (
-                          <span className="text-xs text-gray-600">
-                            {torrentMeta.size}{torrentMeta.size && torrentMeta.seeders > 0 ? ' · ' : ''}{torrentMeta.seeders > 0 ? `${torrentMeta.seeders} seeders` : ''}
-                          </span>
+                        </div>
+                        {/* Option picker — only when multiple candidates were returned */}
+                        {tvTorrentOptions && tvTorrentOptions.length > 1 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {tvTorrentOptions.map((opt, i) => (
+                              <button
+                                key={i}
+                                onClick={() => handleOptionSelect(i)}
+                                className={`text-xs px-2 py-1 rounded font-medium transition-colors
+                                  ${i === selectedOptionIdx
+                                    ? 'bg-plex-accent text-black'
+                                    : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                                  }`}
+                              >
+                                {opt.quality} · {(opt.sizeBytes / 1e9).toFixed(1)} GB · {opt.seeders} seeders
+                              </button>
+                            ))}
+                          </div>
                         )}
                       </div>
                     )

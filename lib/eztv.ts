@@ -2,6 +2,13 @@
 // Knaben aggregates TPB, 1337x, EZTV and other trackers with real full-text search,
 // pre-built magnet URLs, and seeder counts — far more reliable than TPB directly.
 
+export interface TvTorrentOption {
+  magnet: string;
+  quality: string;
+  sizeBytes: number;
+  seeders: number;
+}
+
 export interface TvTorrentResult {
   found: boolean;
   magnet?: string;
@@ -10,6 +17,9 @@ export interface TvTorrentResult {
   seeders?: number;
   /** Show/season exists on trackers but no complete pack was found */
   noSeasonPack?: boolean;
+  /** Top ≤4 candidates sorted by quality+size; [0] is the auto-picked best.
+   *  Only present when more than one candidate was found. */
+  options?: TvTorrentOption[];
 }
 
 interface KnabenHit {
@@ -115,12 +125,23 @@ function pickBest(candidates: KnabenHit[]): TvTorrentResult {
   });
 
   const best = pool[0];
+
+  // Expose top-4 candidates so the UI can offer a picker.
+  const topOptions = pool.slice(0, 4).map((h): TvTorrentOption => ({
+    magnet:    h.magnetUrl,
+    quality:   parseQualityLabel(h.title),
+    sizeBytes: h.bytes,
+    seeders:   h.seeders,
+  }));
+
   return {
     found:     true,
     magnet:    best.magnetUrl,
     quality:   parseQualityLabel(best.title),
     sizeBytes: best.bytes,
     seeders:   best.seeders,
+    // Only include options when there is genuine choice (>1 candidate).
+    options:   topOptions.length > 1 ? topOptions : undefined,
   };
 }
 
