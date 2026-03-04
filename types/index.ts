@@ -17,6 +17,8 @@ export interface PlexStatus {
   found: boolean;
   plexUrl?: string;
   addedAt?: string;
+  /** TV shows only: season numbers (1-based) present in the Plex library */
+  seasons?: number[];
 }
 
 export interface ReviewData {

@@ -44,6 +44,7 @@ interface TmdbTvDetails {
   overview: string;
   poster_path: string | null;
   number_of_seasons: number;
+  seasons: Array<{ season_number: number; episode_count: number }>;
   genres: Array<{ id: number; name: string }>;
 }
 
@@ -144,7 +145,9 @@ export async function getTvDetails(title: string, year?: number): Promise<Partia
     overview: details.overview,
     poster: details.poster_path ? `${TMDB_IMAGE_BASE}${details.poster_path}` : undefined,
     genres: details.genres.map((g) => g.name),
-    numberOfSeasons: details.number_of_seasons,
+    // Only count seasons that have actually aired (episode_count > 0, skip season 0 "Specials")
+    numberOfSeasons: details.seasons?.filter((s) => s.season_number > 0 && s.episode_count > 0).length
+      ?? details.number_of_seasons,
     tmdbId: details.id,
   };
 }

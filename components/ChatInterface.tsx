@@ -233,7 +233,8 @@ export default function ChatInterface() {
   ) => {
     pendingTorrents.current.set(torrentKey(title, year), { torrent: torrents[0], mediaType, season });
     if (mediaType === 'tv' && season !== undefined) {
-      addInfoMessage(`[System] "${title}" Season ${season} is available for download.`);
+      const seasonLabel = season === 0 ? 'Complete Series' : `Season ${season}`;
+      addInfoMessage(`[System] "${title}" ${seasonLabel} is available for download.`);
     } else {
       addInfoMessage(`[System] "${title}" is available for download.`);
     }
@@ -282,7 +283,7 @@ export default function ChatInterface() {
       saveAppTorrentIds(appIds);
 
       const displayName = mediaType === 'tv' && season !== undefined
-        ? `${title} — Season ${season}`
+        ? season === 0 ? `${title} — Complete Series` : `${title} — Season ${season}`
         : title;
 
       setActiveDownloads((prev) => [

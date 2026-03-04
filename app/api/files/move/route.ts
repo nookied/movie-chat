@@ -47,8 +47,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'torrentId required' }, { status: 400 });
   }
 
-  const LIBRARY_DIR      = cfg('libraryDir',             'LIBRARY_DIR');
+  const LIBRARY_DIR      = cfg('libraryDir',    'LIBRARY_DIR');
+  const TV_LIBRARY_DIR   = cfg('tvLibraryDir',  'TV_LIBRARY_DIR');
   const CONFIG_DOWNLOAD  = cfg('transmissionDownloadDir', 'TRANSMISSION_DOWNLOAD_DIR');
+
+  // Use TV-specific directory for TV downloads; fall back to the shared library dir.
+  const EFFECTIVE_DIR = (mediaType === 'tv' && TV_LIBRARY_DIR) ? TV_LIBRARY_DIR : LIBRARY_DIR;
 
   try {
     const status = await getTorrentStatus(torrentId);
@@ -62,10 +66,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // No library directory configured — just remove the job from Transmission
-    if (!LIBRARY_DIR) {
-      await removeTorrent(torrentId);
-      return NextResponse.json({ moved: [], removedOnly: true });
+    // No library directory configured — leave the torrent and file untouched, surface an error.
+    // The DownloadTracker will show Retry + Dismiss so the user can fix settings first.
+    if (!EFFECTIVE_DIR) {
+      const label = mediaType === 'tv' ? 'TV shows' : 'Movies';
+      return NextResponse.json(
+        { error: `No ${label} library directory configured — set it in Settings → File Management.` },
+        { status: 400 }
+      );
     }
 
     if (!status.files || status.files.length === 0) {
@@ -81,18 +89,20 @@ export async function POST(req: NextRequest) {
     }
 
     // Destination subfolder:
-    //   Movie: LIBRARY_DIR/<clean movie name>/
-    //   TV:    LIBRARY_DIR/<Show Name>/Season N/
+    //   Movie:          LIBRARY_DIR/<clean movie name>/
+    //   TV season N:    TV_LIBRARY_DIR (or LIBRARY_DIR)/<Show Name>/Season N/
+    //   TV all (s=0):   TV_LIBRARY_DIR (or LIBRARY_DIR)/<Show Name>/
     let destFolder: string;
     if (mediaType === 'tv' && season !== undefined) {
       const showName = cleanTvFolderName(status.name);
-      const seasonFolder = `Season ${season}`;
-      destFolder = path.join(LIBRARY_DIR, showName, seasonFolder);
+      destFolder = season === 0
+        ? path.join(EFFECTIVE_DIR, showName)
+        : path.join(EFFECTIVE_DIR, showName, `Season ${season}`);
     } else {
-      destFolder = path.join(LIBRARY_DIR, cleanFolderName(status.name));
+      destFolder = path.join(EFFECTIVE_DIR, cleanFolderName(status.name));
     }
 
-    assertWithinDir(destFolder, LIBRARY_DIR); // guard against traversal in torrent name
+    assertWithinDir(destFolder, EFFECTIVE_DIR); // guard against traversal in torrent name
     await fs.mkdir(destFolder, { recursive: true });
 
     const moved: string[] = [];
@@ -111,7 +121,7 @@ export async function POST(req: NextRequest) {
       assertWithinDir(sourcePath, DOWNLOAD_DIR); // guard against traversal in file path
 
       const destPath = path.join(destFolder, fileName);
-      assertWithinDir(destPath, LIBRARY_DIR);   // guard dest too
+      assertWithinDir(destPath, EFFECTIVE_DIR);  // guard dest too
 
       await fs.copyFile(sourcePath, destPath);
       await fs.unlink(sourcePath);

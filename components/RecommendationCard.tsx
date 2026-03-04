@@ -45,6 +45,9 @@ export default function RecommendationCard({
   const [noSuitableQuality, setNoSuitableQuality] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
+  // Torrent meta shown below the download button: size + seeders
+  const [torrentMeta, setTorrentMeta] = useState<{ size: string; seeders: number } | null>(null);
+
   // TV-specific state
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const [tvTorrentState, setTvTorrentState] = useState<TvTorrentState>('idle');
@@ -69,12 +72,17 @@ export default function RecommendationCard({
       // Step 1: Plex
       let plexFound = false;
       try {
-        const r = await fetch(`/api/plex/check?${params}`);
+        const plexUrl = type === 'tv'
+          ? `/api/plex/check?${params}&type=tv`
+          : `/api/plex/check?${params}`;
+        const r = await fetch(plexUrl);
         const d: PlexStatus = await r.json();
         setPlex(d);
         setPlexState('done');
-        plexFound = d.found;
-        if (d.found && !plexCallbackSent.current) {
+        // For movies fire immediately; for TV we fire in a separate effect once
+        // we know numberOfSeasons (needed to distinguish "all" vs "partial").
+        plexFound = type === 'movie' ? d.found : false;
+        if (type === 'movie' && d.found && !plexCallbackSent.current) {
           plexCallbackSent.current = true;
           onPlexFound(title, year);
         }
@@ -106,6 +114,7 @@ export default function RecommendationCard({
         if (d.torrents?.length > 0) {
           const best = d.torrents[0];
           setTorrentSummary(`1080p · ${best.codec} · ${best.size}`);
+          setTorrentMeta({ size: best.size, seeders: best.seeders });
           if (!torrentCallbackSent.current) {
             torrentCallbackSent.current = true;
             onTorrentsReady(title, year, d.torrents, 'movie');
@@ -123,6 +132,7 @@ export default function RecommendationCard({
     setSelectedSeason(season);
     setTvTorrentState('loading');
     setTvDownloading(false);
+    setTorrentMeta(null);
 
     try {
       const params = new URLSearchParams({
@@ -145,6 +155,10 @@ export default function RecommendationCard({
       }
 
       setTvTorrentState('found');
+      setTorrentMeta({
+        size: d.sizeBytes ? `${(d.sizeBytes / 1e9).toFixed(1)} GB` : '',
+        seeders: d.seeders ?? 0,
+      });
 
       // Build a synthetic TorrentOption to reuse the existing download pipeline
       const syntheticTorrent: TorrentOption = {
@@ -165,7 +179,28 @@ export default function RecommendationCard({
   }
 
   const numberOfSeasons = reviews?.numberOfSeasons;
-  const showPlex = plex?.found || forceInLibrary;
+
+  // Derived TV Plex state — only meaningful when type === 'tv'
+  const seasonsInLibrary = new Set(plex?.seasons ?? []);
+  const allSeasonsInPlex =
+    type === 'tv' &&
+    plex?.found === true &&
+    numberOfSeasons !== undefined &&
+    seasonsInLibrary.size >= numberOfSeasons;
+  const someSeasonsInPlex =
+    type === 'tv' && plex?.found === true && seasonsInLibrary.size > 0 && !allSeasonsInPlex;
+
+  // Fire onPlexFound for TV only when every season is confirmed in library
+  useEffect(() => {
+    if (type === 'tv' && allSeasonsInPlex && !plexCallbackSent.current) {
+      plexCallbackSent.current = true;
+      onPlexFound(title, year);
+    }
+  }, [allSeasonsInPlex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const showPlex =
+    forceInLibrary ||
+    (type === 'movie' ? plex?.found === true : allSeasonsInPlex);
 
   return (
     <div className="mt-2 rounded-xl border border-plex-border bg-plex-card overflow-hidden max-w-[600px]">
@@ -209,6 +244,10 @@ export default function RecommendationCard({
             ) : showPlex ? (
               <span className="text-xs bg-green-900/60 text-green-400 border border-green-700 px-2 py-0.5 rounded-full flex-shrink-0">
                 On Plex ✓
+              </span>
+            ) : someSeasonsInPlex ? (
+              <span className="text-xs bg-yellow-900/40 text-yellow-500 border border-yellow-700/50 px-2 py-0.5 rounded-full flex-shrink-0">
+                Partially in library
               </span>
             ) : (
               <span className="text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded-full flex-shrink-0">
@@ -256,25 +295,32 @@ export default function RecommendationCard({
               ) : isDownloading ? (
                 <span className="text-xs text-green-400">Downloading…</span>
               ) : torrentSummary ? (
-                <button
-                  onClick={() => { setDownloading(true); onDownload(title, year); }}
-                  disabled={downloading}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
-                    bg-plex-accent text-black font-semibold
-                    hover:bg-yellow-400 transition-colors
-                    disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {downloading ? (
-                    'Starting…'
-                  ) : (
-                    <>
-                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
-                        <path d="M5 20h14v-2H5v2zm7-4l-5-5 1.41-1.41L11 17.17V4h2v13.17l3.59-3.58L18 15l-6 6-6-6z" />
-                      </svg>
-                      Download
-                    </>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => { setDownloading(true); onDownload(title, year); }}
+                    disabled={downloading}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+                      bg-plex-accent text-black font-semibold
+                      hover:bg-yellow-400 transition-colors
+                      disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {downloading ? (
+                      'Starting…'
+                    ) : (
+                      <>
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                          <path d="M5 20h14v-2H5v2zm7-4l-5-5 1.41-1.41L11 17.17V4h2v13.17l3.59-3.58L18 15l-6 6-6-6z" />
+                        </svg>
+                        Download
+                      </>
+                    )}
+                  </button>
+                  {torrentMeta && (
+                    <span className="text-xs text-gray-600">
+                      {torrentMeta.size}{torrentMeta.size && torrentMeta.seeders > 0 ? ' · ' : ''}{torrentMeta.seeders > 0 ? `${torrentMeta.seeders} seeders` : ''}
+                    </span>
                   )}
-                </button>
+                </div>
               ) : noSuitableQuality ? (
                 <span className="text-xs text-gray-500">Not available in HD</span>
               ) : (
@@ -286,23 +332,53 @@ export default function RecommendationCard({
           {/* TV season picker — shown only when not on Plex and numberOfSeasons is known */}
           {type === 'tv' && !showPlex && numberOfSeasons && numberOfSeasons > 0 && (
             <div className="mt-3">
-              {/* Season buttons */}
+              {/* Season buttons — "All" first (hidden if any seasons owned), then S01 S02 … */}
               <div className="flex flex-wrap gap-1 mb-2">
-                {Array.from({ length: numberOfSeasons }, (_, i) => i + 1).map((s) => (
+                {/* All seasons button — hide if any seasons are already in Plex */}
+                {seasonsInLibrary.size === 0 && (
                   <button
-                    key={s}
-                    onClick={() => handleSeasonSelect(s)}
-                    disabled={tvTorrentState === 'loading' && selectedSeason === s}
+                    key={0}
+                    onClick={() => handleSeasonSelect(0)}
+                    disabled={tvTorrentState === 'loading' && selectedSeason === 0}
                     className={`text-xs px-2 py-1 rounded font-medium transition-colors
-                      ${selectedSeason === s
+                      ${selectedSeason === 0
                         ? 'bg-plex-accent text-black'
                         : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
                       }
                       disabled:opacity-60 disabled:cursor-not-allowed`}
                   >
-                    S{String(s).padStart(2, '0')}
+                    All
                   </button>
-                ))}
+                )}
+                {Array.from({ length: numberOfSeasons }, (_, i) => i + 1).map((s) => {
+                  const inPlex = seasonsInLibrary.has(s);
+                  return inPlex ? (
+                    // Season already in Plex — muted with ✓, not clickable
+                    <span
+                      key={s}
+                      title={`Season ${s} is in your Plex library`}
+                      className="text-xs px-2 py-1 rounded font-medium
+                        bg-green-900/30 text-green-600 border border-green-800/50
+                        cursor-default select-none"
+                    >
+                      ✓ S{String(s).padStart(2, '0')}
+                    </span>
+                  ) : (
+                    <button
+                      key={s}
+                      onClick={() => handleSeasonSelect(s)}
+                      disabled={tvTorrentState === 'loading' && selectedSeason === s}
+                      className={`text-xs px-2 py-1 rounded font-medium transition-colors
+                        ${selectedSeason === s
+                          ? 'bg-plex-accent text-black'
+                          : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                        }
+                        disabled:opacity-60 disabled:cursor-not-allowed`}
+                    >
+                      S{String(s).padStart(2, '0')}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* TV torrent state below season row */}
@@ -314,29 +390,38 @@ export default function RecommendationCard({
                     isDownloading ? (
                       <span className="text-xs text-green-400">Downloading…</span>
                     ) : (
-                      <button
-                        onClick={() => { setTvDownloading(true); onDownload(title, year); }}
-                        disabled={tvDownloading}
-                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
-                          bg-plex-accent text-black font-semibold
-                          hover:bg-yellow-400 transition-colors
-                          disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        {tvDownloading ? (
-                          'Starting…'
-                        ) : (
-                          <>
-                            <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
-                              <path d="M5 20h14v-2H5v2zm7-4l-5-5 1.41-1.41L11 17.17V4h2v13.17l3.59-3.58L18 15l-6 6-6-6z" />
-                            </svg>
-                            Download Season {selectedSeason}
-                          </>
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          onClick={() => { setTvDownloading(true); onDownload(title, year); }}
+                          disabled={tvDownloading}
+                          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+                            bg-plex-accent text-black font-semibold
+                            hover:bg-yellow-400 transition-colors
+                            disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {tvDownloading ? (
+                            'Starting…'
+                          ) : (
+                            <>
+                              <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                                <path d="M5 20h14v-2H5v2zm7-4l-5-5 1.41-1.41L11 17.17V4h2v13.17l3.59-3.58L18 15l-6 6-6-6z" />
+                              </svg>
+                              {selectedSeason === 0 ? 'Download Complete Series' : `Download Season ${selectedSeason}`}
+                            </>
+                          )}
+                        </button>
+                        {torrentMeta && (
+                          <span className="text-xs text-gray-600">
+                            {torrentMeta.size}{torrentMeta.size && torrentMeta.seeders > 0 ? ' · ' : ''}{torrentMeta.seeders > 0 ? `${torrentMeta.seeders} seeders` : ''}
+                          </span>
                         )}
-                      </button>
+                      </div>
                     )
                   ) : tvTorrentState === 'nopack' ? (
                     <span className="text-xs text-gray-500">
-                      Season {selectedSeason} isn&apos;t available as a complete pack yet
+                      {selectedSeason === 0
+                        ? "Complete series pack isn\u2019t available yet"
+                        : `Season ${selectedSeason} isn\u2019t available as a complete pack yet`}
                     </span>
                   ) : tvTorrentState === 'notfound' || tvTorrentState === 'error' ? (
                     <span className="text-xs text-gray-500">Not available to download</span>
