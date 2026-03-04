@@ -156,14 +156,22 @@ export { norm, qualityRank, isCompletePack, isSeasonNPack, sizebonus, pickBest }
 export async function searchTvSeason(title: string, season: number): Promise<TvTorrentResult> {
   const normTitle = norm(title);
 
+  // Prefer ≤1080p candidates; fall back to 4K only when nothing else was found.
+  // The search queries already include "1080p" but Knaben is a text search — 4K
+  // results can still slip through if the title matches.
+  function prefer1080p(candidates: KnabenHit[]): KnabenHit[] {
+    const non4k = candidates.filter((h) => qualityRank(h.title) < 400);
+    return non4k.length > 0 ? non4k : candidates;
+  }
+
   if (season === 0) {
     const results = await knabSearch(`${title} complete series 1080p`);
     const matches = results.filter((h) => norm(h.title).includes(normTitle) && isCompletePack(h.title));
-    if (matches.length > 0) return pickBest(matches);
+    if (matches.length > 0) return pickBest(prefer1080p(matches));
 
     // Fallback: any title match from the same query
     const any = results.filter((h) => norm(h.title).includes(normTitle));
-    if (any.length > 0) return pickBest(any);
+    if (any.length > 0) return pickBest(prefer1080p(any));
 
     return { found: false };
   }
@@ -193,5 +201,5 @@ export async function searchTvSeason(title: string, season: number): Promise<TvT
     return { found: true, noSeasonPack: true };
   }
 
-  return pickBest(packs);
+  return pickBest(prefer1080p(packs));
 }

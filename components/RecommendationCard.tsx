@@ -437,30 +437,27 @@ export default function RecommendationCard({
                               </>
                             )}
                           </button>
-                          {torrentMeta && (
+                          {/* Inline dropdown when multiple options exist; static text otherwise */}
+                          {tvTorrentOptions && tvTorrentOptions.length > 1 ? (
+                            <select
+                              value={selectedOptionIdx}
+                              onChange={(e) => handleOptionSelect(Number(e.target.value))}
+                              className="text-xs bg-gray-800 text-gray-400 border border-gray-700
+                                rounded px-2 py-1 cursor-pointer hover:border-gray-500
+                                focus:outline-none focus:border-plex-accent"
+                            >
+                              {tvTorrentOptions.map((opt, i) => (
+                                <option key={i} value={i}>
+                                  {opt.quality} · {(opt.sizeBytes / 1e9).toFixed(1)} GB · {opt.seeders} seeders
+                                </option>
+                              ))}
+                            </select>
+                          ) : torrentMeta ? (
                             <span className="text-xs text-gray-600">
                               {torrentMeta.size}{torrentMeta.size && torrentMeta.seeders > 0 ? ' · ' : ''}{torrentMeta.seeders > 0 ? `${torrentMeta.seeders} seeders` : ''}
                             </span>
-                          )}
+                          ) : null}
                         </div>
-                        {/* Option picker — only when multiple candidates were returned */}
-                        {tvTorrentOptions && tvTorrentOptions.length > 1 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {tvTorrentOptions.map((opt, i) => (
-                              <button
-                                key={i}
-                                onClick={() => handleOptionSelect(i)}
-                                className={`text-xs px-2 py-1 rounded font-medium transition-colors
-                                  ${i === selectedOptionIdx
-                                    ? 'bg-plex-accent text-black'
-                                    : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
-                                  }`}
-                              >
-                                {opt.quality} · {(opt.sizeBytes / 1e9).toFixed(1)} GB · {opt.seeders} seeders
-                              </button>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     )
                   ) : tvTorrentState === 'nopack' ? (
