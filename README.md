@@ -39,25 +39,31 @@ Before you start, you'll need:
 
 ## Installation
 
-**1. Clone and install dependencies**
+### Option A — one-liner (easiest)
+
+Paste this into your terminal. It clones the repo, installs dependencies, and optionally sets up auto-start:
 
 ```bash
-git clone https://github.com/yourname/movie-chat.git
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/nookied/movie-chat/main/install.sh)"
+```
+
+You'll need [git](https://git-scm.com) and [Node.js](https://nodejs.org) v18+ installed first.
+
+### Option B — manual
+
+```bash
+git clone https://github.com/nookied/movie-chat.git
 cd movie-chat
-npm install
+npm run setup
 ```
 
-**2. Start the development server**
+`npm run setup` checks prerequisites, installs dependencies, and offers to configure [pm2](https://pm2.keymetrics.io) for auto-start on reboot.
 
-```bash
-npm run dev
-```
+---
 
-The app runs on **http://localhost:3000**
+### After installing — configure your services
 
-**3. Open Settings and configure your services**
-
-Navigate to **http://localhost:3000/settings** (or click the gear icon ⚙️ in the top right) and fill in each section. Everything is saved locally to `config.local.json` — no environment variables needed.
+Open **http://localhost:3000/settings** (or click the gear icon ⚙️ in the top right) and fill in each section. Everything is saved locally to `config.local.json` — no environment variables needed.
 
 ---
 
@@ -253,6 +259,30 @@ This is handled automatically — the app uses a shared server-side registry. Re
 
 **The free OpenRouter model doesn't follow the format**
 Switch to a specific model in Settings (e.g. `mistralai/mistral-small-3.1-24b-instruct:free`) or enable Ollama exclusively for more consistent behaviour.
+
+---
+
+## Running as a service (auto-start on boot)
+
+`npm run setup` offers to configure this automatically. If you skipped it or want to set it up manually:
+
+```bash
+npm install -g pm2
+pm2 start ecosystem.config.js
+pm2 save
+pm2 startup   # prints a command — run it to register with your OS
+```
+
+**Day-to-day commands:**
+
+```bash
+pm2 status          # check if the app is running
+pm2 logs movie-chat # tail the logs
+pm2 restart movie-chat
+pm2 stop movie-chat
+```
+
+> Works on both macOS (LaunchAgent) and Linux (systemd).
 
 ---
 
