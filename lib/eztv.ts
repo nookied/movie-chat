@@ -44,19 +44,17 @@ function norm(s: string): string {
 }
 
 // Quality tier score — higher = better.
-// Resolution: 4K=400, 1080p=300, 720p=200, unknown=100, 480p/SD=50
-// Codec bonus: x265/HEVC=+10, x264=+5
+// Resolution only: 4K=400, 1080p=300, 720p=200, unknown=100, 480p/SD=50.
+// No codec bonus: a WEB-DL x264 is a cleaner source than an x265 re-encode,
+// so codec efficiency is not a reliable quality signal. Size bonus in pickBest()
+// handles the preference for higher-bitrate encodes within a resolution tier.
 function qualityRank(name: string): number {
   const n = name.toLowerCase();
-  const base = /2160p|4k\b/.test(n) ? 400
-             : /1080p/.test(n)       ? 300
-             : /720p/.test(n)        ? 200
-             : /480p/.test(n)        ? 50
-             : 100;
-  const codec = /x265|h\.265|hevc/.test(n) ? 10
-              : /x264|h264|h\.264/.test(n)  ? 5
-              : 0;
-  return base + codec;
+  return /2160p|4k\b/.test(n) ? 400
+       : /1080p/.test(n)       ? 300
+       : /720p/.test(n)        ? 200
+       : /480p/.test(n)        ? 50
+       : 100;
 }
 
 function parseQualityLabel(name: string): string {
