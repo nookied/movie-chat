@@ -5,8 +5,20 @@ import NewChatButton from '@/components/NewChatButton';
 export default function Home() {
   return (
     <main className="flex flex-col h-screen h-dvh bg-plex-bg">
-      {/* Header */}
-      <header className="flex items-center gap-3 px-6 py-4 border-b border-plex-border bg-plex-card">
+      {/* Header
+          In standalone PWA mode, the black-translucent status bar overlays the very top
+          of the app. calc() stacks the regular 1rem padding on top of safe-area-inset-top
+          so content clears the bar on every iPhone (notch, Dynamic Island, or none).
+          Left/right insets handle landscape orientation on notched iPhones. */}
+      <header
+        className="flex items-center gap-3 border-b border-plex-border bg-plex-card"
+        style={{
+          paddingTop: 'calc(env(safe-area-inset-top) + 1rem)',
+          paddingBottom: '1rem',
+          paddingLeft: 'max(1.5rem, env(safe-area-inset-left))',
+          paddingRight: 'max(1.5rem, env(safe-area-inset-right))',
+        }}
+      >
         <div className="w-8 h-8 rounded bg-plex-accent flex items-center justify-center">
           <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-black">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />

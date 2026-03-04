@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatMessage, Recommendation, ActiveDownload, TorrentOption } from '@/types';
 import Message from './Message';
 import RecommendationCard from './RecommendationCard';
-import DownloadTracker from './DownloadTracker';
+import DownloadsPanel from './DownloadsPanel';
 
 // Parse recommendation tags from a string.
 // Handles both the canonical format: <recommendation>{"json"}</recommendation>
@@ -397,7 +397,13 @@ export default function ChatInterface() {
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto overscroll-none px-4 py-6 space-y-5">
+      <div
+        className="flex-1 overflow-y-auto overscroll-none py-6 space-y-5"
+        style={{
+          paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+          paddingRight: 'max(1rem, env(safe-area-inset-right))',
+        }}
+      >
         {messages.map((msg) => (
           <div key={msg.id}>
             <Message message={msg} thinking={isStreaming && msg.role === 'assistant' && msg.content === ''} />
@@ -419,27 +425,30 @@ export default function ChatInterface() {
             ))}
           </div>
         ))}
-        {activeDownloads.map((dl) => (
-          <DownloadTracker
-            key={dl.torrentId}
-            download={dl}
-            onMoved={(name) =>
-              setMovedTitles((prev) => new Set([...prev, name.toLowerCase()]))
-            }
-            onComplete={() => {
-              setActiveDownloads((prev) => prev.filter((d) => d.torrentId !== dl.torrentId));
-              const appIds = loadAppTorrentIds();
-              appIds.delete(dl.torrentId);
-              saveAppTorrentIds(appIds);
-            }}
-          />
-        ))}
         <div ref={bottomRef} />
       </div>
 
-      {/* pt-3 always; pb grows to cover iPhone home-indicator via safe-area-inset-bottom */}
-      <div className="border-t border-plex-border bg-plex-card px-4 pt-3"
-        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+      {/* Downloads panel — collapsible, sits between chat and input bar */}
+      <DownloadsPanel
+        downloads={activeDownloads}
+        onMoved={(name) => setMovedTitles((prev) => new Set([...prev, name.toLowerCase()]))}
+        onComplete={(id) => {
+          setActiveDownloads((prev) => prev.filter((d) => d.torrentId !== id));
+          const appIds = loadAppTorrentIds();
+          appIds.delete(id);
+          saveAppTorrentIds(appIds);
+        }}
+      />
+
+      {/* pt-3 always; pb covers iPhone home indicator; left/right cover notch in landscape */}
+      <div
+        className="border-t border-plex-border bg-plex-card pt-3"
+        style={{
+          paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+          paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+          paddingRight: 'max(1rem, env(safe-area-inset-right))',
+        }}
+      >
         <div className="flex items-end gap-3 max-w-4xl mx-auto">
           <textarea
             ref={inputRef}

@@ -412,7 +412,15 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-plex-bg text-gray-100">
-      <header className="flex items-center gap-4 px-6 py-4 border-b border-plex-border bg-plex-card">
+      <header
+        className="flex items-center gap-4 border-b border-plex-border bg-plex-card"
+        style={{
+          paddingTop: 'calc(env(safe-area-inset-top) + 1rem)',
+          paddingBottom: '1rem',
+          paddingLeft: 'max(1.5rem, env(safe-area-inset-left))',
+          paddingRight: 'max(1.5rem, env(safe-area-inset-right))',
+        }}
+      >
         <Link
           href="/"
           className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
@@ -428,7 +436,12 @@ export default function SettingsPage() {
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-2xl mx-auto py-8 space-y-8"
+        style={{
+          paddingLeft: 'max(1.5rem, env(safe-area-inset-left))',
+          paddingRight: 'max(1.5rem, env(safe-area-inset-right))',
+        }}
+      >
 
         <Section title="OpenRouter" description="Cloud LLM powering the chat assistant — free tier available at openrouter.ai">
           <Field label="API Key" value={form.openRouterApiKey} placeholder={sensitiveplaceholder('openRouterApiKey')}
