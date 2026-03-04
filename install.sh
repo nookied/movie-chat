@@ -25,7 +25,7 @@ echo -e "${BOLD}  Movie Chat — installer${RESET}"
 echo "  ─────────────────────────────────────────"
 
 # ── 1. Prerequisites ──────────────────────────────────────────────────────────
-heading "1 / 4  Checking prerequisites"
+heading "1 / 5  Checking prerequisites"
 
 MISSING=0
 
@@ -51,7 +51,7 @@ fi
 [ "$MISSING" -eq 1 ] && exit 1
 
 # ── 2. Install location ───────────────────────────────────────────────────────
-heading "2 / 4  Choose install location"
+heading "2 / 5  Choose install location"
 
 ask "Where should Movie Chat be installed? [${DEFAULT_DIR}]"
 read -r INSTALL_DIR
@@ -77,7 +77,7 @@ fi
 cd "$INSTALL_DIR"
 
 # ── 3. npm install ────────────────────────────────────────────────────────────
-heading "3 / 4  Installing dependencies"
+heading "3 / 5  Installing dependencies"
 
 npm install --silent
 info "Dependencies installed"
