@@ -69,7 +69,9 @@ function parseQualityLabel(name: string): string {
 // True if the torrent looks like a complete-series / multi-season pack.
 function isCompletePack(name: string): boolean {
   const n = name.toLowerCase();
-  return /complete|s\d{2}-s\d{2}|seasons?\s+\d.+\d|the complete series/.test(n);
+  // "seasons?\s+\d+" must be followed by an explicit range separator (-, to, through)
+  // before a second digit — prevents "Season 1 S01 + Extras ... x265" from matching.
+  return /complete|s\d{2}-s\d{2}|seasons?\s+\d+\s*([-–]|to|through)\s*\d+|the complete series/.test(n);
 }
 
 // True if the torrent is a season pack for season N — not a single episode, not a different season.
@@ -121,6 +123,9 @@ function pickBest(candidates: KnabenHit[]): TvTorrentResult {
     seeders:   best.seeders,
   };
 }
+
+// Exported for unit tests only — not part of the public API.
+export { norm, qualityRank, isCompletePack, isSeasonNPack, sizebonus, pickBest };
 
 /**
  * Search for a TV season pack via Knaben.
