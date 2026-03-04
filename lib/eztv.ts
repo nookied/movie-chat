@@ -83,19 +83,34 @@ function isSeasonNPack(name: string, season: number): boolean {
   if (new RegExp(`s${pad}e\\d{2}|\\b${season}x\\d{2}\\b`).test(n)) return false;
   // Exclude cross-season ranges like "S01-S05" (complete-series packs, not a single season)
   if (/s\d{2}-s\d{2}/.test(n)) return false;
+  // Exclude prose multi-season ranges: "Season 1 to 5", "Season 1 through 3", "Season 1-5"
+  if (/season\s*\d+\s*(to|through|-)\s*\d+/.test(n)) return false;
+  // Exclude comma-listed multi-season packs: "Season 1, 2, 3"
+  if (/season\s*\d+(\s*,\s*\d+){2,}/.test(n)) return false;
 
   // Must contain a season-N marker: "Season 1", "S01", or standalone "S1"
   return new RegExp(`season\\s*${season}\\b|\\bs${pad}\\b|\\bs${season}\\b`).test(n);
 }
 
+// Size bonus: prefer higher-bitrate encodes within the same quality tier.
+// Capped at 60 GB so monster packs (3D SBS, multi-season bundles) don't dominate.
+// Max bonus ≈ 23 pts (60 GB) vs ~11 pts (5 GB) — enough to beat a re-encode but
+// never enough to overcome a quality-tier difference (50+ pts between tiers).
+const SIZE_CAP_BYTES = 60_000_000_000;
+function sizebonus(bytes: number): number {
+  return Math.log10(Math.min(bytes, SIZE_CAP_BYTES) / 1e9 + 1) * 15;
+}
+
 function pickBest(candidates: KnabenHit[]): TvTorrentResult {
-  // Prefer seeded results; among those, highest quality then most seeders.
+  // Prefer seeded results; among those, highest (quality + size bonus) then most seeders.
   const seeded = candidates.filter((h) => h.seeders > 0);
   const pool   = seeded.length > 0 ? seeded : candidates;
 
   pool.sort((a, b) => {
-    const qd = qualityRank(b.title) - qualityRank(a.title);
-    if (qd !== 0) return qd;
+    const scoreA = qualityRank(a.title) + sizebonus(a.bytes);
+    const scoreB = qualityRank(b.title) + sizebonus(b.bytes);
+    const sd = scoreB - scoreA;
+    if (Math.abs(sd) > 0.01) return sd;
     return b.seeders - a.seeders;
   });
 
