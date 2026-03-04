@@ -296,21 +296,38 @@ export default function ChatInterface() {
         throw new Error(errMsg);
       }
 
-      const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        fullContent += chunk;
-        setMessages((prev) =>
-          prev.map((m) => m.id === assistantMsg.id ? { ...m, content: fullContent } : m)
-        );
+      // Drain a ReadableStream, appending each token to the chat bubble as it arrives
+      async function drainStream(reader: ReadableStreamDefaultReader<Uint8Array>) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          fullContent += chunk;
+          setMessages((prev) =>
+            prev.map((m) => m.id === assistantMsg.id ? { ...m, content: fullContent } : m)
+          );
+        }
       }
 
-      // Guard: if the model returned nothing, surface it as an error instead of silent blank
+      await drainStream(res.body.getReader());
+
+      // OpenRouter sometimes returns 200 OK but streams nothing (upstream model error).
+      // Silently retry via Ollama before surfacing an error to the user.
+      if (!fullContent.trim()) {
+        const fallbackRes = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: history, forceOllama: true }),
+        });
+        if (fallbackRes.ok && fallbackRes.body) {
+          await drainStream(fallbackRes.body.getReader());
+        }
+      }
+
+      // Guard: both backends returned nothing — surface it as an error
       if (!fullContent.trim()) {
         throw new Error('No response received. Please try again.');
       }
@@ -372,6 +389,7 @@ export default function ChatInterface() {
                 onPlexFound={handlePlexFound}
                 onTorrentsReady={handleTorrentsReady}
                 onNoSuitableQuality={handleNoSuitableQuality}
+                onDownload={triggerDownload}
               />
             ))}
           </div>

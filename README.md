@@ -8,9 +8,10 @@ An AI-powered movie assistant for your Plex library. Chat naturally to get perso
 
 - **Chat with an AI** to get movie recommendations based on your mood, genre preferences, favourite actors, or anything else
 - **Checks your Plex library** instantly — every suggestion shows whether it's already available to watch
-- **Finds and downloads** movies not in your library via a 1080p torrent source
+- **One-click downloads** — each recommendation card has a Download button; no need to type anything
 - **Moves completed downloads** to your Plex folder automatically and triggers a library scan
 - Works from **any device on your local network** — desktop, phone, tablet
+- **Resilient AI** — falls back to a local Ollama model automatically if the cloud API is unavailable
 
 ---
 
@@ -71,18 +72,20 @@ The cloud LLM that powers the conversation.
 1. Sign up at [openrouter.ai](https://openrouter.ai) — there is a free tier
 2. Generate an API key
 3. Paste it into the **API Key** field
-4. The default model (`openrouter/free`) automatically picks from available free models. You can select a specific model from the dropdown if you prefer
+4. Select a model from the dropdown, or leave the default (`mistralai/mistral-small-3.1-24b-instruct:free`)
 
 ### Ollama (Optional — Local Fallback)
 
-A locally-running AI that takes over if OpenRouter is unavailable, or can be used exclusively.
+A locally-running AI that takes over automatically if OpenRouter is unavailable or returns an empty response. Can also be used exclusively.
 
 1. Install Ollama from [ollama.com](https://ollama.com)
 2. Pull a model: `ollama pull llama3.2:3b`
-3. Set **Base URL** to `http://localhost:11434` (default)
+3. Set **Base URL** to `http://localhost:11434` (this is pre-filled by default)
 4. Select `llama3.2:3b` (or whichever model you pulled) from the **Model** dropdown
 5. Use **Send test message** to verify it's responding correctly
 6. Toggle **"Use Ollama exclusively"** if you want to skip OpenRouter entirely and always use your local model
+
+> **Tip:** For best results with longer conversations, increase Ollama's context window to 8 192 tokens. In your Modelfile add `PARAMETER num_ctx 8192`, or run: `ollama create llama3.2:3b-ctx8k -f Modelfile`
 
 ### Plex
 
@@ -94,7 +97,7 @@ Your media server — used to check which movies you already own.
    - Open your browser's developer tools → Network tab
    - Look for any request to your Plex server — the token is in the URL as `X-Plex-Token=...`
    - Alternatively: [how to find your Plex token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/)
-3. Enter both in the Settings page
+3. Enter both in the Settings page (URL is pre-filled with the default)
 
 ### TMDB
 
@@ -117,7 +120,7 @@ The download client that manages your torrents.
 
 1. Install Transmission from [transmissionbt.com](https://transmissionbt.com)
 2. Enable the remote (web) interface — in Transmission: **Preferences → Remote → Enable remote access**
-3. Set the **Base URL** (default: `http://localhost:9091`)
+3. Set the **Base URL** (pre-filled with the default: `http://localhost:9091`)
 4. Enter credentials if you've set a username/password in Transmission's preferences, or leave blank if no auth is configured
 5. Set **Download directory** to match Transmission's download folder
 
@@ -126,6 +129,7 @@ The download client that manages your torrents.
 Controls where completed downloads go after they finish.
 
 - **Library directory** — set this to your Plex Movies folder (e.g. `/Volumes/Drive/Plex/Movies`)
+- A disk space indicator shows how full the drive is
 - When a download completes, the app automatically:
   1. Copies the video file to `Library directory/Movie Title/`
   2. Removes the torrent from Transmission
@@ -149,7 +153,7 @@ The assistant recommends one film at a time. Each recommendation shows as a card
 - IMDb, TMDB, and Rotten Tomatoes scores
 - A synopsis
 - Whether it's **already in your Plex library**
-- Whether it's **available to download**
+- A **Download button** if a copy is available
 
 ### Watching something you already have
 
@@ -157,11 +161,12 @@ If the movie is already in your library, the card shows a green **"On Plex"** ba
 
 ### Downloading something new
 
-If the movie isn't in your library and a copy is available:
-1. The assistant will ask: _"Want me to download [Title]?"_
-2. Say yes (or "sure", "go ahead", "ok", etc.)
-3. A download tracker card appears in the chat showing progress
-4. When it finishes, the file is automatically moved to your library and Plex is refreshed
+If the movie isn't in your library and a copy is available, you have two options:
+
+- **Click the Download button** on the recommendation card directly, or
+- **Reply in chat** — the assistant will ask _"Want me to download [Title]?"_ and start the download when you confirm
+
+Either way, a download tracker card appears showing progress. When it finishes, the file is automatically moved to your library and Plex is refreshed.
 
 ### Starting a new conversation
 
@@ -171,9 +176,9 @@ Click the **pencil icon** ✏️ in the top right to start fresh. Your previous 
 
 ## Access from other devices
 
-The app runs on your local machine and is accessible from any device on the same network.
+The app is restricted to your local network — requests from outside are blocked automatically.
 
-Open `http://<your-mac-ip>:3000` on your phone or tablet — find your Mac's IP in **System Settings → Wi-Fi → Details**.
+Open `http://<your-mac-ip>:3000` on your phone or tablet — find your Mac's IP in **System Settings → Wi-Fi → Details**. You can also use your Mac's hostname: `http://your-mac-name.local:3000`.
 
 > **Note:** `crypto.randomUUID()` requires a secure context (HTTPS). Over plain HTTP on a local IP, the app falls back to a `Math.random`-based UUID, which is fine for local use.
 
@@ -185,15 +190,17 @@ Open `http://<your-mac-ip>:3000` on your phone or tablet — find your Mac's IP 
 Browser
   └── ChatInterface (Next.js / React)
         ├── Sends messages to /api/chat
-        │     ├── OpenRouter (cloud LLM, with retry + backoff)
-        │     └── Ollama (local LLM fallback)
+        │     ├── OpenRouter (cloud LLM, retry + backoff)
+        │     └── Ollama (local fallback — server-side after retries,
+        │                 or client-side if OpenRouter streams nothing)
         ├── RecommendationCard
-        │     ├── /api/plex/check    → is it in the library?
-        │     ├── /api/reviews       → TMDB metadata + OMDB ratings
-        │     └── /api/torrents/search → YTS 1080p availability
+        │     ├── /api/plex/check      → is it in the library?
+        │     ├── /api/reviews         → TMDB metadata + OMDB ratings
+        │     ├── /api/torrents/search → YTS 1080p availability
+        │     └── Download button      → triggers triggerDownload()
         └── DownloadTracker
               ├── /api/transmission/add    → start download
-              ├── /api/transmission/status → poll progress
+              ├── /api/transmission/status → poll progress (cross-device)
               ├── /api/transmission/control → pause/resume/cancel
               └── /api/files/move  → copy to library + Plex refresh
 ```
@@ -203,6 +210,7 @@ Browser
 - The LLM communicates intent via XML tags: `<recommendation>` triggers a card, `<download>` triggers a torrent
 - Chat history is persisted to `localStorage` (up to 200 messages)
 - App-initiated torrent IDs are tracked server-side in `app-torrents.json` so downloads started on one device are visible from any device
+- OpenRouter's free tier sometimes returns an empty stream; the client automatically retries via Ollama before surfacing an error
 
 ---
 
@@ -210,6 +218,7 @@ Browser
 
 The app is designed for trusted local-network use only. It includes:
 
+- **Local-network restriction** — middleware blocks all requests from non-LAN IPs; only RFC-1918 addresses and `.local` mDNS hostnames are allowed
 - **Rate limiting** — 30 requests/minute per IP on the chat endpoint
 - **Magnet URL validation** — only well-formed `magnet:?xt=urn:btih:` links are accepted
 - **SSRF protection** — Plex, Transmission, and Ollama URLs must be localhost or RFC-1918 addresses
@@ -227,6 +236,9 @@ Start Ollama: `ollama serve` (it may already be running as a background service 
 
 **"No API key configured"**
 Go to Settings and add your OpenRouter API key, or enable "Use Ollama exclusively" to skip OpenRouter entirely.
+
+**Ollama responses are cut off mid-sentence**
+The model's context window may be too small for long conversations. Set `num_ctx` to at least `8192` in your Modelfile and recreate the model. See the Ollama section above.
 
 **Recommendation card shows no poster / ratings**
 Check that your TMDB and OMDB API keys are set correctly in Settings. Both have free tiers with generous limits.

@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
  *   • 172.16–31.x.x              — RFC-1918 class B
  *   • 192.168.x.x                — RFC-1918 class C
  *   • ::ffff: variants of all of the above (IPv4-mapped IPv6)
+ *   • *.local Host header         — mDNS/Bonjour hostnames (e.g. MBPi5.local)
  *
  * Everything else gets a 403.
  */
@@ -35,6 +36,11 @@ function isLocalAddress(ip: string): boolean {
 }
 
 export function middleware(req: NextRequest) {
+  // Allow mDNS .local hostnames (e.g. MBPi5.local:3000) — .local is a reserved
+  // TLD only resolvable on the local network via Bonjour/mDNS, never on the internet
+  const host = (req.headers.get('host') ?? '').split(':')[0];
+  if (host.endsWith('.local')) return NextResponse.next();
+
   // Next.js Edge runtime exposes req.ip; fall back to standard proxy headers
   const raw =
     req.ip ??

@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
             model: ollamaModel,
             messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...trimmedMessages],
             stream: true,
-            max_tokens: 512,
+            max_tokens: 2048,
             temperature: 0.4,
           }),
           signal: AbortSignal.timeout(60000),

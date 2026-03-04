@@ -9,6 +9,7 @@ interface Props {
   onPlexFound: (title: string, year: number) => void;
   onTorrentsReady: (title: string, year: number, torrents: TorrentOption[]) => void;
   onNoSuitableQuality: (title: string, year: number) => void;
+  onDownload: (title: string, year: number) => void;
 }
 
 // 'idle' = waiting for Plex result before starting; 'skipped' = on Plex, no need to search
@@ -19,6 +20,7 @@ export default function RecommendationCard({
   onPlexFound,
   onTorrentsReady,
   onNoSuitableQuality,
+  onDownload,
 }: Props) {
   const { title, year, type } = recommendation;
 
@@ -30,6 +32,7 @@ export default function RecommendationCard({
   const [reviews, setReviews] = useState<ReviewData | null>(null);
   const [torrentSummary, setTorrentSummary] = useState('');
   const [noSuitableQuality, setNoSuitableQuality] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   // Fire each callback only once
   const plexCallbackSent = useRef(false);
@@ -100,7 +103,7 @@ export default function RecommendationCard({
   }, [title, year, type, onPlexFound, onTorrentsReady, onNoSuitableQuality]);
 
   return (
-    <div className="ml-11 mt-2 rounded-xl border border-plex-border bg-plex-card overflow-hidden max-w-[600px]">
+    <div className="mt-2 rounded-xl border border-plex-border bg-plex-card overflow-hidden max-w-[600px]">
       <div className="flex gap-4 p-4">
         {/* Poster */}
         <div className="w-24 h-36 flex-shrink-0 rounded-lg overflow-hidden bg-gray-800">
@@ -186,7 +189,25 @@ export default function RecommendationCard({
               {torrentState === 'idle' ? null : torrentState === 'loading' ? (
                 <span className="text-xs text-gray-600 animate-pulse">Checking availability...</span>
               ) : torrentSummary ? (
-                <span className="text-xs text-green-500">Available to download</span>
+                <button
+                  onClick={() => { setDownloading(true); onDownload(title, year); }}
+                  disabled={downloading}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg
+                    bg-plex-accent text-black font-semibold
+                    hover:bg-yellow-400 transition-colors
+                    disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {downloading ? (
+                    'Starting…'
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                        <path d="M5 20h14v-2H5v2zm7-4l-5-5 1.41-1.41L11 17.17V4h2v13.17l3.59-3.58L18 15l-6 6-6-6z" />
+                      </svg>
+                      Download
+                    </>
+                  )}
+                </button>
               ) : (
                 <span className="text-xs text-gray-500">Not available to download</span>
               )}
