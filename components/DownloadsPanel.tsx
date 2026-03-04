@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { ActiveDownload } from '@/types';
 import DownloadTracker from './DownloadTracker';
 
@@ -12,13 +12,10 @@ interface Props {
 
 export default function DownloadsPanel({ downloads, onMoved, onComplete }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const prevCountRef = useRef(downloads.length);
 
-  // Auto-expand when a new download is added; auto-collapse when all finish
+  // Auto-collapse when all downloads finish
   useEffect(() => {
-    if (downloads.length > prevCountRef.current) setExpanded(true);
     if (downloads.length === 0) setExpanded(false);
-    prevCountRef.current = downloads.length;
   }, [downloads.length]);
 
   if (downloads.length === 0) return null;
