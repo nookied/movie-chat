@@ -62,10 +62,16 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
       const msg = err instanceof Error ? err.message : 'Cannot reach Transmission';
       setError(msg);
       consecutiveErrors.current += 1;
-      // Stop polling if the torrent is gone, or after 3 consecutive errors (e.g. Transmission down)
-      if (msg.toLowerCase().includes('not found') || consecutiveErrors.current >= 3) {
+      // If the torrent is gone from Transmission and this was an app-initiated download,
+      // the file was already moved to the library — silently dismiss instead of showing an error.
+      // This handles the case where the app was backgrounded on iPhone while the download
+      // finished and the torrent was removed, then resumed to find it missing.
+      if (msg.toLowerCase().includes('not found')) {
         stopPolling();
+        if (download.fromApp) { onComplete(); return; }
       }
+      // Stop polling after 3 consecutive errors (e.g. Transmission down)
+      if (consecutiveErrors.current >= 3) stopPolling();
     }
   }, [download.torrentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
