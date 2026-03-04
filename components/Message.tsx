@@ -39,18 +39,7 @@ export default function Message({ message, thinking = false }: Props) {
   if (!displayText && !isUser && !thinking) return null;
 
   return (
-    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-      {/* Avatar */}
-      <div
-        className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold
-          ${isUser
-            ? 'bg-plex-accent text-black'
-            : 'bg-gray-700 text-gray-300'
-          }`}
-      >
-        {isUser ? 'U' : 'AI'}
-      </div>
-
+    <div className={`flex ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
       {/* Bubble */}
       <div
         className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap

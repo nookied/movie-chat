@@ -22,12 +22,12 @@ interface ConfigFields {
 
 const EMPTY: ConfigFields = {
   openRouterApiKey: '', openRouterModel: '',
-  plexBaseUrl: '', plexToken: '',
+  plexBaseUrl: 'http://localhost:32400', plexToken: '',
   tmdbApiKey: '', omdbApiKey: '',
-  transmissionBaseUrl: '', transmissionUsername: '',
+  transmissionBaseUrl: 'http://localhost:9091', transmissionUsername: '',
   transmissionPassword: '', transmissionDownloadDir: '',
   libraryDir: '',
-  ollamaBaseUrl: '', ollamaModel: '', ollamaOnly: '',
+  ollamaBaseUrl: 'http://localhost:11434', ollamaModel: '', ollamaOnly: '',
 };
 
 const SENSITIVE = new Set(['openRouterApiKey', 'plexToken', 'tmdbApiKey', 'omdbApiKey', 'transmissionPassword']);
@@ -202,6 +202,12 @@ function Toggle({ label, description, enabled, onChange }: {
   );
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes >= 1e12) return `${(bytes / 1e12).toFixed(2)} TB`;
+  if (bytes >= 1e9)  return `${(bytes / 1e9).toFixed(1)} GB`;
+  return `${(bytes / 1e6).toFixed(0)} MB`;
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -221,6 +227,12 @@ export default function SettingsPage() {
   const [tmdbStatus, setTmdbStatus] = useState<ServiceStatus>('idle');
   const [omdbStatus, setOmdbStatus] = useState<ServiceStatus>('idle');
   const [transmissionStatus, setTransmissionStatus] = useState<ServiceStatus>('idle');
+
+  // Disk space for the library directory
+  type DiskInfo = { total: number; free: number; used: number; percent: number };
+  const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
+  const [diskError, setDiskError] = useState('');
+
 
   const runChecks = useCallback(async (currentSensitiveSet: Set<string>) => {
     // OpenRouter — special: also captures available free models list
@@ -323,8 +335,10 @@ export default function SettingsPage() {
           if (SENSITIVE.has(k) && v === 'set') {
             wasSet.add(k);
             filled[k as keyof ConfigFields] = '';
-          } else {
-            filled[k as keyof ConfigFields] = v ?? '';
+          } else if (v) {
+            // Only populate non-empty values — empty strings fall back to EMPTY defaults
+            // so fields like plexBaseUrl start pre-filled even on a fresh install
+            filled[k as keyof ConfigFields] = v;
           }
         }
 
@@ -334,6 +348,22 @@ export default function SettingsPage() {
       })
       .catch(() => {});
   }, [runChecks]);
+
+  // Fetch disk space whenever the library directory changes (debounced 600ms)
+  useEffect(() => {
+    const dir = form.libraryDir.trim();
+    if (!dir) { setDiskInfo(null); setDiskError(''); return; }
+    const timer = setTimeout(() => {
+      fetch(`/api/files/diskspace?path=${encodeURIComponent(dir)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.error) { setDiskInfo(null); setDiskError(data.error); }
+          else { setDiskInfo(data as DiskInfo); setDiskError(''); }
+        })
+        .catch(() => { setDiskInfo(null); setDiskError('Could not read disk info'); });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [form.libraryDir]);
 
   function handleChange(key: keyof ConfigFields, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -480,6 +510,32 @@ export default function SettingsPage() {
         <Section title="File Management" description="Plex library path for moving completed downloads">
           <Field label="Library directory" value={form.libraryDir} placeholder="/Volumes/ExternalDrive/Movies"
             onChange={(v) => handleChange('libraryDir', v)} />
+          {(diskInfo || diskError) && (
+            <div className="px-4 py-3">
+              {diskError && <p className="text-xs text-red-400">{diskError}</p>}
+              {diskInfo && (
+                <div>
+                  <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                    <span>{formatBytes(diskInfo.free)} free</span>
+                    <span>{diskInfo.percent}% used</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        diskInfo.percent > 95 ? 'bg-red-500'
+                        : diskInfo.percent > 85 ? 'bg-amber-500'
+                        : 'bg-plex-accent'
+                      }`}
+                      style={{ width: `${diskInfo.percent}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1.5">
+                    {formatBytes(diskInfo.used)} used of {formatBytes(diskInfo.total)}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </Section>
 
         <div className="flex items-center gap-4 pt-2 pb-8">

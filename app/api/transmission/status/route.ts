@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTorrentStatus, listActiveTorrents } from '@/lib/transmission';
+import { isAppTorrent } from '@/lib/appTorrents';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const id = searchParams.get('id');
 
-  // No ID → return all active torrents
+  // No ID → return all active torrents, annotated with isAppTorrent flag.
+  // This lets any device (not just the one that initiated the download) recognise
+  // which torrents were added through this app and should be tracked/auto-moved.
   if (!id) {
     try {
       const torrents = await listActiveTorrents();
-      return NextResponse.json(torrents);
+      const annotated = torrents.map((t) => ({ ...t, isAppTorrent: isAppTorrent(t.id) }));
+      return NextResponse.json(annotated);
     } catch (err) {
       console.error('[transmission/status]', err);
       const message = err instanceof Error ? err.message : 'Failed to list torrents';

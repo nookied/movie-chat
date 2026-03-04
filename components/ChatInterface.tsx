@@ -168,7 +168,10 @@ export default function ChatInterface() {
     } catch { /* storage full or unavailable */ }
   }, [messages, isStreaming]);
 
-  // On mount, pick up any app-initiated downloads already in progress in Transmission
+  // On mount, pick up any app-initiated downloads already in progress in Transmission.
+  // Uses the server-side isAppTorrent flag (from app-torrents.json) as the primary check
+  // so downloads started on OTHER devices are also picked up and auto-moved correctly.
+  // localStorage IDs serve as a backward-compat fallback in case app-torrents.json is missing.
   useEffect(() => {
     fetch('/api/transmission/status')
       .then((r) => r.json())
@@ -176,7 +179,7 @@ export default function ChatInterface() {
         if (!Array.isArray(torrents) || torrents.length === 0) return;
         const appIds = loadAppTorrentIds();
         const downloads: ActiveDownload[] = torrents
-          .filter((t: { id: number }) => appIds.has(t.id))
+          .filter((t: { id: number; isAppTorrent?: boolean }) => t.isAppTorrent || appIds.has(t.id))
           .map((t: { id: number; name: string }) => ({
             torrentId: t.id,
             torrentName: cleanTorrentName(t.name),
