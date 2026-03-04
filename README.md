@@ -262,6 +262,64 @@ Switch to a specific model in Settings (e.g. `mistralai/mistral-small-3.1-24b-in
 
 ---
 
+## Updating
+
+### Manual update
+
+Run this from inside the app folder:
+
+```bash
+npm run update
+```
+
+It checks if a newer version is available, shows what changed, and — if you confirm — pulls the update and restarts the app automatically.
+
+### Automatic updates
+
+During setup (`npm run setup` or the one-liner installer) you're offered the option to enable **nightly auto-updates**. This adds a cron job that silently checks for updates every night at 3 AM and applies them if found.
+
+To enable it later manually, run this once:
+
+```bash
+(crontab -l 2>/dev/null; echo "0 3 * * * cd \"$HOME/movie-chat\" && bash update.sh --auto >> \"$HOME/.movie-chat-update.log\" 2>&1") | crontab -
+```
+
+To check what happened during the last auto-update:
+
+```bash
+cat ~/.movie-chat-update.log
+```
+
+To disable auto-updates:
+
+```bash
+crontab -e   # delete the movie-chat line and save
+```
+
+---
+
+## Uninstalling
+
+**One-liner (if you installed with the one-liner):**
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/nookied/movie-chat/main/uninstall.sh)"
+```
+
+**From inside the repo:**
+
+```bash
+npm run uninstall:app
+```
+
+The script will:
+- Stop and remove the pm2 auto-start process
+- Ask whether to delete the app folder (code + config)
+
+> pm2 itself is left installed since it may be used by other apps. To remove it too: `npm uninstall -g pm2`
+
+---
+
 ## Running as a service (auto-start on boot)
 
 `npm run setup` offers to configure this automatically. If you skipped it or want to set it up manually:

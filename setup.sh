@@ -22,7 +22,7 @@ echo -e "${BOLD}  Movie Chat — setup${RESET}"
 echo "  ─────────────────────────────────────────"
 
 # ── 1. Node.js check ─────────────────────────────────────────────────────────
-heading "1 / 3  Checking prerequisites"
+heading "1 / 4  Checking prerequisites"
 
 if ! command -v node &>/dev/null; then
   error "Node.js is not installed."
@@ -42,13 +42,13 @@ fi
 info "Node.js $NODE_VER"
 
 # ── 2. npm install ────────────────────────────────────────────────────────────
-heading "2 / 3  Installing dependencies"
+heading "2 / 4  Installing dependencies"
 
 npm install --silent
 info "Dependencies installed"
 
 # ── 3. pm2 (optional) ────────────────────────────────────────────────────────
-heading "3 / 3  Auto-start with pm2 (optional)"
+heading "3 / 4  Auto-start with pm2 (optional)"
 echo "       pm2 keeps the app running and restarts it after crashes or reboots."
 echo ""
 
@@ -87,6 +87,32 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
   echo ""
 else
   info "Skipped — start manually with:  npm run dev"
+fi
+
+# ── 4. auto-update cron (optional) ───────────────────────────────────────────
+heading "4 / 4  Automatic updates (optional)"
+echo "       Schedules a nightly check at 3 AM — pulls updates and restarts"
+echo "       the app silently if a new version is available."
+echo ""
+
+ask "Set up automatic nightly updates?"
+read -r REPLY_UPDATE
+echo ""
+
+INSTALL_DIR="$(pwd)"
+
+if [[ "$REPLY_UPDATE" =~ ^[Yy]$ ]]; then
+  CRON_CMD="0 3 * * * cd \"$INSTALL_DIR\" && bash update.sh --auto >> \"$HOME/.movie-chat-update.log\" 2>&1"
+  # Add only if not already present
+  if crontab -l 2>/dev/null | grep -qF "movie-chat"; then
+    warn "A Movie Chat cron job already exists — skipping"
+  else
+    (crontab -l 2>/dev/null; echo "$CRON_CMD") | crontab -
+    info "Cron job added (runs daily at 3:00 AM)"
+    info "Update log:  $HOME/.movie-chat-update.log"
+  fi
+else
+  info "Skipped — update manually any time with:  npm run update"
 fi
 
 # ── done ──────────────────────────────────────────────────────────────────────

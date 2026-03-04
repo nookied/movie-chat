@@ -83,7 +83,7 @@ npm install --silent
 info "Dependencies installed"
 
 # ── 4. pm2 (optional) ────────────────────────────────────────────────────────
-heading "4 / 4  Auto-start with pm2 (optional)"
+heading "4 / 5  Auto-start with pm2 (optional)"
 echo "       pm2 keeps the app running and restarts it after crashes or reboots."
 echo ""
 
@@ -122,6 +122,29 @@ else
   echo ""
   echo "       cd $INSTALL_DIR && npm run dev"
   echo ""
+fi
+
+# ── 5. auto-update cron (optional) ───────────────────────────────────────────
+heading "5 / 5  Automatic updates (optional)"
+echo "       Schedules a nightly check at 3 AM — pulls updates and restarts"
+echo "       the app silently if a new version is available."
+echo ""
+
+ask "Set up automatic nightly updates? [y/N]"
+read -r REPLY_UPDATE
+echo ""
+
+if [[ "$REPLY_UPDATE" =~ ^[Yy]$ ]]; then
+  CRON_CMD="0 3 * * * cd \"$INSTALL_DIR\" && bash update.sh --auto >> \"$HOME/.movie-chat-update.log\" 2>&1"
+  if crontab -l 2>/dev/null | grep -qF "movie-chat"; then
+    warn "A Movie Chat cron job already exists — skipping"
+  else
+    (crontab -l 2>/dev/null; echo "$CRON_CMD") | crontab -
+    info "Cron job added (runs daily at 3:00 AM)"
+    info "Update log:  $HOME/.movie-chat-update.log"
+  fi
+else
+  info "Skipped — update manually any time with:  npm run update"
 fi
 
 # ── done ──────────────────────────────────────────────────────────────────────

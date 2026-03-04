@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "setup": "bash setup.sh"
+    "setup": "bash setup.sh",
+    "update": "bash update.sh",
+    "uninstall:app": "bash uninstall.sh"
   },
   "dependencies": {
     "next": "^14.2.0",
