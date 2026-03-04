@@ -19,6 +19,9 @@ app-torrents.json
 .env.test.local
 .env.production.local
 
+# Claude Code
+.claude/
+
 # misc
 .DS_Store
 *.pem
