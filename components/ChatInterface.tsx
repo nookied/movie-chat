@@ -121,6 +121,8 @@ export default function ChatInterface() {
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [activeDownloads, setActiveDownloads] = useState<ActiveDownload[]>([]);
+  // Titles successfully moved to the Plex library this session — used to update cards immediately
+  const [movedTitles, setMovedTitles] = useState<Set<string>>(new Set());
 
   // Stores the best torrent for each recommended movie (keyed by "title-year")
   const pendingTorrents = useRef<Map<string, TorrentOption>>(new Map());
@@ -406,6 +408,10 @@ export default function ChatInterface() {
                   const t = rec.title.toLowerCase();
                   return dl.includes(t) || t.includes(dl);
                 })}
+                forceInLibrary={[...movedTitles].some((name) => {
+                  const t = rec.title.toLowerCase();
+                  return name.includes(t) || t.includes(name);
+                })}
               />
             ))}
           </div>
@@ -414,6 +420,9 @@ export default function ChatInterface() {
           <DownloadTracker
             key={dl.torrentId}
             download={dl}
+            onMoved={(name) =>
+              setMovedTitles((prev) => new Set([...prev, name.toLowerCase()]))
+            }
             onComplete={() => {
               setActiveDownloads((prev) => prev.filter((d) => d.torrentId !== dl.torrentId));
               const appIds = loadAppTorrentIds();

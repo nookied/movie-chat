@@ -11,6 +11,7 @@ interface Props {
   onNoSuitableQuality: (title: string, year: number) => void;
   onDownload: (title: string, year: number) => void;
   isDownloading?: boolean;
+  forceInLibrary?: boolean;
 }
 
 // 'idle' = waiting for Plex result before starting; 'skipped' = on Plex, no need to search
@@ -23,6 +24,7 @@ export default function RecommendationCard({
   onNoSuitableQuality,
   onDownload,
   isDownloading = false,
+  forceInLibrary = false,
 }: Props) {
   const { title, year, type } = recommendation;
 
@@ -139,11 +141,11 @@ export default function RecommendationCard({
             </div>
 
             {/* Plex badge */}
-            {plexState === 'loading' ? (
+            {plexState === 'loading' && !forceInLibrary ? (
               <span className="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full flex-shrink-0 animate-pulse">
                 Checking Plex...
               </span>
-            ) : plex?.found ? (
+            ) : plex?.found || forceInLibrary ? (
               <span className="text-xs bg-green-900/60 text-green-400 border border-green-700 px-2 py-0.5 rounded-full flex-shrink-0">
                 On Plex ✓
               </span>
@@ -186,7 +188,7 @@ export default function RecommendationCard({
           </div>
 
           {/* Torrent availability — shown only when Plex doesn't have it */}
-          {type === 'movie' && torrentState !== 'skipped' && (
+          {type === 'movie' && torrentState !== 'skipped' && !forceInLibrary && (
             <div className="mt-3">
               {torrentState === 'idle' ? null : torrentState === 'loading' ? (
                 <span className="text-xs text-gray-600 animate-pulse">Checking availability...</span>

@@ -6,6 +6,7 @@ import { DownloadStatus, ActiveDownload } from '@/types';
 interface Props {
   download: ActiveDownload;
   onComplete: () => void;
+  onMoved?: (torrentName: string) => void;
 }
 
 // Transmission status codes
@@ -32,7 +33,7 @@ function formatSpeed(bytesPerSec: number): string {
   return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`;
 }
 
-export default function DownloadTracker({ download, onComplete }: Props) {
+export default function DownloadTracker({ download, onComplete, onMoved }: Props) {
   const [status, setStatus] = useState<DownloadStatus | null>(null);
   const [error, setError] = useState('');
   const [moving, setMoving] = useState(false);
@@ -85,6 +86,7 @@ export default function DownloadTracker({ download, onComplete }: Props) {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Move failed');
+      onMoved?.(download.torrentName);
       setMoved(true);
     } catch (err) {
       setMoveError(err instanceof Error ? err.message : 'Move failed');
