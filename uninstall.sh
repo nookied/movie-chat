@@ -47,7 +47,22 @@ else
   warn "No pm2 process found — skipping"
 fi
 
-# ── 2. App files ──────────────────────────────────────────────────────────────
+# ── 2. Cron job ───────────────────────────────────────────────────────────────
+heading "Remove auto-update cron job"
+
+if crontab -l 2>/dev/null | grep -qF "movie-chat"; then
+  crontab -l 2>/dev/null | grep -vF "movie-chat" | crontab -
+  info "Cron job removed"
+  # Remove the log file too (if it exists)
+  if [ -f "$HOME/.movie-chat-update.log" ]; then
+    rm -f "$HOME/.movie-chat-update.log"
+    info "Update log deleted"
+  fi
+else
+  warn "No Movie Chat cron job found — skipping"
+fi
+
+# ── 3. App files ──────────────────────────────────────────────────────────────
 heading "Remove app files"
 
 # Detect the install directory
