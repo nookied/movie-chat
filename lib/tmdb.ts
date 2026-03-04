@@ -63,8 +63,18 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
   });
   if (!searchRes.ok) return {};
 
-  const searchData = await searchRes.json();
-  const results: TmdbSearchResult[] = searchData.results ?? [];
+  let results: TmdbSearchResult[] = (await searchRes.json()).results ?? [];
+
+  // If the year-qualified search found nothing, retry without the year constraint.
+  // The LLM sometimes guesses the wrong year for recent releases.
+  if (results.length === 0 && year) {
+    const fallbackUrl = new URL(`${TMDB_BASE}/search/movie`);
+    fallbackUrl.searchParams.set('api_key', tmdbApiKey);
+    fallbackUrl.searchParams.set('query', title);
+    const fbRes = await fetch(fallbackUrl.toString(), { signal: AbortSignal.timeout(8000) });
+    if (fbRes.ok) results = (await fbRes.json()).results ?? [];
+  }
+
   if (results.length === 0) return {};
 
   const movie = results[0];
@@ -116,8 +126,18 @@ export async function getTvDetails(title: string, year?: number): Promise<Partia
   });
   if (!searchRes.ok) return {};
 
-  const searchData = await searchRes.json();
-  const results: TmdbTvSearchResult[] = searchData.results ?? [];
+  let results: TmdbTvSearchResult[] = (await searchRes.json()).results ?? [];
+
+  // If the year-qualified search found nothing, retry without the year constraint.
+  // The LLM sometimes guesses the wrong year for recent releases.
+  if (results.length === 0 && year) {
+    const fallbackUrl = new URL(`${TMDB_BASE}/search/tv`);
+    fallbackUrl.searchParams.set('api_key', tmdbApiKey);
+    fallbackUrl.searchParams.set('query', title);
+    const fbRes = await fetch(fallbackUrl.toString(), { signal: AbortSignal.timeout(8000) });
+    if (fbRes.ok) results = (await fbRes.json()).results ?? [];
+  }
+
   if (results.length === 0) return {};
 
   const show = results[0];
