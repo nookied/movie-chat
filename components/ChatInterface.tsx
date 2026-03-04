@@ -168,28 +168,39 @@ export default function ChatInterface() {
     } catch { /* storage full or unavailable */ }
   }, [messages, isStreaming]);
 
-  // On mount, pick up any app-initiated downloads already in progress in Transmission.
-  // Uses the server-side isAppTorrent flag (from app-torrents.json) as the primary check
-  // so downloads started on OTHER devices are also picked up and auto-moved correctly.
-  // localStorage IDs serve as a backward-compat fallback in case app-torrents.json is missing.
-  useEffect(() => {
+  // Merge any app-initiated torrents from Transmission into the activeDownloads list.
+  // Skips IDs already tracked so existing cards aren't reset.
+  const syncAppDownloads = useCallback(() => {
     fetch('/api/transmission/status')
       .then((r) => r.json())
       .then((torrents) => {
         if (!Array.isArray(torrents) || torrents.length === 0) return;
         const appIds = loadAppTorrentIds();
-        const downloads: ActiveDownload[] = torrents
-          .filter((t: { id: number; isAppTorrent?: boolean }) => t.isAppTorrent || appIds.has(t.id))
-          .map((t: { id: number; name: string }) => ({
-            torrentId: t.id,
-            torrentName: cleanTorrentName(t.name),
-            addedAt: Date.now(),
-            fromApp: true,
-          }));
-        if (downloads.length > 0) setActiveDownloads(downloads);
+        setActiveDownloads((prev) => {
+          const knownIds = new Set(prev.map((d) => d.torrentId));
+          const incoming = torrents
+            .filter((t: { id: number; isAppTorrent?: boolean }) =>
+              (t.isAppTorrent || appIds.has(t.id)) && !knownIds.has(t.id)
+            )
+            .map((t: { id: number; name: string }) => ({
+              torrentId: t.id,
+              torrentName: cleanTorrentName(t.name),
+              addedAt: Date.now(),
+              fromApp: true,
+            }));
+          return incoming.length > 0 ? [...prev, ...incoming] : prev;
+        });
       })
       .catch(() => { /* Transmission not reachable — no-op */ });
   }, []);
+
+  // On mount, pick up downloads already in progress (including from other devices).
+  // Then poll every 10 s so downloads started elsewhere appear without a page reload.
+  useEffect(() => {
+    syncAppDownloads();
+    const interval = setInterval(syncAppDownloads, 10_000);
+    return () => clearInterval(interval);
+  }, [syncAppDownloads]);
 
   // Inject a system info message visible in chat and included in LLM history
   const addInfoMessage = useCallback((content: string) => {
@@ -390,6 +401,11 @@ export default function ChatInterface() {
                 onTorrentsReady={handleTorrentsReady}
                 onNoSuitableQuality={handleNoSuitableQuality}
                 onDownload={triggerDownload}
+                isDownloading={activeDownloads.some((d) => {
+                  const dl = d.torrentName.toLowerCase();
+                  const t = rec.title.toLowerCase();
+                  return dl.includes(t) || t.includes(dl);
+                })}
               />
             ))}
           </div>

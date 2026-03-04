@@ -10,6 +10,7 @@ interface Props {
   onTorrentsReady: (title: string, year: number, torrents: TorrentOption[]) => void;
   onNoSuitableQuality: (title: string, year: number) => void;
   onDownload: (title: string, year: number) => void;
+  isDownloading?: boolean;
 }
 
 // 'idle' = waiting for Plex result before starting; 'skipped' = on Plex, no need to search
@@ -21,6 +22,7 @@ export default function RecommendationCard({
   onTorrentsReady,
   onNoSuitableQuality,
   onDownload,
+  isDownloading = false,
 }: Props) {
   const { title, year, type } = recommendation;
 
@@ -188,6 +190,8 @@ export default function RecommendationCard({
             <div className="mt-3">
               {torrentState === 'idle' ? null : torrentState === 'loading' ? (
                 <span className="text-xs text-gray-600 animate-pulse">Checking availability...</span>
+              ) : isDownloading ? (
+                <span className="text-xs text-green-400">Downloading…</span>
               ) : torrentSummary ? (
                 <button
                   onClick={() => { setDownloading(true); onDownload(title, year); }}
