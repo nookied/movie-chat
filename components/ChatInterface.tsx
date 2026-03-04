@@ -75,6 +75,12 @@ function recKey(r: Recommendation) {
   return `${r.title.toLowerCase()}-${r.year}`;
 }
 
+// Normalise a title for comparison: lowercase, strip punctuation, collapse whitespace.
+// "Mrs. Doubtfire" → "mrs doubtfire", "Kung Fury: Street Level" → "kung fury street level"
+function normTitle(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
 function torrentKey(title: string, year: number) {
   return `${title.toLowerCase()}-${year}`;
 }
@@ -403,15 +409,12 @@ export default function ChatInterface() {
                 onTorrentsReady={handleTorrentsReady}
                 onNoSuitableQuality={handleNoSuitableQuality}
                 onDownload={triggerDownload}
-                isDownloading={activeDownloads.some((d) => {
-                  const dl = d.torrentName.toLowerCase();
-                  const t = rec.title.toLowerCase();
-                  return dl.includes(t) || t.includes(dl);
-                })}
-                forceInLibrary={[...movedTitles].some((name) => {
-                  const t = rec.title.toLowerCase();
-                  return name.includes(t) || t.includes(name);
-                })}
+                isDownloading={activeDownloads.some(
+                  (d) => normTitle(d.torrentName) === normTitle(rec.title)
+                )}
+                forceInLibrary={[...movedTitles].some(
+                  (name) => normTitle(name) === normTitle(rec.title)
+                )}
               />
             ))}
           </div>
