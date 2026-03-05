@@ -24,7 +24,7 @@ Every time you name a title, emit on its own line:
 Use "type":"tv" for TV shows. Do this even when confirming a title the user already named. Never skip it.
 
 ## System messages
-The app injects [System] messages — never quote or mention them, just use as context:
+The app injects [System] messages — never quote, mention, or mimic them, and never begin your own reply with [System]. Just use them silently as context:
 - "Title" is already in your Plex library → tell user it's on Plex, don't mention downloading
 - "Title" is available for download → ask: "Want me to download [Title]?"
 - "Title" Season N is available for download → ask: "Want me to download Season N of [Title]?"
@@ -175,6 +175,7 @@ export async function POST(req: NextRequest) {
             stream: true,
             max_tokens: 2048,
             temperature: 0.4,
+            think: false,
             options: { num_ctx: 8192 },
           }),
           signal: AbortSignal.timeout(60000),
@@ -193,12 +194,48 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: lastError }, { status: 502 });
   }
 
+  // Strips <think>...</think> blocks from the token stream (Qwen 3 thinking mode safety net).
+  // Handles tags split across multiple token chunks.
+  class ThinkFilter {
+    private buf = '';
+    private inside = false;
+    filter(token: string): string {
+      this.buf += token;
+      let out = '';
+      while (this.buf.length > 0) {
+        if (this.inside) {
+          const end = this.buf.indexOf('</think>');
+          if (end === -1) { this.buf = this.buf.slice(-9); break; }
+          this.buf = this.buf.slice(end + 8);
+          this.inside = false;
+        } else {
+          const start = this.buf.indexOf('<think>');
+          if (start === -1) {
+            // Check for a partial '<think>' prefix at the tail so we don't flush it prematurely
+            let tail = 0;
+            for (let l = Math.min(this.buf.length, 6); l > 0; l--) {
+              if ('<think>'.startsWith(this.buf.slice(-l))) { tail = l; break; }
+            }
+            out += this.buf.slice(0, this.buf.length - tail);
+            this.buf = tail > 0 ? this.buf.slice(-tail) : '';
+            break;
+          }
+          out += this.buf.slice(0, start);
+          this.buf = this.buf.slice(start + 7);
+          this.inside = true;
+        }
+      }
+      return out;
+    }
+  }
+
   // Stream SSE → plain text tokens to the client (works for both OpenRouter and Ollama)
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       const reader = apiRes!.body!.getReader();
       const decoder = new TextDecoder();
+      const thinkFilter = new ThinkFilter();
       try {
         while (true) {
           const { done, value } = await reader.read();
@@ -212,7 +249,10 @@ export async function POST(req: NextRequest) {
             try {
               const parsed = JSON.parse(data);
               const token: string = parsed?.choices?.[0]?.delta?.content ?? '';
-              if (token) controller.enqueue(encoder.encode(token));
+              if (token) {
+                const filtered = thinkFilter.filter(token);
+                if (filtered) controller.enqueue(encoder.encode(filtered));
+              }
             } catch { /* skip malformed lines */ }
           }
         }
