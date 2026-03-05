@@ -184,7 +184,7 @@ If the title isn't in your library and a copy is available:
 - **Click the Download button** on the recommendation card directly, or
 - **Reply in chat** — the assistant will ask _"Want me to download [Title]?"_ and start the download when you confirm
 
-A download tracker card appears showing progress. When it finishes, the file is automatically moved to your library and Plex is refreshed.
+A download tracker card appears showing progress. When it finishes, the file is automatically moved to your library and Plex is refreshed — this happens in the background on the server, so it works even if you close the browser or navigate away.
 
 ### Starting a new conversation
 
@@ -221,6 +221,10 @@ Browser
               ├── /api/transmission/status → poll progress (cross-device)
               ├── /api/transmission/control → pause/resume/cancel
               └── /api/files/move  → copy to library + Plex refresh
+
+Server (background)
+  └── Auto-move poller (runs every 60 s, no browser required)
+        └── Checks completed app torrents → moves files → Plex refresh
 ```
 
 **Key design choices:**
