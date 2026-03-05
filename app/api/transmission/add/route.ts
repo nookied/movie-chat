@@ -8,7 +8,11 @@ const MAGNET_RE = /^magnet:\?.*xt=urn:btih:([a-fA-F0-9]{40}|[A-Z2-7]{32})/i;
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { magnet } = body as { magnet: string };
+  const { magnet, mediaType, season } = body as {
+    magnet: string;
+    mediaType?: 'movie' | 'tv';
+    season?: number;
+  };
 
   if (!magnet || typeof magnet !== 'string' || !MAGNET_RE.test(magnet)) {
     return NextResponse.json({ error: 'Valid magnet link required' }, { status: 400 });
@@ -16,7 +20,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const id = await addTorrent(magnet);
-    registerAppTorrent(id); // persist so control endpoint can validate ownership
+    // Persist ownership + metadata so the auto-move poller knows where to put the file
+    registerAppTorrent(id, mediaType, season);
     return NextResponse.json({ id });
   } catch (err) {
     console.error('[transmission/add]', err);

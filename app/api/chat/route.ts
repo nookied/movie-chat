@@ -43,8 +43,20 @@ const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60_000;
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
+// Prune expired entries so the map doesn't grow unbounded over days of use.
+// Runs at most once per minute — O(n) over the number of unique IPs seen.
+let lastPrune = 0;
+function pruneRateLimitMap(now: number) {
+  if (now - lastPrune < 60_000) return;
+  lastPrune = now;
+  for (const [ip, entry] of rateLimitMap) {
+    if (now > entry.resetAt) rateLimitMap.delete(ip);
+  }
+}
+
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
+  pruneRateLimitMap(now);
   const entry = rateLimitMap.get(ip);
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });

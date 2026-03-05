@@ -12,6 +12,7 @@ export async function triggerLibraryRefresh(): Promise<void> {
     const res = await fetch(`${plexBaseUrl}/library/sections`, {
       headers: { 'X-Plex-Token': plexToken, Accept: 'application/json' },
       signal: AbortSignal.timeout(5000),
+      cache: 'no-store',
     });
     if (!res.ok) return;
 
@@ -24,6 +25,7 @@ export async function triggerLibraryRefresh(): Promise<void> {
         fetch(`${plexBaseUrl}/library/sections/${s.key}/refresh`, {
           headers: { 'X-Plex-Token': plexToken, Accept: 'application/json' },
           signal: AbortSignal.timeout(5000),
+          cache: 'no-store',
         }).catch(() => {})
       )
     );
@@ -48,6 +50,7 @@ export async function searchTvLibrary(title: string): Promise<PlexStatus> {
   const res = await fetch(url.toString(), {
     headers: { Accept: 'application/json', 'X-Plex-Token': plexToken },
     signal: AbortSignal.timeout(5000),
+    cache: 'no-store',
   });
   if (!res.ok) return { found: false };
 
@@ -74,6 +77,7 @@ export async function searchTvLibrary(title: string): Promise<PlexStatus> {
   const seasonsRes = await fetch(`${plexBaseUrl}/library/metadata/${show.ratingKey}/children`, {
     headers: { Accept: 'application/json', 'X-Plex-Token': plexToken },
     signal: AbortSignal.timeout(5000),
+    cache: 'no-store',
   });
   if (!seasonsRes.ok) return { found: true, seasons: [] };
 
@@ -104,6 +108,7 @@ export async function searchLibrary(title: string, year?: number): Promise<PlexS
     // Pass token in header — never in URL query params (leaks to server logs / referrer headers)
     headers: { Accept: 'application/json', 'X-Plex-Token': plexToken },
     signal: AbortSignal.timeout(5000),
+    cache: 'no-store',
   });
 
   if (!res.ok) return { found: false };

@@ -21,6 +21,7 @@ async function getSessionId(): Promise<string> {
     headers: { 'Content-Type': 'application/json', ...authHeader() },
     body: JSON.stringify({ method: 'session-get' }),
     signal: AbortSignal.timeout(5000),
+    cache: 'no-store',
   });
 
   if (res.status === 409) {
@@ -28,8 +29,10 @@ async function getSessionId(): Promise<string> {
     if (id) return id;
   }
 
-  // Try again if we happen to have gotten through without a 409
-  return res.headers.get('X-Transmission-Session-Id') ?? '';
+  // Transmission occasionally responds without a 409 — the header may still be present
+  const id = res.headers.get('X-Transmission-Session-Id');
+  if (!id) throw new Error('Failed to obtain Transmission session ID (header missing)');
+  return id;
 }
 
 async function rpc(
@@ -46,6 +49,7 @@ async function rpc(
     },
     body: JSON.stringify({ method, arguments: args }),
     signal: AbortSignal.timeout(10000),
+    cache: 'no-store',
   });
 
   if (!res.ok) throw new Error(`Transmission RPC error: ${res.status}`);

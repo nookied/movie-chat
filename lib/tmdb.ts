@@ -60,6 +60,7 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
 
   const searchRes = await fetch(searchUrl.toString(), {
     signal: AbortSignal.timeout(8000),
+    next: { revalidate: 28800 }, // cache for 8 h
   });
   if (!searchRes.ok) return {};
 
@@ -86,6 +87,7 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
 
   const detailRes = await fetch(detailUrl.toString(), {
     signal: AbortSignal.timeout(8000),
+    next: { revalidate: 28800 }, // cache for 8 h
   });
   if (!detailRes.ok) {
     // Return partial data from search if detail fetch fails
@@ -123,6 +125,7 @@ export async function getTvDetails(title: string, year?: number): Promise<Partia
 
   const searchRes = await fetch(searchUrl.toString(), {
     signal: AbortSignal.timeout(8000),
+    next: { revalidate: 28800 }, // cache for 8 h
   });
   if (!searchRes.ok) return {};
 
@@ -148,6 +151,7 @@ export async function getTvDetails(title: string, year?: number): Promise<Partia
 
   const detailRes = await fetch(detailUrl.toString(), {
     signal: AbortSignal.timeout(8000),
+    next: { revalidate: 28800 }, // cache for 8 h
   });
   if (!detailRes.ok) {
     return {

@@ -232,6 +232,11 @@ export default function ChatInterface() {
     season?: number
   ) => {
     pendingTorrents.current.set(torrentKey(title, year), { torrent: torrents[0], mediaType, season });
+    // Trim to the most recent 60 entries — each session is bounded but the ref never resets
+    if (pendingTorrents.current.size > 60) {
+      const oldest = pendingTorrents.current.keys().next().value;
+      if (oldest !== undefined) pendingTorrents.current.delete(oldest);
+    }
     if (mediaType === 'tv' && season !== undefined) {
       const seasonLabel = season === 0 ? 'Complete Series' : `Season ${season}`;
       addInfoMessage(`[System] "${title}" ${seasonLabel} is available for download.`);
@@ -287,7 +292,7 @@ export default function ChatInterface() {
       const res = await fetch('/api/transmission/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ magnet: torrent.magnet }),
+        body: JSON.stringify({ magnet: torrent.magnet, mediaType, season }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Failed to add torrent');
@@ -482,7 +487,15 @@ export default function ChatInterface() {
       {/* Downloads panel — collapsible, sits between chat and input bar */}
       <DownloadsPanel
         downloads={activeDownloads}
-        onMoved={(name) => setMovedTitles((prev) => new Set([...prev, name.toLowerCase()]))}
+        onMoved={(name) => setMovedTitles((prev) => {
+          const next = new Set([...prev, name.toLowerCase()]);
+          // Cap size — only the most recent 100 moved titles need to be tracked
+          if (next.size > 100) {
+            const oldest = next.values().next().value;
+            if (oldest !== undefined) next.delete(oldest);
+          }
+          return next;
+        })}
         onComplete={(id) => {
           setActiveDownloads((prev) => prev.filter((d) => d.torrentId !== id));
           const appIds = loadAppTorrentIds();

@@ -27,7 +27,10 @@ export async function getOmdbRatings(
   url.searchParams.set('type', type);
   if (year) url.searchParams.set('y', String(year));
 
-  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(6000) });
+  const res = await fetch(url.toString(), {
+    signal: AbortSignal.timeout(6000),
+    next: { revalidate: 28800 }, // cache for 8 h
+  });
   if (!res.ok) return {};
 
   const data: OmdbResponse = await res.json();
