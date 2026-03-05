@@ -25,7 +25,7 @@ echo -e "${BOLD}  Movie Chat — installer${RESET}"
 echo "  ─────────────────────────────────────────"
 
 # ── 1. Prerequisites ──────────────────────────────────────────────────────────
-heading "1 / 5  Checking prerequisites"
+heading "1 / 6  Checking prerequisites"
 
 MISSING=0
 
@@ -51,7 +51,7 @@ fi
 [ "$MISSING" -eq 1 ] && exit 1
 
 # ── 2. Install location ───────────────────────────────────────────────────────
-heading "2 / 5  Choose install location"
+heading "2 / 6  Choose install location"
 
 ask "Where should Movie Chat be installed? [${DEFAULT_DIR}]"
 read -r INSTALL_DIR
@@ -136,7 +136,7 @@ else
   echo ""
 fi
 
-# ── 5. auto-update cron (optional) ───────────────────────────────────────────
+# ── 6. auto-update cron (optional) ───────────────────────────────────────────
 heading "6 / 6  Automatic updates (optional)"
 echo "       Schedules a nightly check at 3 AM — pulls updates and restarts"
 echo "       the app silently if a new version is available."
