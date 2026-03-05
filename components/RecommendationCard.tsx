@@ -433,7 +433,7 @@ export default function RecommendationCard({
                                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
                                   <path d="M5 20h14v-2H5v2zm7-4l-5-5 1.41-1.41L11 17.17V4h2v13.17l3.59-3.58L18 15l-6 6-6-6z" />
                                 </svg>
-                                {selectedSeason === 0 ? 'Download Complete Series' : `Download Season ${selectedSeason}`}
+                                {selectedSeason === 0 ? 'Download Series' : `Season ${selectedSeason}`}
                               </>
                             )}
                           </button>
@@ -448,7 +448,7 @@ export default function RecommendationCard({
                             >
                               {tvTorrentOptions.map((opt, i) => (
                                 <option key={i} value={i}>
-                                  {opt.quality} · {(opt.sizeBytes / 1e9).toFixed(1)} GB · {opt.seeders} seeders
+                                  {(opt.sizeBytes / 1e9).toFixed(1)} GB · {opt.seeders} seeders
                                 </option>
                               ))}
                             </select>
