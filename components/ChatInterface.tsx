@@ -333,19 +333,6 @@ export default function ChatInterface() {
       }));
 
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history }),
-      });
-
-      if (!res.ok || !res.body) {
-        const errText = await res.text().catch(() => 'Unknown error');
-        let errMsg = errText;
-        try { errMsg = JSON.parse(errText).error ?? errText; } catch { /* not JSON */ }
-        throw new Error(errMsg);
-      }
-
       const decoder = new TextDecoder();
       let fullContent = '';
 
@@ -362,7 +349,40 @@ export default function ChatInterface() {
         }
       }
 
-      await drainStream(res.body.getReader());
+      // Fetch /api/chat and drain the response stream.
+      // Retries up to 3× on network errors (fetch throws / stream read fails).
+      // HTTP errors (4xx/5xx from the server) are thrown immediately without retry.
+      const FETCH_RETRY_DELAYS = [500, 1000, 2000];
+      async function fetchAndDrain(reqBody: object): Promise<void> {
+        let lastErr: Error = new Error('Request failed');
+        for (let attempt = 0; attempt <= FETCH_RETRY_DELAYS.length; attempt++) {
+          if (attempt > 0) fullContent = '';
+          try {
+            const res = await fetch('/api/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(reqBody),
+            });
+            if (!res.ok || !res.body) {
+              const errText = await res.text().catch(() => 'Unknown error');
+              let errMsg = errText;
+              try { errMsg = JSON.parse(errText).error ?? errText; } catch { /* not JSON */ }
+              throw Object.assign(new Error(errMsg), { isHttpError: true });
+            }
+            await drainStream(res.body.getReader());
+            return;
+          } catch (err) {
+            if ((err as Error & { isHttpError?: boolean }).isHttpError) throw err;
+            lastErr = err instanceof Error ? err : new Error(String(err));
+            if (attempt < FETCH_RETRY_DELAYS.length) {
+              await new Promise((r) => setTimeout(r, FETCH_RETRY_DELAYS[attempt]));
+            }
+          }
+        }
+        throw lastErr;
+      }
+
+      await fetchAndDrain({ messages: history });
 
       // OpenRouter sometimes returns 200 OK but streams nothing (upstream model error).
       // Silently retry via Ollama before surfacing an error to the user.
@@ -443,7 +463,7 @@ export default function ChatInterface() {
                 key={recKey(rec)}
                 recommendation={rec}
                 onPlexFound={handlePlexFound}
-                onTorrentsReady={(t, y, torrents, mediaType, season) => handleTorrentsReady(t, y, torrents, mediaType, season)}
+                onTorrentsReady={handleTorrentsReady}
                 onNoSuitableQuality={handleNoSuitableQuality}
                 onDownload={triggerDownload}
                 isDownloading={activeDownloads.some(
