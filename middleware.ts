@@ -41,9 +41,9 @@ export function middleware(req: NextRequest) {
   const host = (req.headers.get('host') ?? '').split(':')[0];
   if (host.endsWith('.local')) return NextResponse.next();
 
-  // Next.js Edge runtime exposes req.ip; fall back to standard proxy headers
+  // Next.js 15+ no longer exposes req.ip; read from standard proxy / forwarded headers
+  // (Next.js's own server populates x-forwarded-for for direct connections too)
   const raw =
-    req.ip ??
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
     req.headers.get('x-real-ip') ??
     '';

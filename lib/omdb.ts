@@ -15,7 +15,8 @@ interface OmdbResponse {
 
 export async function getOmdbRatings(
   title: string,
-  year?: number
+  year?: number,
+  type: 'movie' | 'series' = 'movie'
 ): Promise<{ imdbScore?: string; rtScore?: string }> {
   const omdbApiKey = cfg('omdbApiKey', 'OMDB_API_KEY');
   if (!omdbApiKey) return {};
@@ -23,7 +24,7 @@ export async function getOmdbRatings(
   const url = new URL(OMDB_BASE);
   url.searchParams.set('apikey', omdbApiKey);
   url.searchParams.set('t', title);
-  url.searchParams.set('type', 'movie');
+  url.searchParams.set('type', type);
   if (year) url.searchParams.set('y', String(year));
 
   const res = await fetch(url.toString(), { signal: AbortSignal.timeout(6000) });

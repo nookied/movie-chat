@@ -88,7 +88,11 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
       const res = await fetch('/api/files/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ torrentId: download.torrentId }),
+        body: JSON.stringify({
+          torrentId: download.torrentId,
+          mediaType: download.mediaType,
+          season: download.season,
+        }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Move failed');

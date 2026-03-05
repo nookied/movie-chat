@@ -40,6 +40,7 @@ export async function GET() {
     transmissionPassword:   cfg('transmissionPassword',   'TRANSMISSION_PASSWORD'),
     transmissionDownloadDir:cfg('transmissionDownloadDir','TRANSMISSION_DOWNLOAD_DIR'),
     libraryDir:             cfg('libraryDir',             'LIBRARY_DIR'),
+    tvLibraryDir:           cfg('tvLibraryDir',           'TV_LIBRARY_DIR'),
     ollamaBaseUrl:          cfg('ollamaBaseUrl',          'OLLAMA_BASE_URL',          'http://localhost:11434'),
     ollamaModel:            cfg('ollamaModel',            'OLLAMA_MODEL'),
     ollamaOnly:             cfg('ollamaOnly',             'OLLAMA_ONLY'),
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
     'plexBaseUrl', 'plexToken',
     'tmdbApiKey', 'omdbApiKey',
     'transmissionBaseUrl', 'transmissionUsername', 'transmissionPassword',
-    'transmissionDownloadDir', 'libraryDir',
+    'transmissionDownloadDir', 'libraryDir', 'tvLibraryDir',
     'ollamaBaseUrl', 'ollamaModel', 'ollamaOnly',
   ];
 

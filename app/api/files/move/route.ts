@@ -6,7 +6,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { cfg } from '@/lib/config';
 
-// Only copy media files — skip YTS junk (.txt, .jpg, .nfo, etc.)
+// Only copy media files — skip YTS/EZTV junk (.txt, .jpg, .nfo, etc.)
 const ALLOWED_EXTENSIONS = new Set([
   '.mp4', '.mkv', '.avi', '.mov', '.m4v', '.wmv',  // video
   '.srt', '.sub', '.ass', '.ssa', '.vtt',           // subtitles
@@ -15,6 +15,14 @@ const ALLOWED_EXTENSIONS = new Set([
 // "Dead Mans Wire (2025) [1080p] [WEBRip] [x265]..." → "Dead Mans Wire (2025)"
 function cleanFolderName(torrentName: string): string {
   return torrentName.replace(/\s*\[.*$/s, '').trim() || torrentName;
+}
+
+// "Breaking Bad S05 Complete [1080p] [BluRay]" → "Breaking Bad"
+// Strips the S\d{2}... suffix that EZTV uses for season pack names.
+function cleanTvFolderName(torrentName: string): string {
+  // Remove " S05..." and everything after; then trim brackets/junk
+  const stripped = torrentName.replace(/\s+[Ss]\d{2}.*$/s, '').trim();
+  return stripped || torrentName;
 }
 
 // Throws if filePath resolves outside of the allowed parent directory.
@@ -29,14 +37,22 @@ function assertWithinDir(filePath: string, dir: string): void {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { torrentId } = body as { torrentId: number };
+  const { torrentId, mediaType, season } = body as {
+    torrentId: number;
+    mediaType?: 'movie' | 'tv';
+    season?: number;
+  };
 
   if (!torrentId || typeof torrentId !== 'number') {
     return NextResponse.json({ error: 'torrentId required' }, { status: 400 });
   }
 
-  const LIBRARY_DIR      = cfg('libraryDir',             'LIBRARY_DIR');
+  const LIBRARY_DIR      = cfg('libraryDir',    'LIBRARY_DIR');
+  const TV_LIBRARY_DIR   = cfg('tvLibraryDir',  'TV_LIBRARY_DIR');
   const CONFIG_DOWNLOAD  = cfg('transmissionDownloadDir', 'TRANSMISSION_DOWNLOAD_DIR');
+
+  // Use TV-specific directory for TV downloads; fall back to the shared library dir.
+  const EFFECTIVE_DIR = (mediaType === 'tv' && TV_LIBRARY_DIR) ? TV_LIBRARY_DIR : LIBRARY_DIR;
 
   try {
     const status = await getTorrentStatus(torrentId);
@@ -50,10 +66,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // No library directory configured — just remove the job from Transmission
-    if (!LIBRARY_DIR) {
-      await removeTorrent(torrentId);
-      return NextResponse.json({ moved: [], removedOnly: true });
+    // No library directory configured — leave the torrent and file untouched, surface an error.
+    // The DownloadTracker will show Retry + Dismiss so the user can fix settings first.
+    if (!EFFECTIVE_DIR) {
+      const label = mediaType === 'tv' ? 'TV shows' : 'Movies';
+      return NextResponse.json(
+        { error: `No ${label} library directory configured — set it in Settings → File Management.` },
+        { status: 400 }
+      );
     }
 
     if (!status.files || status.files.length === 0) {
@@ -68,9 +88,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Cannot determine torrent download directory' }, { status: 400 });
     }
 
-    // Destination subfolder: LIBRARY_DIR/<clean movie name>/
-    const destFolder = path.join(LIBRARY_DIR, cleanFolderName(status.name));
-    assertWithinDir(destFolder, LIBRARY_DIR); // guard against traversal in torrent name
+    // Destination subfolder:
+    //   Movie:          LIBRARY_DIR/<clean movie name>/
+    //   TV season N:    TV_LIBRARY_DIR (or LIBRARY_DIR)/<Show Name>/Season N/
+    //   TV all (s=0):   TV_LIBRARY_DIR (or LIBRARY_DIR)/<Show Name>/
+    let destFolder: string;
+    if (mediaType === 'tv' && season !== undefined) {
+      const showName = cleanTvFolderName(status.name);
+      destFolder = season === 0
+        ? path.join(EFFECTIVE_DIR, showName)
+        : path.join(EFFECTIVE_DIR, showName, `Season ${season}`);
+    } else {
+      destFolder = path.join(EFFECTIVE_DIR, cleanFolderName(status.name));
+    }
+
+    assertWithinDir(destFolder, EFFECTIVE_DIR); // guard against traversal in torrent name
     await fs.mkdir(destFolder, { recursive: true });
 
     const moved: string[] = [];
@@ -89,7 +121,7 @@ export async function POST(req: NextRequest) {
       assertWithinDir(sourcePath, DOWNLOAD_DIR); // guard against traversal in file path
 
       const destPath = path.join(destFolder, fileName);
-      assertWithinDir(destPath, LIBRARY_DIR);   // guard dest too
+      assertWithinDir(destPath, EFFECTIVE_DIR);  // guard dest too
 
       await fs.copyFile(sourcePath, destPath);
       await fs.unlink(sourcePath);
@@ -111,7 +143,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Kick off a Plex library scan so the movie appears immediately — fire and forget
+    // Kick off a Plex library scan so the content appears immediately — fire and forget
     triggerLibraryRefresh().catch(() => {});
 
     return NextResponse.json({ moved, skipped, destFolder });

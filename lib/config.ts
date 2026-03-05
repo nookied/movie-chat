@@ -13,6 +13,7 @@ export interface AppConfig {
   transmissionPassword?: string;
   transmissionDownloadDir?: string;
   libraryDir?: string;
+  tvLibraryDir?: string;
   ollamaBaseUrl?: string;
   ollamaModel?: string;
   ollamaOnly?: string;  // 'true' = skip OpenRouter entirely, route all chat through Ollama

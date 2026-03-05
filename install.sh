@@ -77,13 +77,19 @@ fi
 cd "$INSTALL_DIR"
 
 # ── 3. npm install ────────────────────────────────────────────────────────────
-heading "3 / 5  Installing dependencies"
+heading "3 / 6  Installing dependencies"
 
 npm install --silent
 info "Dependencies installed"
 
-# ── 4. pm2 (optional) ────────────────────────────────────────────────────────
-heading "4 / 5  Auto-start with pm2 (optional)"
+# ── 4. Build ──────────────────────────────────────────────────────────────────
+heading "4 / 6  Building"
+
+npm run build --silent
+info "Build complete"
+
+# ── 5. pm2 (optional) ────────────────────────────────────────────────────────
+heading "5 / 6  Auto-start with pm2 (optional)"
 echo "       pm2 keeps the app running and restarts it after crashes or reboots."
 echo ""
 
@@ -111,21 +117,27 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
   pm2 save --silent
   info "pm2 process list saved"
 
-  echo ""
-  warn "Almost done — run the command below once to make pm2 survive reboots"
-  warn "(copy-paste the command it outputs and run it):"
-  echo ""
-  echo "       pm2 startup"
+  # register pm2 with the OS so it starts on reboot
+  STARTUP_CMD=$(pm2 startup 2>&1 | grep "^sudo")
+  if [ -n "$STARTUP_CMD" ]; then
+    echo "       Registering pm2 with system startup"
+    echo "       (you may be prompted for your password)..."
+    eval "$STARTUP_CMD"
+    info "pm2 registered — will start automatically on reboot"
+  else
+    warn "Could not auto-register pm2 startup."
+    warn "Run 'pm2 startup' manually and follow the instructions to survive reboots."
+  fi
   echo ""
 else
   echo "       Start the app manually at any time:"
   echo ""
-  echo "       cd $INSTALL_DIR && npm run dev"
+  echo "       cd $INSTALL_DIR && npm run build && npm run start"
   echo ""
 fi
 
 # ── 5. auto-update cron (optional) ───────────────────────────────────────────
-heading "5 / 5  Automatic updates (optional)"
+heading "6 / 6  Automatic updates (optional)"
 echo "       Schedules a nightly check at 3 AM — pulls updates and restarts"
 echo "       the app silently if a new version is available."
 echo ""

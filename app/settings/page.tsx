@@ -15,6 +15,7 @@ interface ConfigFields {
   transmissionPassword: string;
   transmissionDownloadDir: string;
   libraryDir: string;
+  tvLibraryDir: string;
   ollamaBaseUrl: string;
   ollamaModel: string;
   ollamaOnly: string;  // 'true' | ''
@@ -26,7 +27,7 @@ const EMPTY: ConfigFields = {
   tmdbApiKey: '', omdbApiKey: '',
   transmissionBaseUrl: 'http://localhost:9091', transmissionUsername: '',
   transmissionPassword: '', transmissionDownloadDir: '',
-  libraryDir: '',
+  libraryDir: '', tvLibraryDir: '',
   ollamaBaseUrl: 'http://localhost:11434', ollamaModel: '', ollamaOnly: '',
 };
 
@@ -232,6 +233,8 @@ export default function SettingsPage() {
   type DiskInfo = { total: number; free: number; used: number; percent: number };
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
   const [diskError, setDiskError] = useState('');
+  const [tvDiskInfo, setTvDiskInfo] = useState<DiskInfo | null>(null);
+  const [tvDiskError, setTvDiskError] = useState('');
 
 
   const runChecks = useCallback(async (currentSensitiveSet: Set<string>) => {
@@ -364,6 +367,22 @@ export default function SettingsPage() {
     }, 600);
     return () => clearTimeout(timer);
   }, [form.libraryDir]);
+
+  // Same disk space indicator for the TV library directory
+  useEffect(() => {
+    const dir = form.tvLibraryDir.trim();
+    if (!dir) { setTvDiskInfo(null); setTvDiskError(''); return; }
+    const timer = setTimeout(() => {
+      fetch(`/api/files/diskspace?path=${encodeURIComponent(dir)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.error) { setTvDiskInfo(null); setTvDiskError(data.error); }
+          else { setTvDiskInfo(data as DiskInfo); setTvDiskError(''); }
+        })
+        .catch(() => { setTvDiskInfo(null); setTvDiskError('Could not read disk info'); });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [form.tvLibraryDir]);
 
   function handleChange(key: keyof ConfigFields, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -520,8 +539,8 @@ export default function SettingsPage() {
             onChange={(v) => handleChange('transmissionDownloadDir', v)} />
         </Section>
 
-        <Section title="File Management" description="Plex library path for moving completed downloads">
-          <Field label="Library directory" value={form.libraryDir} placeholder="/Volumes/ExternalDrive/Movies"
+        <Section title="File Management" description="Plex library paths for moving completed downloads">
+          <Field label="Movies directory" value={form.libraryDir} placeholder="/Volumes/ExternalDrive/Movies"
             onChange={(v) => handleChange('libraryDir', v)} />
           {(diskInfo || diskError) && (
             <div className="px-4 py-3">
@@ -544,6 +563,34 @@ export default function SettingsPage() {
                   </div>
                   <p className="text-xs text-gray-600 mt-1.5">
                     {formatBytes(diskInfo.used)} used of {formatBytes(diskInfo.total)}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          <Field label="TV shows directory" value={form.tvLibraryDir} placeholder="/Volumes/ExternalDrive/TV Shows"
+            onChange={(v) => handleChange('tvLibraryDir', v)} />
+          {(tvDiskInfo || tvDiskError) && (
+            <div className="px-4 py-3">
+              {tvDiskError && <p className="text-xs text-red-400">{tvDiskError}</p>}
+              {tvDiskInfo && (
+                <div>
+                  <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                    <span>{formatBytes(tvDiskInfo.free)} free</span>
+                    <span>{tvDiskInfo.percent}% used</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        tvDiskInfo.percent > 95 ? 'bg-red-500'
+                        : tvDiskInfo.percent > 85 ? 'bg-amber-500'
+                        : 'bg-plex-accent'
+                      }`}
+                      style={{ width: `${tvDiskInfo.percent}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1.5">
+                    {formatBytes(tvDiskInfo.used)} used of {formatBytes(tvDiskInfo.total)}
                   </p>
                 </div>
               )}
