@@ -82,12 +82,17 @@ if git diff HEAD~1 HEAD --name-only 2>/dev/null | grep -q "package.json"; then
   info "Dependencies updated"
 fi
 
+# ── build (always required for production mode) ───────────────────────────────
+[ "$AUTO" -eq 0 ] && echo "  Building..."
+npm run build --silent
+info "Build complete"
+
 # ── restart pm2 ───────────────────────────────────────────────────────────────
 if command -v pm2 &>/dev/null && pm2 describe movie-chat &>/dev/null 2>&1; then
   pm2 restart movie-chat --silent
   info "App restarted"
 else
-  warn "pm2 not running — start with:  npm run dev"
+  warn "pm2 not running — start with:  npm run build && npm run start"
 fi
 
 # ── done ──────────────────────────────────────────────────────────────────────

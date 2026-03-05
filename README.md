@@ -1,14 +1,15 @@
 # Movie Chat
 
-An AI-powered movie assistant for your Plex library. Chat naturally to get personalised recommendations, check what's already in your library, and download anything that isn't — all from one interface.
+An AI-powered media assistant for your Plex library. Chat naturally to get personalised recommendations, check what's already in your library, and download anything that isn't — all from one interface.
 
 ---
 
 ## What it does
 
-- **Chat with an AI** to get movie recommendations based on your mood, genre preferences, favourite actors, or anything else
+- **Chat with an AI** to get movie and TV show recommendations based on your mood, genre preferences, favourite actors, or anything else
 - **Checks your Plex library** instantly — every suggestion shows whether it's already available to watch
 - **One-click downloads** — each recommendation card has a Download button; no need to type anything
+- **TV season picker** — for TV shows, choose which season to download; seasons already in your library are greyed out automatically
 - **Moves completed downloads** to your Plex folder automatically and triggers a library scan
 - Works from **any device on your local network** — desktop, phone, tablet
 - **Resilient AI** — falls back to a local Ollama model automatically if the cloud API is unavailable
@@ -27,11 +28,11 @@ Before you start, you'll need:
 
 | Service | What it's for | Cost |
 |---|---|---|
-| [Node.js](https://nodejs.org) v18+ | Run the app | Free |
+| [Node.js](https://nodejs.org) v18.18+ | Run the app | Free |
 | [Plex Media Server](https://www.plex.tv) | Your media library | Free |
 | [Transmission](https://transmissionbt.com) | Download manager | Free |
 | [OpenRouter](https://openrouter.ai) account | AI chat (cloud) | Free tier available |
-| [TMDB API key](https://www.themoviedb.org/settings/api) | Movie metadata & posters | Free |
+| [TMDB API key](https://www.themoviedb.org/settings/api) | Movie/TV metadata & posters | Free |
 | [OMDB API key](https://www.omdbapi.com/apikey.aspx) | IMDb & Rotten Tomatoes scores | Free tier available |
 | [Ollama](https://ollama.com) _(optional)_ | Local AI fallback | Free |
 
@@ -41,13 +42,13 @@ Before you start, you'll need:
 
 ### Option A — one-liner (easiest)
 
-Paste this into your terminal. It clones the repo, installs dependencies, and optionally sets up auto-start:
+Paste this into your terminal. It clones the repo, installs dependencies, builds, and optionally sets up auto-start:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/nookied/movie-chat/main/install.sh)"
 ```
 
-You'll need [git](https://git-scm.com) and [Node.js](https://nodejs.org) v18+ installed first.
+You'll need [git](https://git-scm.com) and [Node.js](https://nodejs.org) v18.18+ installed first.
 
 ### Option B — manual
 
@@ -57,7 +58,7 @@ cd movie-chat
 npm run setup
 ```
 
-`npm run setup` checks prerequisites, installs dependencies, and offers to configure [pm2](https://pm2.keymetrics.io) for auto-start on reboot.
+`npm run setup` checks prerequisites, installs dependencies, builds the app, and offers to configure [pm2](https://pm2.keymetrics.io) for auto-start on reboot.
 
 ---
 
@@ -95,7 +96,7 @@ A locally-running AI that takes over automatically if OpenRouter is unavailable 
 
 ### Plex
 
-Your media server — used to check which movies you already own.
+Your media server — used to check which movies and TV shows you already own.
 
 1. Find your Plex server URL (usually `http://localhost:32400` if running locally)
 2. Get your Plex token:
@@ -107,7 +108,7 @@ Your media server — used to check which movies you already own.
 
 ### TMDB
 
-Provides movie posters, synopses, genres, runtime, and director.
+Provides movie and TV posters, synopses, genres, runtime, director, and season counts.
 
 1. Create a free account at [themoviedb.org](https://www.themoviedb.org)
 2. Go to **Settings → API** and request a free API key
@@ -134,12 +135,13 @@ The download client that manages your torrents.
 
 Controls where completed downloads go after they finish.
 
-- **Library directory** — set this to your Plex Movies folder (e.g. `/Volumes/Drive/Plex/Movies`)
+- **Library directory** — set this to your Plex media folder (e.g. `/Volumes/Drive/Plex`)
 - A disk space indicator shows how full the drive is
 - When a download completes, the app automatically:
-  1. Copies the video file to `Library directory/Movie Title/`
-  2. Removes the torrent from Transmission
-  3. Triggers a Plex library scan so it appears immediately
+  - **Movies**: copies to `Library directory/Movie Title/`
+  - **TV shows**: copies to `Library directory/Show Name/Season N/` (Plex-compatible layout)
+  - Removes the torrent from Transmission
+  - Triggers a Plex library scan so it appears immediately
 - If left blank, the torrent is just removed from Transmission and the file stays in the download folder
 
 ---
@@ -153,26 +155,36 @@ Just chat! Some examples:
 - _"Suggest a feel-good comedy from the 90s"_
 - _"Something like Interstellar"_
 - _"What should I watch with my kids tonight?"_
+- _"Recommend a crime TV series"_
 
-The assistant recommends one film at a time. Each recommendation shows as a card with:
-- Movie poster, year, runtime, director
+The assistant recommends one title at a time. Each recommendation shows as a card with:
+- Poster, year, runtime, director
 - IMDb, TMDB, and Rotten Tomatoes scores
 - A synopsis
 - Whether it's **already in your Plex library**
 - A **Download button** if a copy is available
 
+### TV show downloads
+
+For TV shows, a season picker appears below the card:
+
+- Seasons already in your Plex library are shown with a green ✓ and are not clickable
+- Click any season button to check availability — a **Download** button appears if a 1080p pack is found
+- If multiple release options exist (different encodes or sizes), a dropdown lets you pick which one to download
+- **All** downloads all seasons at once (only shown if none are in your library)
+
 ### Watching something you already have
 
-If the movie is already in your library, the card shows a green **"On Plex"** badge. The assistant will point you there directly.
+If the title is already in your library, the card shows a green **"On Plex"** badge. The assistant will point you there directly.
 
 ### Downloading something new
 
-If the movie isn't in your library and a copy is available, you have two options:
+If the title isn't in your library and a copy is available:
 
 - **Click the Download button** on the recommendation card directly, or
 - **Reply in chat** — the assistant will ask _"Want me to download [Title]?"_ and start the download when you confirm
 
-Either way, a download tracker card appears showing progress. When it finishes, the file is automatically moved to your library and Plex is refreshed.
+A download tracker card appears showing progress. When it finishes, the file is automatically moved to your library and Plex is refreshed.
 
 ### Starting a new conversation
 
@@ -202,7 +214,7 @@ Browser
         ├── RecommendationCard
         │     ├── /api/plex/check      → is it in the library?
         │     ├── /api/reviews         → TMDB metadata + OMDB ratings
-        │     ├── /api/torrents/search → YTS 1080p availability
+        │     ├── /api/torrents/search → YTS (movies) / Knaben (TV) availability
         │     └── Download button      → triggers triggerDownload()
         └── DownloadTracker
               ├── /api/transmission/add    → start download
@@ -214,6 +226,7 @@ Browser
 **Key design choices:**
 - All config lives in `config.local.json` (gitignored) — no `.env` files needed
 - The LLM communicates intent via XML tags: `<recommendation>` triggers a card, `<download>` triggers a torrent
+- Movies use the YTS API (1080p only); TV seasons use Knaben (aggregates TPB, 1337x, EZTV; strict 1080p filter)
 - Chat history is persisted to `localStorage` (up to 200 messages)
 - App-initiated torrent IDs are tracked server-side in `app-torrents.json` so downloads started on one device are visible from any device
 - OpenRouter's free tier sometimes returns an empty stream; the client automatically retries via Ollama before surfacing an error
@@ -249,6 +262,9 @@ The model's context window may be too small for long conversations. Set `num_ctx
 **Recommendation card shows no poster / ratings**
 Check that your TMDB and OMDB API keys are set correctly in Settings. Both have free tiers with generous limits.
 
+**TV show season picker doesn't appear**
+The season count comes from TMDB — make sure your TMDB API key is configured in Settings.
+
 **Download completes but file doesn't appear in Plex**
 - Make sure **Library directory** is set correctly in Settings
 - Check that Plex has permission to read the directory
@@ -272,7 +288,7 @@ Run this from inside the app folder:
 npm run update
 ```
 
-It checks if a newer version is available, shows what changed, and — if you confirm — pulls the update and restarts the app automatically.
+It checks if a newer version is available, shows what changed, and — if you confirm — pulls the update, rebuilds, and restarts the app automatically.
 
 ### Automatic updates
 
@@ -314,6 +330,7 @@ npm run uninstall:app
 
 The script will:
 - Stop and remove the pm2 auto-start process
+- Remove the cron job if one was set up
 - Ask whether to delete the app folder (code + config)
 
 > pm2 itself is left installed since it may be used by other apps. To remove it too: `npm uninstall -g pm2`
@@ -322,14 +339,17 @@ The script will:
 
 ## Running as a service (auto-start on boot)
 
-`npm run setup` offers to configure this automatically. If you skipped it or want to set it up manually:
+`npm run setup` and the one-liner installer handle this automatically. If you skipped it or want to set it up manually:
 
 ```bash
 npm install -g pm2
+npm run build
 pm2 start ecosystem.config.js
 pm2 save
-pm2 startup   # prints a command — run it to register with your OS
+pm2 startup   # prints a sudo command — run it to register with your OS
 ```
+
+The app runs in production mode (`next start`) for stable 24/7 uptime. pm2 will automatically restart it if it crashes or exceeds 400 MB of memory.
 
 **Day-to-day commands:**
 
@@ -349,7 +369,9 @@ pm2 stop movie-chat
 ```bash
 npm run dev    # development server with hot reload (port 3000)
 npm run build  # production build
+npm run start  # production server (requires a build first)
 npm run lint   # ESLint
+npm test       # run the test suite
 ```
 
 All configuration is read from `config.local.json` at runtime — no server restart needed after saving settings.

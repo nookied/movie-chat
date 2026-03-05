@@ -259,11 +259,25 @@ export default function ChatInterface() {
     // Hard guard: never download something already in the Plex library,
     // regardless of what the LLM requested.
     try {
-      const plexCheck = await fetch(`/api/plex/check?title=${encodeURIComponent(title)}&year=${year}`);
-      const plexData = await plexCheck.json();
-      if (plexData.found) {
-        addInfoMessage(`[System] "${title}" is already in your Plex library — download skipped.`);
-        return;
+      if (mediaType === 'tv') {
+        // For TV, use the season-aware check — only block if the specific season is already in Plex.
+        // A generic movie search would match the show and block valid downloads of missing seasons.
+        const plexCheck = await fetch(`/api/plex/check?title=${encodeURIComponent(title)}&year=${year}&type=tv`);
+        const plexData = await plexCheck.json();
+        if (plexData.found && season !== undefined && season > 0) {
+          const seasons: number[] = plexData.seasons ?? [];
+          if (seasons.includes(season)) {
+            addInfoMessage(`[System] "${title}" Season ${season} is already in your Plex library — download skipped.`);
+            return;
+          }
+        }
+      } else {
+        const plexCheck = await fetch(`/api/plex/check?title=${encodeURIComponent(title)}&year=${year}`);
+        const plexData = await plexCheck.json();
+        if (plexData.found) {
+          addInfoMessage(`[System] "${title}" is already in your Plex library — download skipped.`);
+          return;
+        }
       }
     } catch {
       // Plex unreachable — proceed with download rather than blocking
