@@ -156,22 +156,23 @@ export { norm, qualityRank, isCompletePack, isSeasonNPack, sizebonus, pickBest }
 export async function searchTvSeason(title: string, season: number): Promise<TvTorrentResult> {
   const normTitle = norm(title);
 
-  // Prefer ≤1080p candidates; fall back to 4K only when nothing else was found.
-  // The search queries already include "1080p" but Knaben is a text search — 4K
-  // results can still slip through if the title matches.
-  function prefer1080p(candidates: KnabenHit[]): KnabenHit[] {
-    const non4k = candidates.filter((h) => qualityRank(h.title) < 400);
-    return non4k.length > 0 ? non4k : candidates;
+  // Strict 1080p filter — same policy as the movie torrent search.
+  // The search queries already include "1080p" but Knaben is a text search so
+  // 4K, 720p and lower-res results can still slip through. We discard them all;
+  // if nothing 1080p remains the caller returns { found: false }.
+  function only1080p(candidates: KnabenHit[]): KnabenHit[] {
+    return candidates.filter((h) => qualityRank(h.title) === 300);
   }
 
   if (season === 0) {
     const results = await knabSearch(`${title} complete series 1080p`);
     const matches = results.filter((h) => norm(h.title).includes(normTitle) && isCompletePack(h.title));
-    if (matches.length > 0) return pickBest(prefer1080p(matches));
+    const matches1080 = only1080p(matches);
+    if (matches1080.length > 0) return pickBest(matches1080);
 
-    // Fallback: any title match from the same query
-    const any = results.filter((h) => norm(h.title).includes(normTitle));
-    if (any.length > 0) return pickBest(prefer1080p(any));
+    // Fallback: any 1080p title match from the same query (not necessarily a labelled complete pack)
+    const any1080 = only1080p(results.filter((h) => norm(h.title).includes(normTitle)));
+    if (any1080.length > 0) return pickBest(any1080);
 
     return { found: false };
   }
@@ -201,5 +202,8 @@ export async function searchTvSeason(title: string, season: number): Promise<TvT
     return { found: true, noSeasonPack: true };
   }
 
-  return pickBest(prefer1080p(packs));
+  const packs1080 = only1080p(packs);
+  if (packs1080.length === 0) return { found: false };
+
+  return pickBest(packs1080);
 }
