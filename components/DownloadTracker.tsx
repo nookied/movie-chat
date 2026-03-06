@@ -36,6 +36,8 @@ function formatSpeed(bytesPerSec: number): string {
 export default function DownloadTracker({ download, onComplete, onMoved }: Props) {
   const [status, setStatus] = useState<DownloadStatus | null>(null);
   const [error, setError] = useState('');
+  // moving/moveError are only set when the user clicks "Move now" manually.
+  // App-initiated downloads are moved by the server-side background poller.
   const [moving, setMoving] = useState(false);
   const [moved, setMoved] = useState(false);
   const [moveError, setMoveError] = useState('');
@@ -60,16 +62,20 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
       setError('');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Cannot reach Transmission';
-      setError(msg);
       consecutiveErrors.current += 1;
-      // If the torrent is gone from Transmission and this was an app-initiated download,
-      // the file was already moved to the library — silently dismiss instead of showing an error.
-      // This handles the case where the app was backgrounded on iPhone while the download
-      // finished and the torrent was removed, then resumed to find it missing.
+
+      // Torrent is gone from Transmission — the background poller already moved it.
+      // Show "Added to library" briefly, then dismiss.
       if (msg.toLowerCase().includes('not found')) {
         stopPolling();
-        if (download.fromApp) { onComplete(); return; }
+        if (download.fromApp) {
+          onMoved?.(download.torrentName);
+          setMoved(true);
+          return;
+        }
       }
+
+      setError(msg);
       // Stop polling after 3 consecutive errors (e.g. Transmission down)
       if (consecutiveErrors.current >= 3) stopPolling();
     }
@@ -81,6 +87,8 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
     return () => stopPolling();
   }, [fetchStatus]);
 
+  // Manual move — only used as a fallback if the background poller hasn't
+  // picked up the torrent yet and the user wants to trigger it themselves.
   async function handleMove() {
     setMoving(true);
     setMoveError('');
@@ -99,7 +107,20 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
       onMoved?.(download.torrentName);
       setMoved(true);
     } catch (err) {
-      setMoveError(err instanceof Error ? err.message : 'Move failed');
+      const msg = err instanceof Error ? err.message : 'Move failed';
+
+      // Background poller is already on it — stay in "Moving to library…" state.
+      // The poller will remove the torrent; the next poll will clean up the card.
+      if (msg.toLowerCase().includes('already in progress')) return;
+
+      // File is already gone — poller moved it but hadn't yet removed the torrent.
+      if (msg.toLowerCase().includes('enoent') || msg.toLowerCase().includes('no such file')) {
+        onMoved?.(download.torrentName);
+        setMoved(true);
+        return;
+      }
+
+      setMoveError(msg);
       setMoving(false);
     }
   }
@@ -131,15 +152,6 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
   const isFinalizing = percent >= 100 && status !== null && status.status === 4;
   const isDone = percent >= 100 && status !== null && (status.status === 0 || status.status === 5 || status.status === 6);
   const isPaused = status?.status === 0 && !isDone;
-
-  // Auto-move as soon as the download finishes — only for app-initiated downloads.
-  // External downloads (fromApp: false) are left alone; user can dismiss them.
-  useEffect(() => {
-    if (isDone && !moved && !moving && download.fromApp) {
-      handleMove();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDone]);
 
   // Auto-dismiss the "Added to library" card 3 seconds after a successful move
   useEffect(() => {
@@ -198,7 +210,7 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
         </div>
       )}
 
-      {/* Stats + controls row */}
+      {/* Stats + controls row — only shown while actively downloading */}
       {!error && !isDone && !isFinalizing && status && (
         <div className="flex items-center justify-between mt-1">
           <div className="flex gap-3 text-xs text-gray-500">
@@ -258,7 +270,12 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
         </div>
       )}
 
-      {/* External download — done but not auto-moved */}
+      {/* App-initiated download complete — server is moving it in the background */}
+      {isDone && download.fromApp && !moving && !moveError && (
+        <p className="text-gray-500 text-xs mt-1 animate-pulse">Moving to library…</p>
+      )}
+
+      {/* External download — done, user must dismiss manually */}
       {isDone && !download.fromApp && !moving && !moveError && (
         <div className="flex items-center justify-between gap-2 mt-1">
           <p className="text-gray-400 text-xs">Download complete</p>
