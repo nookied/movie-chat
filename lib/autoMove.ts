@@ -78,6 +78,8 @@ export function startAutoMovePoller(): void {
   if (started) return;
   started = true;
 
+  console.log('[autoMove] Poller started — will check Transmission every 60 s');
+
   // Delay the first check by 60 s so the server finishes booting before we
   // start hammering Transmission
   const initial = setTimeout(() => {
