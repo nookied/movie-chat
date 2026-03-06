@@ -36,11 +36,7 @@ function formatSpeed(bytesPerSec: number): string {
 export default function DownloadTracker({ download, onComplete, onMoved }: Props) {
   const [status, setStatus] = useState<DownloadStatus | null>(null);
   const [error, setError] = useState('');
-  // moving/moveError are only set when the user clicks "Move now" manually.
-  // App-initiated downloads are moved by the server-side background poller.
-  const [moving, setMoving] = useState(false);
   const [moved, setMoved] = useState(false);
-  const [moveError, setMoveError] = useState('');
   const [controlLoading, setControlLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consecutiveErrors = useRef(0);
@@ -64,15 +60,17 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
       const msg = err instanceof Error ? err.message : 'Cannot reach Transmission';
       consecutiveErrors.current += 1;
 
-      // Torrent is gone from Transmission — the background poller already moved it.
-      // Show "Added to library" briefly, then dismiss.
       if (msg.toLowerCase().includes('not found')) {
         stopPolling();
         if (download.fromApp) {
+          // Server poller moved it — show "Added to library" then dismiss
           onMoved?.(download.torrentName);
           setMoved(true);
-          return;
+        } else {
+          // External torrent manually removed — just dismiss quietly
+          onComplete();
         }
+        return;
       }
 
       setError(msg);
@@ -86,44 +84,6 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
     intervalRef.current = setInterval(fetchStatus, 5000);
     return () => stopPolling();
   }, [fetchStatus]);
-
-  // Manual move — only used as a fallback if the background poller hasn't
-  // picked up the torrent yet and the user wants to trigger it themselves.
-  async function handleMove() {
-    setMoving(true);
-    setMoveError('');
-    try {
-      const res = await fetch('/api/files/move', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          torrentId: download.torrentId,
-          mediaType: download.mediaType,
-          season: download.season,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Move failed');
-      onMoved?.(download.torrentName);
-      setMoved(true);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Move failed';
-
-      // Background poller is already on it — stay in "Moving to library…" state.
-      // The poller will remove the torrent; the next poll will clean up the card.
-      if (msg.toLowerCase().includes('already in progress')) return;
-
-      // File is already gone — poller moved it but hadn't yet removed the torrent.
-      if (msg.toLowerCase().includes('enoent') || msg.toLowerCase().includes('no such file')) {
-        onMoved?.(download.torrentName);
-        setMoved(true);
-        return;
-      }
-
-      setMoveError(msg);
-      setMoving(false);
-    }
-  }
 
   async function handleControl(action: 'pause' | 'resume' | 'remove') {
     setControlLoading(true);
@@ -148,12 +108,12 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
   const percent = status ? Math.round(status.percentDone * 100) : 0;
   // percent=100 alone isn't enough — Transmission stays at status 4 (Downloading) while it flushes
   // the last bytes and verifies the hash. The file doesn't exist on disk until status transitions to
-  // 0 (Stopped), 5 (Queued to seed), or 6 (Seeding). Triggering the move on status 4 causes ENOENT.
+  // 0 (Stopped), 5 (Queued to seed), or 6 (Seeding).
   const isFinalizing = percent >= 100 && status !== null && status.status === 4;
   const isDone = percent >= 100 && status !== null && (status.status === 0 || status.status === 5 || status.status === 6);
   const isPaused = status?.status === 0 && !isDone;
 
-  // Auto-dismiss the "Added to library" card 3 seconds after a successful move
+  // Auto-dismiss the "Added to library" card 3 seconds after move confirmation
   useEffect(() => {
     if (!moved) return;
     const timer = setTimeout(() => onComplete(), 3000);
@@ -257,7 +217,7 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
         </div>
       )}
 
-      {/* Error state */}
+      {/* Error state — covers Transmission unreachable or other unexpected errors */}
       {error && (
         <div className="flex items-center justify-between gap-2 mt-1">
           <p className="text-red-400 text-xs">{error}</p>
@@ -271,12 +231,12 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
       )}
 
       {/* App-initiated download complete — server is moving it in the background */}
-      {isDone && download.fromApp && !moving && !moveError && (
+      {isDone && download.fromApp && (
         <p className="text-gray-500 text-xs mt-1 animate-pulse">Moving to library…</p>
       )}
 
       {/* External download — done, user must dismiss manually */}
-      {isDone && !download.fromApp && !moving && !moveError && (
+      {isDone && !download.fromApp && (
         <div className="flex items-center justify-between gap-2 mt-1">
           <p className="text-gray-400 text-xs">Download complete</p>
           <button
@@ -285,27 +245,6 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
           >
             Dismiss
           </button>
-        </div>
-      )}
-
-      {moving && <p className="text-xs text-gray-500 mt-1 animate-pulse">Moving to library…</p>}
-      {moveError && (
-        <div className="flex items-center justify-between gap-2 mt-1">
-          <p className="text-red-400 text-xs">{moveError}</p>
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <button
-              onClick={() => { setMoveError(''); handleMove(); }}
-              className="text-xs text-plex-accent hover:text-plex-accent-hover transition-colors underline"
-            >
-              Retry
-            </button>
-            <button
-              onClick={onComplete}
-              className="text-xs text-gray-400 hover:text-white transition-colors underline"
-            >
-              Dismiss
-            </button>
-          </div>
         </div>
       )}
     </div>
