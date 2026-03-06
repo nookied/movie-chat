@@ -36,14 +36,17 @@ async function tick(): Promise<void> {
     let movedCount = 0;
 
     for (const torrent of torrents) {
-      if (!isAppTorrent(torrent.id)) continue;
-
       // Mirror the same "done" logic used in DownloadTracker.tsx
       const isDone =
         Math.round(torrent.percentDone * 100) >= 100 &&
         (torrent.status === 0 || torrent.status === 5 || torrent.status === 6);
 
       if (!isDone) continue;
+
+      if (!isAppTorrent(torrent.id)) {
+        console.log(`[autoMove] Skipping torrent ${torrent.id} "${torrent.name}" — not in app registry`);
+        continue;
+      }
 
       // 15 s gap *between* moves (not before the first, not after the last).
       // Gives the OS time to flush I/O buffers between large file copies.

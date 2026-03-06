@@ -23,10 +23,16 @@ type StoredFormat = Record<string, AppTorrentMeta>;
 
 const IDS_FILE = path.join(process.cwd(), 'app-torrents.json');
 
-let cache: Map<number, AppTorrentMeta> | null = null;
+// Cache with a 30-second TTL so that registrations written by the API route
+// (which runs in a separate Next.js bundle with its own module instance) are
+// visible to the auto-move poller within one cache window — well within the
+// 60-second poll interval.
+let cache: { data: Map<number, AppTorrentMeta>; expiry: number } | null = null;
+const CACHE_TTL = 30_000;
 
 function loadCache(): Map<number, AppTorrentMeta> {
-  if (cache !== null) return cache;
+  const now = Date.now();
+  if (cache && cache.expiry > now) return cache.data;
   const m = new Map<number, AppTorrentMeta>();
   try {
     const raw = fs.readFileSync(IDS_FILE, 'utf8');
@@ -40,7 +46,7 @@ function loadCache(): Map<number, AppTorrentMeta> {
       }
     }
   } catch { /* file missing or corrupt — start empty */ }
-  cache = m;
+  cache = { data: m, expiry: now + CACHE_TTL };
   return m;
 }
 
@@ -53,6 +59,9 @@ function flushCache(m: Map<number, AppTorrentMeta>): void {
   try {
     fs.writeFileSync(tmp, JSON.stringify(obj));
     fs.renameSync(tmp, IDS_FILE);
+    // Refresh the cache TTL so this bundle doesn't immediately re-read
+    // what it just wrote.
+    cache = { data: m, expiry: Date.now() + CACHE_TTL };
   } catch {
     try { fs.unlinkSync(tmp); } catch { /* ignore */ }
     /* disk full or permissions — non-fatal */
