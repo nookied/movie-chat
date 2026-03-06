@@ -7,16 +7,16 @@ import { TvTorrentResult, TvTorrentOption } from '@/lib/eztv';
 
 interface Props {
   recommendation: Recommendation;
-  onPlexFound: (title: string, year: number) => void;
+  onPlexFound: (title: string, year?: number) => void;
   onTorrentsReady: (
     title: string,
-    year: number,
+    year: number | undefined,
     torrents: TorrentOption[],
     mediaType: 'movie' | 'tv',
     season?: number
   ) => void;
-  onNoSuitableQuality: (title: string, year: number) => void;
-  onDownload: (title: string, year: number) => void;
+  onNoSuitableQuality: (title: string, year?: number) => void;
+  onDownload: (title: string, year?: number) => void;
   isDownloading?: boolean;
   forceInLibrary?: boolean;
 }
@@ -61,7 +61,8 @@ export default function RecommendationCard({
   const torrentCallbackSent = useRef(false);
 
   useEffect(() => {
-    const params = new URLSearchParams({ title, year: String(year) });
+    const params = new URLSearchParams({ title });
+    if (year !== undefined) params.set('year', String(year));
     const typeParam = type === 'tv' ? 'tv' : 'movie';
 
     // Reviews run independently — just metadata, no decision depends on them
@@ -142,10 +143,10 @@ export default function RecommendationCard({
     try {
       const params = new URLSearchParams({
         title,
-        year: String(year),
         type: 'tv',
         season: String(season),
       });
+      if (year !== undefined) params.set('year', String(year));
       const r = await fetch(`/api/torrents/search?${params}`);
       const d: TvTorrentResult = await r.json();
 
@@ -256,7 +257,7 @@ export default function RecommendationCard({
             <div>
               <h3 className="text-white font-semibold text-base leading-tight">{title}</h3>
               <p className="text-gray-400 text-xs mt-0.5">
-                {year} · {type === 'tv' ? 'TV Series' : 'Movie'}
+                {year !== undefined ? `${year} · ` : ''}{type === 'tv' ? 'TV Series' : 'Movie'}
                 {reviews?.runtime ? ` · ${reviews.runtime}min` : ''}
                 {reviews?.director ? ` · dir. ${reviews.director}` : ''}
               </p>

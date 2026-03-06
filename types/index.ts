@@ -9,7 +9,7 @@ export interface ChatMessage {
 
 export interface Recommendation {
   title: string;
-  year: number;
+  year?: number;
   type: 'movie' | 'tv';
 }
 

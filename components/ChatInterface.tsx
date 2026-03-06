@@ -16,13 +16,14 @@ function extractRecommendations(text: string): Recommendation[] {
   function tryAdd(json: string) {
     try {
       const parsed = JSON.parse(json);
-      if (parsed.title && parsed.year) {
-        const key = `${String(parsed.title)}-${Number(parsed.year)}`;
+      if (parsed.title) {
+        const yearVal = parsed.year ? Number(parsed.year) : undefined;
+        const key = `${String(parsed.title)}-${yearVal ?? 'unknown'}`;
         if (!seen.has(key)) {
           seen.add(key);
           results.push({
             title: String(parsed.title),
-            year: Number(parsed.year),
+            year: yearVal,
             type: parsed.type === 'tv' ? 'tv' : 'movie',
           });
         }
@@ -40,18 +41,19 @@ function extractRecommendations(text: string): Recommendation[] {
 }
 
 // Parse download tags from a string. Same dual-format tolerance as above.
-function extractDownloadActions(text: string): Array<{ title: string; year: number }> {
-  const results: Array<{ title: string; year: number }> = [];
+function extractDownloadActions(text: string): Array<{ title: string; year?: number }> {
+  const results: Array<{ title: string; year?: number }> = [];
   const seen = new Set<string>();
 
   function tryAdd(json: string) {
     try {
       const parsed = JSON.parse(json);
-      if (parsed.title && parsed.year) {
-        const key = `${String(parsed.title)}-${Number(parsed.year)}`;
+      if (parsed.title) {
+        const yearVal = parsed.year ? Number(parsed.year) : undefined;
+        const key = `${String(parsed.title)}-${yearVal ?? 'unknown'}`;
         if (!seen.has(key)) {
           seen.add(key);
-          results.push({ title: String(parsed.title), year: Number(parsed.year) });
+          results.push({ title: String(parsed.title), year: yearVal });
         }
       }
     } catch { /* skip malformed */ }
@@ -72,7 +74,7 @@ function cleanTorrentName(raw: string): string {
 }
 
 function recKey(r: Recommendation) {
-  return `${r.title.toLowerCase()}-${r.year}`;
+  return `${r.title.toLowerCase()}-${r.year ?? 'unknown'}`;
 }
 
 // Normalise a title for comparison: lowercase, strip punctuation, collapse whitespace.
@@ -81,8 +83,8 @@ function normTitle(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-function torrentKey(title: string, year: number) {
-  return `${title.toLowerCase()}-${year}`;
+function torrentKey(title: string, year?: number) {
+  return `${title.toLowerCase()}-${year ?? 'unknown'}`;
 }
 
 // crypto.randomUUID() is only available in secure contexts (HTTPS / localhost).
@@ -219,14 +221,14 @@ export default function ChatInterface() {
   }, []);
 
   // Called by RecommendationCard when Plex check finds the movie
-  const handlePlexFound = useCallback((title: string, _year: number) => {
+  const handlePlexFound = useCallback((title: string, _year?: number) => {
     addInfoMessage(`[System] "${title}" is already in your Plex library.`);
   }, [addInfoMessage]);
 
   // Called by RecommendationCard when torrents are found (movie or TV season)
   const handleTorrentsReady = useCallback((
     title: string,
-    year: number,
+    year: number | undefined,
     torrents: TorrentOption[],
     mediaType: 'movie' | 'tv',
     season?: number
@@ -246,12 +248,12 @@ export default function ChatInterface() {
   }, [addInfoMessage]);
 
   // Called by RecommendationCard when movie is on YTS but no 1080p
-  const handleNoSuitableQuality = useCallback((title: string, _year: number) => {
+  const handleNoSuitableQuality = useCallback((title: string, _year?: number) => {
     addInfoMessage(`[System] "${title}" is on YTS but no 1080p version is available.`);
   }, [addInfoMessage]);
 
   // Triggered when the LLM emits a <download> tag, or when the user clicks Download on a card
-  const triggerDownload = useCallback(async (title: string, year: number) => {
+  const triggerDownload = useCallback(async (title: string, year?: number) => {
     const entry = pendingTorrents.current.get(torrentKey(title, year));
 
     if (!entry) {
@@ -264,10 +266,11 @@ export default function ChatInterface() {
     // Hard guard: never download something already in the Plex library,
     // regardless of what the LLM requested.
     try {
+      const yearParam = year !== undefined ? `&year=${year}` : '';
       if (mediaType === 'tv') {
         // For TV, use the season-aware check — only block if the specific season is already in Plex.
         // A generic movie search would match the show and block valid downloads of missing seasons.
-        const plexCheck = await fetch(`/api/plex/check?title=${encodeURIComponent(title)}&year=${year}&type=tv`);
+        const plexCheck = await fetch(`/api/plex/check?title=${encodeURIComponent(title)}${yearParam}&type=tv`);
         const plexData = await plexCheck.json();
         if (plexData.found && season !== undefined && season > 0) {
           const seasons: number[] = plexData.seasons ?? [];
@@ -277,7 +280,7 @@ export default function ChatInterface() {
           }
         }
       } else {
-        const plexCheck = await fetch(`/api/plex/check?title=${encodeURIComponent(title)}&year=${year}`);
+        const plexCheck = await fetch(`/api/plex/check?title=${encodeURIComponent(title)}${yearParam}`);
         const plexData = await plexCheck.json();
         if (plexData.found) {
           addInfoMessage(`[System] "${title}" is already in your Plex library — download skipped.`);
