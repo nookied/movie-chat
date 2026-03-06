@@ -252,6 +252,11 @@ export default function ChatInterface() {
     addInfoMessage(`[System] "${title}" is on YTS but no 1080p version is available.`);
   }, [addInfoMessage]);
 
+  // Called by RecommendationCard when TMDB/OMDB return no data at all — title likely doesn't exist
+  const handleNotFound = useCallback((title: string) => {
+    addInfoMessage(`[System] "${title}" wasn't found in any database — it may not exist or the title may be wrong.`);
+  }, [addInfoMessage]);
+
   // Triggered when the LLM emits a <download> tag, or when the user clicks Download on a card
   const triggerDownload = useCallback(async (title: string, year?: number) => {
     const entry = pendingTorrents.current.get(torrentKey(title, year));
@@ -473,6 +478,7 @@ export default function ChatInterface() {
                 onPlexFound={handlePlexFound}
                 onTorrentsReady={handleTorrentsReady}
                 onNoSuitableQuality={handleNoSuitableQuality}
+                onNotFound={handleNotFound}
                 onDownload={triggerDownload}
                 isDownloading={activeDownloads.some(
                   (d) => normTitle(d.torrentName) === normTitle(rec.title)

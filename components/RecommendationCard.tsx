@@ -17,6 +17,7 @@ interface Props {
   ) => void;
   onNoSuitableQuality: (title: string, year?: number) => void;
   onDownload: (title: string, year?: number) => void;
+  onNotFound?: (title: string) => void;
   isDownloading?: boolean;
   forceInLibrary?: boolean;
 }
@@ -31,6 +32,7 @@ export default function RecommendationCard({
   onTorrentsReady,
   onNoSuitableQuality,
   onDownload,
+  onNotFound,
   isDownloading = false,
   forceInLibrary = false,
 }: Props) {
@@ -68,7 +70,14 @@ export default function RecommendationCard({
     // Reviews run independently — just metadata, no decision depends on them
     fetch(`/api/reviews?${params}&type=${typeParam}`)
       .then((r) => r.json())
-      .then((d) => { setReviews(d); setReviewState('done'); })
+      .then((d: ReviewData) => {
+        setReviews(d);
+        setReviewState('done');
+        // If TMDB/OMDB found nothing at all, tell the LLM so it can react
+        if (!d.poster && !d.overview && d.tmdbScore === undefined && !d.imdbScore) {
+          onNotFound?.(title);
+        }
+      })
       .catch(() => setReviewState('error'));
 
     // Plex first — then YTS only if movie not in library; TV uses season picker instead
