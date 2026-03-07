@@ -79,6 +79,7 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
   if (results.length === 0) return {};
 
   const movie = results[0];
+  const releaseYear = movie.release_date ? Number(movie.release_date.split('-')[0]) : undefined;
 
   // Step 2: Fetch full details including credits
   const detailUrl = new URL(`${TMDB_BASE}/movie/${movie.id}`);
@@ -96,6 +97,7 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
       overview: movie.overview,
       poster: movie.poster_path ? `${TMDB_IMAGE_BASE}${movie.poster_path}` : undefined,
       tmdbId: movie.id,
+      year: releaseYear,
     };
   }
 
@@ -110,6 +112,7 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
     runtime: details.runtime,
     director,
     tmdbId: details.id,
+    year: releaseYear,
   };
 }
 
@@ -144,6 +147,7 @@ export async function getTvDetails(title: string, year?: number): Promise<Partia
   if (results.length === 0) return {};
 
   const show = results[0];
+  const releaseYear = show.first_air_date ? Number(show.first_air_date.split('-')[0]) : undefined;
 
   // Step 2: Fetch full TV details
   const detailUrl = new URL(`${TMDB_BASE}/tv/${show.id}`);
@@ -159,6 +163,7 @@ export async function getTvDetails(title: string, year?: number): Promise<Partia
       overview: show.overview,
       poster: show.poster_path ? `${TMDB_IMAGE_BASE}${show.poster_path}` : undefined,
       tmdbId: show.id,
+      year: releaseYear,
     };
   }
 
@@ -173,5 +178,6 @@ export async function getTvDetails(title: string, year?: number): Promise<Partia
     numberOfSeasons: details.seasons?.filter((s) => s.season_number > 0 && s.episode_count > 0).length
       ?? details.number_of_seasons,
     tmdbId: details.id,
+    year: releaseYear,
   };
 }

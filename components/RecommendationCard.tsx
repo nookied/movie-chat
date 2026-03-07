@@ -266,7 +266,7 @@ export default function RecommendationCard({
             <div>
               <h3 className="text-white font-semibold text-base leading-tight">{title}</h3>
               <p className="text-gray-400 text-xs mt-0.5">
-                {year !== undefined ? `${year} · ` : ''}{type === 'tv' ? 'TV Series' : 'Movie'}
+                {(reviews?.year ?? year) !== undefined ? `${reviews?.year ?? year} · ` : ''}{type === 'tv' ? 'TV Series' : 'Movie'}
                 {reviews?.runtime ? ` · ${reviews.runtime}min` : ''}
                 {reviews?.director ? ` · dir. ${reviews.director}` : ''}
               </p>

@@ -32,6 +32,7 @@ export interface ReviewData {
   director?: string;
   tmdbId?: number;
   numberOfSeasons?: number;
+  year?: number;
 }
 
 export interface TorrentOption {
