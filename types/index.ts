@@ -75,4 +75,5 @@ export interface ActiveDownload {
   fromApp: boolean;
   mediaType?: 'movie' | 'tv';
   season?: number;
+  year?: number;
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTorrentStatus, listActiveTorrents } from '@/lib/transmission';
-import { isAppTorrent } from '@/lib/appTorrents';
+import { isAppTorrent, getAppTorrentMeta } from '@/lib/appTorrents';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (!id) {
     try {
       const torrents = await listActiveTorrents();
-      const annotated = torrents.map((t) => ({ ...t, isAppTorrent: isAppTorrent(t.id) }));
+      const annotated = torrents.map((t) => ({ ...t, isAppTorrent: isAppTorrent(t.id), appMeta: getAppTorrentMeta(t.id) }));
       return NextResponse.json(annotated);
     } catch (err) {
       console.error('[transmission/status]', err);

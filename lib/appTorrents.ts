@@ -15,6 +15,7 @@ import path from 'path';
 export interface AppTorrentMeta {
   mediaType?: 'movie' | 'tv';
   season?: number;
+  year?: number;
 }
 
 // Stored format: { "42": { "mediaType": "movie" }, "99": { "mediaType": "tv", "season": 2 }, … }
@@ -72,9 +73,10 @@ export function registerAppTorrent(
   id: number,
   mediaType?: 'movie' | 'tv',
   season?: number,
+  year?: number,
 ): void {
   const m = loadCache();
-  m.set(id, { mediaType, season });
+  m.set(id, { mediaType, season, year });
   flushCache(m);
 }
 

@@ -192,11 +192,12 @@ export default function ChatInterface() {
             .filter((t: { id: number; isAppTorrent?: boolean }) =>
               (t.isAppTorrent || appIds.has(t.id)) && !knownIds.has(t.id)
             )
-            .map((t: { id: number; name: string }) => ({
+            .map((t: { id: number; name: string; appMeta?: { mediaType?: string; season?: number; year?: number } }) => ({
               torrentId: t.id,
               torrentName: cleanTorrentName(t.name),
               addedAt: Date.now(),
               fromApp: true,
+              year: t.appMeta?.year,
             }));
           return incoming.length > 0 ? [...prev, ...incoming] : prev;
         });
@@ -300,7 +301,7 @@ export default function ChatInterface() {
       const res = await fetch('/api/transmission/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ magnet: torrent.magnet, mediaType, season }),
+        body: JSON.stringify({ magnet: torrent.magnet, mediaType, season, year }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Failed to add torrent');
@@ -480,9 +481,13 @@ export default function ChatInterface() {
                 onNoSuitableQuality={handleNoSuitableQuality}
                 onNotFound={handleNotFound}
                 onDownload={triggerDownload}
-                isDownloading={activeDownloads.some(
-                  (d) => normTitle(d.torrentName) === normTitle(rec.title)
-                )}
+                isDownloading={activeDownloads.some((d) => {
+                  if (normTitle(d.torrentName) !== normTitle(rec.title)) return false;
+                  // When both have year info, require a year match — prevents remakes
+                  // (e.g. Beauty and the Beast 1991 vs 2017) from sharing the same status
+                  if (d.year !== undefined && rec.year !== undefined) return d.year === rec.year;
+                  return true;
+                })}
                 forceInLibrary={[...movedTitles].some(
                   (name) => normTitle(name) === normTitle(rec.title)
                 )}

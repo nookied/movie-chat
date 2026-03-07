@@ -164,6 +164,8 @@ The assistant recommends one title at a time. Each recommendation shows as a car
 - Whether it's **already in your Plex library**
 - A **Download button** if a copy is available
 
+You can also name a specific title — including very recent releases the AI may not know about — and it will look it up and show a card for it.
+
 ### TV show downloads
 
 For TV shows, a season picker appears below the card:

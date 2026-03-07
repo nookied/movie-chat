@@ -8,10 +8,11 @@ const MAGNET_RE = /^magnet:\?.*xt=urn:btih:([a-fA-F0-9]{40}|[A-Z2-7]{32})/i;
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { magnet, mediaType, season } = body as {
+  const { magnet, mediaType, season, year } = body as {
     magnet: string;
     mediaType?: 'movie' | 'tv';
     season?: number;
+    year?: number;
   };
 
   if (!magnet || typeof magnet !== 'string' || !MAGNET_RE.test(magnet)) {
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
   try {
     const id = await addTorrent(magnet);
     // Persist ownership + metadata so the auto-move poller knows where to put the file
-    registerAppTorrent(id, mediaType, season);
+    registerAppTorrent(id, mediaType, season, year);
     return NextResponse.json({ id });
   } catch (err) {
     console.error('[transmission/add]', err);
