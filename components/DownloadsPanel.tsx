@@ -6,7 +6,7 @@ import DownloadTracker from './DownloadTracker';
 
 interface Props {
   downloads: ActiveDownload[];
-  onMoved: (name: string) => void;
+  onMoved: (name: string, year?: number) => void;
   onComplete: (torrentId: number) => void;
 }
 

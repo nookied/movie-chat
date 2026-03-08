@@ -14,11 +14,13 @@
  */
 
 import { listActiveTorrents } from './transmission';
-import { isAppTorrent, getAppTorrentMeta } from './appTorrents';
+import { isAppTorrent, getAppTorrentMeta, pruneAppTorrents } from './appTorrents';
 import { moveTorrentFiles } from './moveFiles';
 
 let started = false;
 let ticking = false;
+let lastCleanupAt = 0;
+const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 
 async function tick(): Promise<void> {
   // Guard against the previous tick still running (e.g. a very large file being copied)
@@ -31,6 +33,16 @@ async function tick(): Promise<void> {
       torrents = await listActiveTorrents();
     } catch {
       return; // Transmission not reachable — try again next tick
+    }
+
+    // Once per day: prune registry entries that no longer exist in Transmission
+    // (cancelled/failed torrents that were never unregistered).
+    // Only runs when listActiveTorrents() succeeded — never on error.
+    if (Date.now() - lastCleanupAt >= CLEANUP_INTERVAL) {
+      const activeIds = new Set(torrents.map((t) => t.id));
+      const pruned = pruneAppTorrents(activeIds);
+      if (pruned > 0) console.log(`[autoMove] Pruned ${pruned} stale entr${pruned === 1 ? 'y' : 'ies'} from app-torrents.json`);
+      lastCleanupAt = Date.now();
     }
 
     let movedCount = 0;

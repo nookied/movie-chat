@@ -134,12 +134,16 @@ export async function searchLibrary(title: string, year?: number): Promise<PlexS
     (item) => titleMatches(item) && (year === undefined || Math.abs(Number(item.year ?? 0) - year) <= 1)
   );
 
-  // Step 2: year-agnostic fallback — if only one item in the library has this title,
-  // use it regardless of year (e.g. LLM says 2014 but library has 2026)
+  // Step 2: fallback — if only one item in the library has this title, use it when
+  // the year is unknown OR the gap is small (≤5 years — handles LLM year guesses being
+  // slightly off). A large gap means a different version/remake; don't cross-match.
   if (!match) {
     const candidates = items.filter(titleMatches);
     if (candidates.length === 1) {
-      match = candidates[0];
+      const candidateYear = Number(candidates[0].year ?? 0);
+      if (year === undefined || candidateYear === 0 || Math.abs(candidateYear - year) <= 5) {
+        match = candidates[0];
+      }
     } else if (candidates.length > 1 && year !== undefined) {
       // Multiple — pick whichever year is closest
       match = candidates.sort(

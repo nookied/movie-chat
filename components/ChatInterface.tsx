@@ -488,9 +488,7 @@ export default function ChatInterface() {
                   if (d.year !== undefined && rec.year !== undefined) return d.year === rec.year;
                   return true;
                 })}
-                forceInLibrary={[...movedTitles].some(
-                  (name) => normTitle(name) === normTitle(rec.title)
-                )}
+                forceInLibrary={movedTitles.has(torrentKey(rec.title, rec.year))}
               />
             ))}
           </div>
@@ -501,8 +499,8 @@ export default function ChatInterface() {
       {/* Downloads panel — collapsible, sits between chat and input bar */}
       <DownloadsPanel
         downloads={activeDownloads}
-        onMoved={(name) => setMovedTitles((prev) => {
-          const next = new Set([...prev, name.toLowerCase()]);
+        onMoved={(name, year) => setMovedTitles((prev) => {
+          const next = new Set([...prev, torrentKey(name, year)]);
           // Cap size — only the most recent 100 moved titles need to be tracked
           if (next.size > 100) {
             const oldest = next.values().next().value;

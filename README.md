@@ -186,7 +186,7 @@ If the title isn't in your library and a copy is available:
 - **Click the Download button** on the recommendation card directly, or
 - **Reply in chat** — the assistant will ask _"Want me to download [Title]?"_ and start the download when you confirm
 
-A download tracker card appears showing progress. When it finishes, the file is automatically moved to your library and Plex is refreshed — this happens in the background on the server, so it works even if you close the browser or navigate away.
+A download tracker card appears showing progress. When it finishes, the file is automatically moved to your library and Plex is refreshed — this happens in the background on the server, so it works even if you close the browser or navigate away. The **"On Plex ✓"** badge on the card updates automatically once Plex has indexed the file (usually within a few minutes).
 
 ### Starting a new conversation
 
@@ -272,6 +272,7 @@ Check that your TMDB and OMDB API keys are set correctly in Settings. Both have 
 The season count comes from TMDB — make sure your TMDB API key is configured in Settings.
 
 **Download completes but file doesn't appear in Plex**
+- The **"On Plex ✓"** badge re-checks automatically in the background — give it a few minutes before investigating further
 - Make sure **Library directory** is set correctly in Settings
 - Check that Plex has permission to read the directory
 - You can trigger a manual library scan in Plex if needed

@@ -62,6 +62,10 @@ export default function RecommendationCard({
   const plexCallbackSent = useRef(false);
   const torrentCallbackSent = useRef(false);
 
+  // Always-current plex state accessible inside closures without stale captures
+  const plexRef = useRef<PlexStatus | null>(null);
+  useEffect(() => { plexRef.current = plex; }, [plex]);
+
   useEffect(() => {
     const params = new URLSearchParams({ title });
     if (year !== undefined) params.set('year', String(year));
@@ -233,6 +237,59 @@ export default function RecommendationCard({
       onPlexFound(title, year);
     }
   }, [allSeasonsInPlex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Post-move Plex re-checks — fires silently after forceInLibrary is set.
+  // Retries at 2 min → 10 min → 60 min, stopping early once Plex confirms.
+  // For movies: stops when d.found === true.
+  // For TV:    updates plex state each attempt; allSeasonsInPlex effect fires the
+  //             callback naturally once every season is confirmed.
+  useEffect(() => {
+    if (!forceInLibrary) return;
+    // Already confirmed by the initial mount check — nothing to do
+    if (type === 'movie' && plexRef.current?.found) return;
+
+    let cancelled = false;
+    const DELAYS_MS = [2 * 60_000, 10 * 60_000, 60 * 60_000]; // 2 min, 10 min, 60 min
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    async function attempt(index: number) {
+      if (cancelled || index >= DELAYS_MS.length) return;
+      if (type === 'movie' && plexRef.current?.found) return; // confirmed between attempts
+
+      timeoutId = setTimeout(async () => {
+        if (cancelled) return;
+        try {
+          const params = new URLSearchParams({ title });
+          if (year !== undefined) params.set('year', String(year));
+          const url = `/api/plex/check?${params}${type === 'tv' ? '&type=tv' : ''}`;
+          const r = await fetch(url);
+          if (!r.ok || cancelled) { attempt(index + 1); return; }
+          const d: PlexStatus = await r.json();
+          if (cancelled) return;
+
+          setPlex(d); // always update — TV season badges benefit even from partial data
+
+          if (type === 'movie' && d.found) {
+            // Movie confirmed in Plex — fire callback and stop retrying
+            if (!plexCallbackSent.current) {
+              plexCallbackSent.current = true;
+              onPlexFound(title, year);
+            }
+            return;
+          }
+          attempt(index + 1); // not yet confirmed — schedule next attempt
+        } catch {
+          if (!cancelled) attempt(index + 1);
+        }
+      }, DELAYS_MS[index]);
+    }
+
+    attempt(0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [forceInLibrary]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showPlex =
     forceInLibrary ||

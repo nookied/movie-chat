@@ -6,7 +6,7 @@ import { DownloadStatus, ActiveDownload } from '@/types';
 interface Props {
   download: ActiveDownload;
   onComplete: () => void;
-  onMoved?: (torrentName: string) => void;
+  onMoved?: (torrentName: string, year?: number) => void;
 }
 
 // Transmission status codes
@@ -64,7 +64,7 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
         stopPolling();
         if (download.fromApp) {
           // Server poller moved it — show "Added to library" then dismiss
-          onMoved?.(download.torrentName);
+          onMoved?.(download.torrentName, download.year);
           setMoved(true);
         } else {
           // External torrent manually removed — just dismiss quietly

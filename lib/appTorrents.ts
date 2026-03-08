@@ -16,6 +16,7 @@ export interface AppTorrentMeta {
   mediaType?: 'movie' | 'tv';
   season?: number;
   year?: number;
+  registeredAt?: number; // Unix ms — used by the cleanup poller to skip recently-added entries
 }
 
 // Stored format: { "42": { "mediaType": "movie" }, "99": { "mediaType": "tv", "season": 2 }, … }
@@ -76,7 +77,7 @@ export function registerAppTorrent(
   year?: number,
 ): void {
   const m = loadCache();
-  m.set(id, { mediaType, season, year });
+  m.set(id, { mediaType, season, year, registeredAt: Date.now() });
   flushCache(m);
 }
 
@@ -92,4 +93,32 @@ export function unregisterAppTorrent(id: number): void {
   const m = loadCache();
   m.delete(id);
   flushCache(m);
+}
+
+/**
+ * Remove registry entries whose IDs are no longer present in Transmission.
+ * Only prunes entries registered more than `graceMs` ago (default 1 hour) to
+ * avoid racing against a torrent that was just added but not yet visible in
+ * Transmission's torrent list.
+ * Should only be called when listActiveTorrents() succeeded — never on error.
+ * Returns the number of entries pruned.
+ */
+export function pruneAppTorrents(
+  activeTransmissionIds: Set<number>,
+  graceMs = 60 * 60 * 1000, // 1 hour
+): number {
+  const m = loadCache();
+  const now = Date.now();
+  let pruned = 0;
+
+  for (const [id, meta] of m) {
+    if (activeTransmissionIds.has(id)) continue;
+    // Skip entries registered within the grace period
+    if (meta.registeredAt !== undefined && now - meta.registeredAt < graceMs) continue;
+    m.delete(id);
+    pruned++;
+  }
+
+  if (pruned > 0) flushCache(m);
+  return pruned;
 }
