@@ -61,6 +61,8 @@ export default function RecommendationCard({
   // Fire each callback only once
   const plexCallbackSent = useRef(false);
   const torrentCallbackSent = useRef(false);
+  // Guard for the auto-fetch of the default TV season — runs at most once per card
+  const autoFetchedSeason = useRef(false);
 
   // Always-current plex state accessible inside closures without stale captures
   const plexRef = useRef<PlexStatus | null>(null);
@@ -218,6 +220,30 @@ export default function RecommendationCard({
     onTorrentsReady(title, year, [syntheticTorrent], 'tv', selectedSeason!);
   }
 
+  // Silently fetch the torrent for `season` and register it in pendingTorrents
+  // (via onTorrentsReady) without touching any UI state. This lets the AI respond
+  // to chat-initiated download requests before the user clicks a season button.
+  async function fetchDefaultSeason(season: number) {
+    try {
+      const params = new URLSearchParams({ title, type: 'tv', season: String(season) });
+      if (year !== undefined) params.set('year', String(year));
+      const r = await fetch(`/api/torrents/search?${params}`);
+      if (!r.ok) return;
+      const d: TvTorrentResult = await r.json();
+      if (!d.found || d.noSeasonPack) return;
+      const syntheticTorrent: TorrentOption = {
+        quality: d.quality ?? '1080p',
+        type: 'web',
+        codec: '',
+        size: d.sizeBytes ? `${(d.sizeBytes / 1e9).toFixed(1)} GB` : '',
+        seeders: d.seeders ?? 0,
+        magnet: d.magnet ?? '',
+        movieTitle: title,
+      };
+      onTorrentsReady(title, year, [syntheticTorrent], 'tv', season);
+    } catch { /* silently ignore — user can still click a season button manually */ }
+  }
+
   const numberOfSeasons = reviews?.numberOfSeasons;
 
   // Derived TV Plex state — only meaningful when type === 'tv'
@@ -237,6 +263,30 @@ export default function RecommendationCard({
       onPlexFound(title, year);
     }
   }, [allSeasonsInPlex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-fetch the default season torrent (earliest not in Plex) once Plex and TMDB
+  // data are both settled. This populates pendingTorrents in ChatInterface so the AI
+  // can respond to "can I download it?" without requiring the user to click a season
+  // button first. Does not update any card UI state — purely a background registration.
+  // If the user manually clicks a season, handleSeasonSelect overwrites the entry.
+  useEffect(() => {
+    if (type !== 'tv') return;
+    if (!numberOfSeasons) return;
+    if (plexState !== 'done' && plexState !== 'error') return; // wait for Plex to settle
+    if (showPlex) return; // all seasons already in library
+    if (selectedSeason !== null) return; // user already picked a season manually
+    if (autoFetchedSeason.current) return;
+
+    const seasonsInLib = new Set(plex?.seasons ?? []); // empty on Plex error → defaults to S01
+    let defaultSeason: number | undefined;
+    for (let s = 1; s <= numberOfSeasons; s++) {
+      if (!seasonsInLib.has(s)) { defaultSeason = s; break; }
+    }
+    if (defaultSeason === undefined) return;
+
+    autoFetchedSeason.current = true;
+    fetchDefaultSeason(defaultSeason);
+  }, [type, numberOfSeasons, plexState, showPlex, selectedSeason]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Post-move Plex re-checks — fires silently after forceInLibrary is set.
   // Retries at 2 min → 10 min → 60 min, stopping early once Plex confirms.

@@ -103,22 +103,30 @@ function isSeasonNPack(name: string, season: number): boolean {
 }
 
 // Size bonus: prefer higher-bitrate encodes within the same quality tier.
-// Capped at 60 GB so monster packs (3D SBS, multi-season bundles) don't dominate.
-// Max bonus ≈ 23 pts (60 GB) vs ~11 pts (5 GB) — enough to beat a re-encode but
-// never enough to overcome a quality-tier difference (50+ pts between tiers).
-const SIZE_CAP_BYTES = 60_000_000_000;
+// Capped at 15 GB — a 15 GB season pack is already high quality;
+// anything larger is typically a raw remux. The low cap keeps size from
+// outweighing the seeder bonus on popular efficient encodes.
+const SIZE_CAP_BYTES = 15_000_000_000;
 function sizebonus(bytes: number): number {
   return Math.log10(Math.min(bytes, SIZE_CAP_BYTES) / 1e9 + 1) * 15;
 }
 
+// Seeder bonus: seeders are a strong trust/popularity signal. Weight of 12
+// means ~1000 seeders ≈ +36 pts and ~30 seeders ≈ +18 pts — enough to let a
+// well-seeded efficient encode beat a large-but-obscure remux, but never enough
+// to overcome a quality-tier difference (50+ pts between tiers).
+function seederBonus(seeders: number): number {
+  return Math.log10(seeders + 1) * 12;
+}
+
 function pickBest(candidates: KnabenHit[]): TvTorrentResult {
-  // Prefer seeded results; among those, highest (quality + size bonus) then most seeders.
+  // Prefer seeded results; among those, highest (quality + size + seeder bonus) then most seeders.
   const seeded = candidates.filter((h) => h.seeders > 0);
   const pool   = seeded.length > 0 ? seeded : candidates;
 
   pool.sort((a, b) => {
-    const scoreA = qualityRank(a.title) + sizebonus(a.bytes);
-    const scoreB = qualityRank(b.title) + sizebonus(b.bytes);
+    const scoreA = qualityRank(a.title) + sizebonus(a.bytes) + seederBonus(a.seeders);
+    const scoreB = qualityRank(b.title) + sizebonus(b.bytes) + seederBonus(b.seeders);
     const sd = scoreB - scoreA;
     if (Math.abs(sd) > 0.01) return sd;
     return b.seeders - a.seeders;
@@ -146,7 +154,7 @@ function pickBest(candidates: KnabenHit[]): TvTorrentResult {
 }
 
 // Exported for unit tests only — not part of the public API.
-export { norm, qualityRank, isCompletePack, isSeasonNPack, sizebonus, pickBest };
+export { norm, qualityRank, isCompletePack, isSeasonNPack, sizebonus, seederBonus, pickBest };
 
 /**
  * Search for a TV season pack via Knaben.
@@ -156,10 +164,9 @@ export { norm, qualityRank, isCompletePack, isSeasonNPack, sizebonus, pickBest }
 export async function searchTvSeason(title: string, season: number): Promise<TvTorrentResult> {
   const normTitle = norm(title);
 
-  // Strict 1080p filter — same policy as the movie torrent search.
-  // The search queries already include "1080p" but Knaben is a text search so
-  // 4K, 720p and lower-res results can still slip through. We discard them all;
-  // if nothing 1080p remains the caller returns { found: false }.
+  // Prefer 1080p — Knaben is a text search so other resolutions can slip through
+  // even when the query includes "1080p". Try 1080p first; fall back to the best
+  // available quality only when no 1080p pack exists (e.g. older shows like Blackadder).
   function only1080p(candidates: KnabenHit[]): KnabenHit[] {
     return candidates.filter((h) => qualityRank(h.title) === 300);
   }
@@ -167,12 +174,11 @@ export async function searchTvSeason(title: string, season: number): Promise<TvT
   if (season === 0) {
     const results = await knabSearch(`${title} complete series 1080p`);
     const matches = results.filter((h) => norm(h.title).includes(normTitle) && isCompletePack(h.title));
+
+    // 1080p complete pack → non-1080p complete pack (e.g. older shows) → not found
     const matches1080 = only1080p(matches);
     if (matches1080.length > 0) return pickBest(matches1080);
-
-    // Fallback: any 1080p title match from the same query (not necessarily a labelled complete pack)
-    const any1080 = only1080p(results.filter((h) => norm(h.title).includes(normTitle)));
-    if (any1080.length > 0) return pickBest(any1080);
+    if (matches.length > 0) return pickBest(matches);
 
     return { found: false };
   }
@@ -202,8 +208,7 @@ export async function searchTvSeason(title: string, season: number): Promise<TvT
     return { found: true, noSeasonPack: true };
   }
 
+  // Prefer 1080p; fall back to best available quality if no 1080p pack exists
   const packs1080 = only1080p(packs);
-  if (packs1080.length === 0) return { found: false };
-
-  return pickBest(packs1080);
+  return pickBest(packs1080.length > 0 ? packs1080 : packs);
 }

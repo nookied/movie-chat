@@ -165,17 +165,17 @@ describe('sizebonus()', () => {
     expect(sizebonus(5_000_000_000)).toBeGreaterThan(sizebonus(1_000_000_000));
     expect(sizebonus(20_000_000_000)).toBeGreaterThan(sizebonus(5_000_000_000));
   });
-  it('caps at 60 GB', () => {
-    expect(sizebonus(60_000_000_000)).toBeCloseTo(sizebonus(100_000_000_000), 5);
-    expect(sizebonus(60_000_000_000)).toBeCloseTo(sizebonus(250_000_000_000), 5);
+  it('caps at 15 GB', () => {
+    expect(sizebonus(15_000_000_000)).toBeCloseTo(sizebonus(25_000_000_000), 5);
+    expect(sizebonus(15_000_000_000)).toBeCloseTo(sizebonus(250_000_000_000), 5);
   });
   it('5 GB scores roughly 11.7 pts', () => {
     expect(sizebonus(5_000_000_000)).toBeCloseTo(Math.log10(6) * 15, 2);
   });
-  it('60 GB cap scores roughly 26.7 pts', () => {
-    expect(sizebonus(60_000_000_000)).toBeCloseTo(Math.log10(61) * 15, 2);
+  it('15 GB cap scores roughly 18.1 pts', () => {
+    expect(sizebonus(15_000_000_000)).toBeCloseTo(Math.log10(16) * 15, 2);
   });
-  it('max bonus (~27 pts) never bridges a quality tier gap (50+ pts)', () => {
+  it('max size bonus (~18 pts) never bridges a quality tier gap (50+ pts)', () => {
     const maxBonus = sizebonus(Number.MAX_SAFE_INTEGER);
     expect(maxBonus).toBeLessThan(50);
   });
@@ -189,9 +189,9 @@ function hit(title: string, bytes: number, seeders: number, hash = title) {
 }
 
 describe('pickBest()', () => {
-  it('prefers larger file within the same quality tier', () => {
-    const small = hit('Show.S01.1080p.x265', 4_500_000_000, 341);
-    const large = hit('Show.S01.1080p.BluRay.x265', 13_200_000_000, 28);
+  it('prefers larger file within the same quality tier when seeders are equal', () => {
+    const small = hit('Show.S01.1080p.x265', 4_500_000_000, 50);
+    const large = hit('Show.S01.1080p.BluRay.x265', 13_200_000_000, 50);
     const result = pickBest([small, large]);
     expect(result.sizeBytes).toBe(13_200_000_000);
   });
@@ -236,19 +236,17 @@ describe('pickBest()', () => {
     expect(result.seeders).toBe(50);
   });
 
-  it('60 GB cap prevents monster packs from dominating a well-seeded normal pack', () => {
-    const normal  = hit('Show.S01.1080p.BluRay',     25_000_000_000, 100);
-    const monster = hit('Show.S01.1080p.3D.FULL-SBS', 250_000_000_000, 1);
-    // monster is 0 seeders → falls in seeded pool check; but let's give it 1 seeder
+  it('size cap + seeder bonus: well-seeded normal pack beats a monster remux', () => {
+    const normal  = hit('Show.S01.1080p.BluRay',      12_000_000_000, 100);
+    const monster = hit('Show.S01.1080p.3D.FULL-SBS', 250_000_000_000,  1);
     const result = pickBest([normal, monster]);
-    // normal: score = 300 + sizebonus(25e9) ≈ 300 + 21.0 = 321.0, seeders=100
-    // monster: score = 300 + sizebonus(capped 60e9) ≈ 300 + 26.7 = 326.7, seeders=1
-    // monster wins on score — this is the known trade-off; seeders break ties but not score diffs
-    // The key property we're testing: the cap means it doesn't score astronomically
-    expect(result.sizeBytes).toBe(250_000_000_000); // cap means monster wins on score
-    // But its bonus is bounded: verify cap is applied
+    // normal:  300 + sizebonus(12 GB) + seederBonus(100) ≈ 300 + 16.6 + 24.1 = 340.7
+    // monster: 300 + sizebonus(capped 15 GB) + seederBonus(1) ≈ 300 + 18.1 + 3.6 = 321.7
+    // normal wins — seeder bonus tips it in favour of the popular encode
+    expect(result.sizeBytes).toBe(12_000_000_000);
+    // Verify the cap is still applied: monster's bonus is bounded by 15 GB, not 250 GB
     const monsterBonus = sizebonus(250_000_000_000);
-    const capBonus = sizebonus(60_000_000_000);
+    const capBonus     = sizebonus(15_000_000_000);
     expect(monsterBonus).toBeCloseTo(capBonus, 5);
   });
 
@@ -360,6 +358,36 @@ describe('searchTvSeason()', () => {
     } as Response);
     const result = await searchTvSeason('Breaking Bad', 0);
     expect(result.found).toBe(true);
+  });
+
+  it('season=0 returns found:false when only individual season packs exist (no complete pack)', async () => {
+    // A single-season pack matching the title is not a valid "All seasons" result
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hits: [makeHit('Breaking Bad S01 1080p BluRay x265', 13e9, 200)],
+      }),
+    } as Response);
+    const result = await searchTvSeason('Breaking Bad', 0);
+    expect(result.found).toBe(false);
+  });
+
+  it('falls back to non-1080p pack when no 1080p version exists', async () => {
+    // Simulates an old show (e.g. Blackadder) only available in 720p
+    mockKnaben([makeHit('Blackadder S01 720p BluRay x264', 4e9, 150)]);
+    const result = await searchTvSeason('Blackadder', 1);
+    expect(result.found).toBe(true);
+    expect(result.quality).toBe('720p');
+  });
+
+  it('prefers 1080p over 720p when both exist', async () => {
+    mockKnaben([
+      makeHit('Breaking Bad S01 720p BluRay x264', 4e9, 500),
+      makeHit('Breaking Bad S01 1080p BluRay x265', 10e9, 100),
+    ]);
+    const result = await searchTvSeason('Breaking Bad', 1);
+    expect(result.found).toBe(true);
+    expect(result.quality).toBe('1080p');
   });
 
   it('handles fetch errors gracefully — returns found:false', async () => {
