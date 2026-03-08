@@ -26,7 +26,7 @@ export default function Home() {
         </div>
         <div className="flex-1">
           <h1 className="text-white font-semibold text-lg leading-none">Movie Chat</h1>
-          <p className="hidden sm:block text-gray-400 text-xs mt-0.5">Get your movie night recommendation!</p>
+          <p className="hidden sm:block text-gray-400 text-xs mt-0.5">An AI-powered Plex assistant</p>
         </div>
         <NewChatButton />
         <Link
