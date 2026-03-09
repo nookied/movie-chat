@@ -7,6 +7,24 @@ set -e
 AUTO=0
 [[ "${1:-}" == "--auto" ]] && AUTO=1
 
+# ── ensure npm is on PATH (cron strips PATH; handle nvm + Homebrew installs) ──
+if ! command -v npm &>/dev/null; then
+  # nvm
+  [ -s "$HOME/.nvm/nvm.sh" ] && \. "$HOME/.nvm/nvm.sh"
+fi
+if ! command -v npm &>/dev/null; then
+  # Homebrew – Apple Silicon
+  [ -d "/opt/homebrew/bin" ] && export PATH="/opt/homebrew/bin:$PATH"
+fi
+if ! command -v npm &>/dev/null; then
+  # Homebrew – Intel / Linux
+  [ -d "/usr/local/bin" ] && export PATH="/usr/local/bin:$PATH"
+fi
+if ! command -v npm &>/dev/null; then
+  error "npm not found — add it to PATH and re-run."
+  exit 1
+fi
+
 # ── colours ──────────────────────────────────────────────────────────────────
 BOLD='\033[1m'
 GREEN='\033[0;32m'

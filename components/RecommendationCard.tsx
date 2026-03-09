@@ -264,30 +264,6 @@ export default function RecommendationCard({
     }
   }, [allSeasonsInPlex]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-fetch the default season torrent (earliest not in Plex) once Plex and TMDB
-  // data are both settled. This populates pendingTorrents in ChatInterface so the AI
-  // can respond to "can I download it?" without requiring the user to click a season
-  // button first. Does not update any card UI state — purely a background registration.
-  // If the user manually clicks a season, handleSeasonSelect overwrites the entry.
-  useEffect(() => {
-    if (type !== 'tv') return;
-    if (!numberOfSeasons) return;
-    if (plexState !== 'done' && plexState !== 'error') return; // wait for Plex to settle
-    if (showPlex) return; // all seasons already in library
-    if (selectedSeason !== null) return; // user already picked a season manually
-    if (autoFetchedSeason.current) return;
-
-    const seasonsInLib = new Set(plex?.seasons ?? []); // empty on Plex error → defaults to S01
-    let defaultSeason: number | undefined;
-    for (let s = 1; s <= numberOfSeasons; s++) {
-      if (!seasonsInLib.has(s)) { defaultSeason = s; break; }
-    }
-    if (defaultSeason === undefined) return;
-
-    autoFetchedSeason.current = true;
-    fetchDefaultSeason(defaultSeason);
-  }, [type, numberOfSeasons, plexState, showPlex, selectedSeason]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Post-move Plex re-checks — fires silently after forceInLibrary is set.
   // Retries at 2 min → 10 min → 60 min, stopping early once Plex confirms.
   // For movies: stops when d.found === true.
@@ -344,6 +320,31 @@ export default function RecommendationCard({
   const showPlex =
     forceInLibrary ||
     (type === 'movie' ? plex?.found === true : allSeasonsInPlex);
+
+  // Auto-fetch the default season torrent (earliest not in Plex) once Plex and TMDB
+  // data are both settled. This populates pendingTorrents in ChatInterface so the AI
+  // can respond to "can I download it?" without requiring the user to click a season
+  // button first. Does not update any card UI state — purely a background registration.
+  // If the user manually clicks a season, handleSeasonSelect overwrites the entry.
+  // Placed after showPlex declaration to avoid "used before declaration" build error.
+  useEffect(() => {
+    if (type !== 'tv') return;
+    if (!numberOfSeasons) return;
+    if (plexState !== 'done' && plexState !== 'error') return; // wait for Plex to settle
+    if (showPlex) return; // all seasons already in library
+    if (selectedSeason !== null) return; // user already picked a season manually
+    if (autoFetchedSeason.current) return;
+
+    const seasonsInLib = new Set(plex?.seasons ?? []); // empty on Plex error → defaults to S01
+    let defaultSeason: number | undefined;
+    for (let s = 1; s <= numberOfSeasons; s++) {
+      if (!seasonsInLib.has(s)) { defaultSeason = s; break; }
+    }
+    if (defaultSeason === undefined) return;
+
+    autoFetchedSeason.current = true;
+    fetchDefaultSeason(defaultSeason);
+  }, [type, numberOfSeasons, plexState, showPlex, selectedSeason]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="mt-2 rounded-xl border border-plex-border bg-plex-card overflow-hidden max-w-[600px]">

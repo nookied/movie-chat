@@ -133,7 +133,7 @@ export async function resumeTorrent(id: number): Promise<void> {
   await rpc(sessionId, 'torrent-start', { ids: [id] });
 }
 
-export async function removeTorrent(id: number): Promise<void> {
+export async function removeTorrent(id: number, deleteData = false): Promise<void> {
   const sessionId = await getSessionId();
-  await rpc(sessionId, 'torrent-remove', { ids: [id], 'delete-local-data': false });
+  await rpc(sessionId, 'torrent-remove', { ids: [id], 'delete-local-data': deleteData });
 }

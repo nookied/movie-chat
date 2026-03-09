@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     if (action === 'pause') await pauseTorrent(id);
     else if (action === 'resume') await resumeTorrent(id);
     else if (action === 'remove') {
-      await removeTorrent(id);
+      await removeTorrent(id, true); // delete partial files from disk on cancel
       unregisterAppTorrent(id); // clean up the persistent registry
     }
     else return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
