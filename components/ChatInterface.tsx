@@ -316,7 +316,7 @@ export default function ChatInterface() {
 
       setActiveDownloads((prev) => [
         ...prev.filter((d) => d.torrentId !== data.id),
-        { torrentId: data.id, torrentName: displayName, addedAt: Date.now(), fromApp: true, mediaType, season },
+        { torrentId: data.id, torrentName: displayName, addedAt: Date.now(), fromApp: true, mediaType, season, year },
       ]);
     } catch (err) {
       addInfoMessage(`[System] Download failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
