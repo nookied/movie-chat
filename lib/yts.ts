@@ -44,7 +44,7 @@ export async function searchTorrents(
   // Including the year in the query helps YTS rank the correct film first when
   // there are many results with similar titles (e.g. "Liar Liar" vs "Liar Liar 1997").
   url.searchParams.set('query_term', year ? `${title} ${year}` : title);
-  url.searchParams.set('limit', '8');
+  url.searchParams.set('limit', '20');
 
   const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
   if (!res.ok) return { torrents: [], noSuitableQuality: false };
