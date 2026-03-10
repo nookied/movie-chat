@@ -36,34 +36,30 @@ interface YtsMovie {
   torrents?: YtsTorrent[];
 }
 
-export async function searchTorrents(
-  title: string,
-  year?: number
-): Promise<TorrentSearchResult> {
+// Query YTS and return matching torrents, or null if no exact-title match found.
+async function queryYts(searchTitle: string, matchTitle: string, year?: number): Promise<TorrentSearchResult | null> {
   const url = new URL(YTS_API);
   // Including the year in the query helps YTS rank the correct film first when
   // there are many results with similar titles (e.g. "Liar Liar" vs "Liar Liar 1997").
-  url.searchParams.set('query_term', year ? `${title} ${year}` : title);
+  url.searchParams.set('query_term', year ? `${searchTitle} ${year}` : searchTitle);
   url.searchParams.set('limit', '20');
 
   const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) return { torrents: [], noSuitableQuality: false };
+  if (!res.ok) return null;
 
   const data = await res.json();
   const movies: YtsMovie[] = data?.data?.movies ?? [];
 
   // Find the best matching movie — exact title required to avoid false positives
   // (e.g. "Food and Shelter" matching a search for "Shelter")
-  const lc = title.toLowerCase();
+  const lc = matchTitle.toLowerCase();
   const exactWithYear = movies.find(
     (m) => m.title.toLowerCase() === lc && (year === undefined || Math.abs(m.year - year) <= 1)
   );
   const exactAnyYear = movies.find((m) => m.title.toLowerCase() === lc);
   const match = exactWithYear ?? exactAnyYear;
 
-  if (!match?.torrents || match.torrents.length === 0) {
-    return { torrents: [], noSuitableQuality: false };
-  }
+  if (!match?.torrents || match.torrents.length === 0) return null;
 
   // Filter to 1080p only
   const p1080 = match.torrents.filter((t) => t.quality === '1080p');
@@ -93,4 +89,27 @@ export async function searchTorrents(
   }));
 
   return { torrents, noSuitableQuality: false };
+}
+
+export async function searchTorrents(
+  title: string,
+  year?: number
+): Promise<TorrentSearchResult> {
+  // Primary search: full title
+  const primary = await queryYts(title, title, year);
+  if (primary) return primary;
+
+  // Fallback: some films are indexed on YTS without their subtitle
+  // e.g. "Spiral: From the Book of Saw" → stored as "Spiral"
+  // Strip everything after the first ": " or " - " and retry.
+  const colonIdx = title.indexOf(': ');
+  const dashIdx = title.indexOf(' - ');
+  const cutIdx = colonIdx !== -1 ? colonIdx : dashIdx;
+  if (cutIdx !== -1) {
+    const baseTitle = title.slice(0, cutIdx);
+    const fallback = await queryYts(baseTitle, baseTitle, year);
+    if (fallback) return fallback;
+  }
+
+  return { torrents: [], noSuitableQuality: false };
 }
