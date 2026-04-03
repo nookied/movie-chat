@@ -1,6 +1,6 @@
 # Movie Chat
 
-An AI-powered media assistant for your Plex library. Chat naturally to get personalised recommendations, check what's already in your library, and download anything that isn't — all from one interface.
+**v1.5.0** — An AI-powered media assistant for your Plex library. Chat naturally to get personalised recommendations, check what's already in your library, and download anything that isn't — all from one interface.
 
 ---
 
@@ -164,7 +164,7 @@ The assistant recommends one title at a time. Each recommendation shows as a car
 - Whether it's **already in your Plex library**
 - A **Download button** if a copy is available
 
-You can also name a specific title — including very recent releases the AI may not know about — and it will look it up and show a card for it.
+You can also name a specific title directly — including very recent releases the AI may not know about, or titles that sound like everyday phrases (e.g. "How to Make a Killing", "Get Out", "Don't Look Up") — and it will look it up and show a card for it.
 
 ### TV show downloads
 
@@ -382,3 +382,9 @@ npm test       # run the test suite
 ```
 
 All configuration is read from `config.local.json` at runtime — no server restart needed after saving settings.
+
+---
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full version history.

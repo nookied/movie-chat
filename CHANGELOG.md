@@ -1,10 +1,24 @@
-# Movie Chat — Changelog
+# Changelog
 
-All notable changes to the project, grouped by session/batch. Most recent changes first.
+All notable changes to movie-chat are documented here.
+Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`
+- **MAJOR** — breaking changes
+- **MINOR** — new features, backwards-compatible
+- **PATCH** — bug fixes and small improvements
 
 ---
 
-## 2026-03-10 — YTS search resilience & LLM guardrails
+## [1.5.0] — 2026-04-03
+
+### Changed
+- **System prompt** (`app/api/chat/route.ts`): Rewritten for token efficiency (~40% reduction, ~480 → ~280 words) — sections merged, redundant prose removed, wrong-response lists replaced with positive examples
+- **Phrase-like titles**: LLM now correctly handles film titles that look like questions or phrases (e.g. "How to Make a Killing") — no longer treats them as general questions or triggers safety disclaimers for titles containing words like kill/die/murder
+- **Hallucinated Plex state**: LLM now explicitly forbidden from claiming a title is in the library before emitting the `<recommendation>` tag; the app performs the actual lookup
+- **"The title is X" pattern**: Added few-shot example so the LLM recognises explicit title declarations and always emits the tag
+
+---
+
+## [1.4.0] — 2026-03-10
 
 ### Fixed
 - **YTS subtitle fallback** (`lib/yts.ts`): When YTS drops the subtitle from a film name (e.g. "Alien: Romulus" → "Alien Romulus"), now falls back to a base title search so the torrent is still found
@@ -12,11 +26,11 @@ All notable changes to the project, grouped by session/batch. Most recent change
 - **YTS false negatives** (`lib/yts.ts`): Increased result limit on title-only searches to avoid missing valid torrents
 
 ### Changed
-- **System prompt hardened** (`app/api/chat/route.ts`): Strengthened instructions to prevent the LLM from substituting similar-sounding films when the requested title isn't found
+- **System prompt** (`app/api/chat/route.ts`): Strengthened instructions to prevent the LLM from substituting similar-sounding films when the requested title isn't found
 
 ---
 
-## 2026-03-08 — Post-move verification, TV logic, unit tests
+## [1.3.0] — 2026-03-08
 
 ### Added
 - **Post-move Plex re-check** (`lib/autoMove.ts`): After moving files, the system re-checks Plex to confirm the title appeared in the library
@@ -32,7 +46,7 @@ All notable changes to the project, grouped by session/batch. Most recent change
 
 ---
 
-## 2026-03-07 — Year extraction & developer docs
+## [1.2.1] — 2026-03-07
 
 ### Added
 - **CLAUDE.md** — project instructions for AI-assisted development (architecture, debugging guidelines, flow separation)
@@ -42,7 +56,10 @@ All notable changes to the project, grouped by session/batch. Most recent change
 
 ---
 
-## 2026-03-06 — Auto-move poller, download tracker fixes, LLM tagging
+## [1.2.0] — 2026-03-06
+
+### Added
+- **Background file mover** (`lib/autoMove.ts`): Server-side poller that moves completed downloads to Plex even when the browser is closed
 
 ### Fixed
 - **Auto-move poller** (`lib/autoMove.ts`): Fixed background poller failing to move completed torrents under certain Transmission states
@@ -51,12 +68,9 @@ All notable changes to the project, grouped by session/batch. Most recent change
 - **Chat route** (`app/api/chat/route.ts`): Patched streaming response handling
 - **Memory overload** (`app/api/chat/route.ts`): Fixed unbounded context growth that could exhaust memory on long conversations
 
-### Added
-- **Background file mover** (`lib/autoMove.ts`): Server-side poller that moves completed downloads to Plex even when the browser is closed
-
 ---
 
-## 2026-03-05 — TV shows (PR #1), PWA, installer
+## [1.1.0] — 2026-03-05
 
 ### Added
 - **TV show support** (`components/RecommendationCard.tsx`, `lib/eztv.ts`): Full TV flow with season picker — seasons already in Plex are greyed out, one-click download per season
@@ -68,6 +82,7 @@ All notable changes to the project, grouped by session/batch. Most recent change
 - **Collapsible downloads panel** (`components/DownloadsPanel.tsx`): Active downloads sidebar, collapsed by default
 - **Install/uninstall scripts** (`install.sh`, `uninstall.sh`, `setup.sh`): One-liner installer with pm2 service management and optional auto-update cron
 - **Auto-dismiss download card**: Download tracker auto-dismisses when the torrent is no longer in Transmission
+- **Vitest test suite**: 62 tests covering torrent scoring, pack detection, and Plex check logic
 
 ### Changed
 - **pm2 mode** (`ecosystem.config.js`): Switched from fork to production mode for better stability
@@ -80,41 +95,32 @@ All notable changes to the project, grouped by session/batch. Most recent change
 - **Downloads panel** (`components/DownloadsPanel.tsx`): Collapsed by default; fixed tsconfig target for compatibility
 
 ### Security
-- **CVE patches**: Patched 4 high-severity CVEs; upgraded Next.js 14 → 15.5.12
-- **Setup scripts** (`setup.sh`, `uninstall.sh`): Updated for Next.js 15 compatibility
-
-### Technical details
-- Vitest test suite: 62 tests added covering torrent scoring, pack detection, and Plex check logic
-- TV flow merged via PR #1 from `tvshows` branch
+- Patched 4 high-severity CVEs; upgraded Next.js 14 → 15.5.12
 
 ---
 
-## 2026-03-04 — v1.0 release (movies only)
+## [1.0.0] — 2026-03-04
 
 ### Added
 - **AI chat interface** (`components/ChatInterface.tsx`): Conversational UI powered by OpenRouter (cloud) with automatic Ollama fallback (local)
 - **Recommendation cards** (`components/RecommendationCard.tsx`): Each AI suggestion renders as a card with poster, ratings (TMDB, IMDb, Rotten Tomatoes via OMDB), Plex availability badge, and download button
 - **Plex library check** (`lib/plex.ts`): Real-time check against Plex Media Server for every recommendation
 - **YTS torrent search** (`lib/yts.ts`): 1080p movie torrent search via YTS API
-- **Transmission integration** (`lib/transmission.ts`): Add magnet links, poll progress, pause/resume/cancel — all via Transmission RPC
+- **Transmission integration** (`lib/transmission.ts`): Add magnet links, poll progress, pause/resume/cancel via Transmission RPC
 - **File move to Plex** (`lib/moveFiles.ts`): Copies completed downloads into organized Plex library folders and triggers a library scan
 - **Download tracker** (`components/DownloadTracker.tsx`): Real-time progress bar with pause/resume/cancel controls, polling every 5 seconds
-- **Settings page** (`app/settings/page.tsx`): Configure all API keys and service URLs from the browser — saved to `config.local.json`
+- **Settings page** (`app/settings/page.tsx`): Configure all API keys and service URLs from the browser, saved to `config.local.json`
 - **TMDB metadata** (`lib/tmdb.ts`): Posters, overviews, cast, director, runtime
 - **OMDB ratings** (`lib/omdb.ts`): IMDb score and Rotten Tomatoes percentage
 - **Torrent registry** (`lib/appTorrents.ts`): Tracks which torrents the app added — enables cross-device visibility and prevents controlling external torrents
 - **Local network middleware** (`middleware.ts`): Blocks non-LAN traffic (RFC-1918 + `.local` mDNS)
-- **Rate limiting** (`app/api/chat/route.ts`): 30 req/min per IP on chat endpoint
-
-### Technical details
+- **Rate limiting** (`app/api/chat/route.ts`): 30 req/min per IP on the chat endpoint
 - Next.js 15, React 18, TypeScript (strict), Tailwind CSS
 - Config chain: `config.local.json` → `process.env` → defaults
-- All service URLs configurable via Settings or `.env.local`
 
 ---
 
-## 2026-03-02 — Project scaffolding
+## [0.1.0] — 2026-03-02
 
 ### Added
-- Initial Next.js project setup with TypeScript and Tailwind CSS
-- Repository created with base configuration
+- Initial Next.js project scaffolding with TypeScript and Tailwind CSS
