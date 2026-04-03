@@ -3,6 +3,7 @@ import { cfg } from '@/lib/config';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+const METADATA_CACHE_SECONDS = 28800; // 8 hours — metadata rarely changes
 
 interface TmdbSearchResult {
   id: number;
@@ -60,7 +61,7 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
 
   const searchRes = await fetch(searchUrl.toString(), {
     signal: AbortSignal.timeout(8000),
-    next: { revalidate: 28800 }, // cache for 8 h
+    next: { revalidate: METADATA_CACHE_SECONDS },
   });
   if (!searchRes.ok) return {};
 
@@ -88,7 +89,7 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
 
   const detailRes = await fetch(detailUrl.toString(), {
     signal: AbortSignal.timeout(8000),
-    next: { revalidate: 28800 }, // cache for 8 h
+    next: { revalidate: METADATA_CACHE_SECONDS },
   });
   if (!detailRes.ok) {
     // Return partial data from search if detail fetch fails
@@ -128,7 +129,7 @@ export async function getTvDetails(title: string, year?: number): Promise<Partia
 
   const searchRes = await fetch(searchUrl.toString(), {
     signal: AbortSignal.timeout(8000),
-    next: { revalidate: 28800 }, // cache for 8 h
+    next: { revalidate: METADATA_CACHE_SECONDS },
   });
   if (!searchRes.ok) return {};
 
@@ -155,7 +156,7 @@ export async function getTvDetails(title: string, year?: number): Promise<Partia
 
   const detailRes = await fetch(detailUrl.toString(), {
     signal: AbortSignal.timeout(8000),
-    next: { revalidate: 28800 }, // cache for 8 h
+    next: { revalidate: METADATA_CACHE_SECONDS },
   });
   if (!detailRes.ok) {
     return {

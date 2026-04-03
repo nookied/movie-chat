@@ -223,7 +223,7 @@ export default function ChatInterface() {
 
   // Called by RecommendationCard when Plex check finds the movie
   const handlePlexFound = useCallback((title: string, _year?: number) => {
-    addInfoMessage(`[System] "${title}" is already in your Plex library.`);
+    addInfoMessage(`[System] "${title}" is on Plex. Tell the user it's in their library — no need to download.`);
   }, [addInfoMessage]);
 
   // Called by RecommendationCard when torrents are found (movie or TV season)
@@ -242,20 +242,20 @@ export default function ChatInterface() {
     }
     if (mediaType === 'tv' && season !== undefined) {
       const seasonLabel = season === 0 ? 'Complete Series' : `Season ${season}`;
-      addInfoMessage(`[System] "${title}" ${seasonLabel} is available for download.`);
+      addInfoMessage(`[System] "${title}" ${seasonLabel} is available. Ask the user: "Want me to download ${seasonLabel} of ${title}?"`);
     } else {
-      addInfoMessage(`[System] "${title}" is available for download.`);
+      addInfoMessage(`[System] "${title}" is available. Ask the user: "Want me to download ${title}?"`);
     }
   }, [addInfoMessage]);
 
   // Called by RecommendationCard when movie is on YTS but no 1080p
   const handleNoSuitableQuality = useCallback((title: string, _year?: number) => {
-    addInfoMessage(`[System] "${title}" is on YTS but no 1080p version is available.`);
+    addInfoMessage(`[System] No good copy of "${title}" is available. Tell the user and suggest one alternative.`);
   }, [addInfoMessage]);
 
   // Called by RecommendationCard when TMDB/OMDB return no data at all — title likely doesn't exist
   const handleNotFound = useCallback((title: string) => {
-    addInfoMessage(`[System] "${title}" wasn't found in any database — it may not exist or the title may be wrong.`);
+    addInfoMessage(`[System] "${title}" wasn't found anywhere — may not exist or wrong spelling. Tell the user and suggest one alternative.`);
   }, [addInfoMessage]);
 
   // Triggered when the LLM emits a <download> tag, or when the user clicks Download on a card
@@ -417,7 +417,36 @@ export default function ChatInterface() {
       }
 
       // Extract recommendation tags → attach all to message
-      const recs = extractRecommendations(fullContent);
+      let recs = extractRecommendations(fullContent);
+
+      // Silent retry: if the model mentioned a title but forgot the tag, nudge it once.
+      // Skip short replies (likely clarifying questions) and out-of-scope responses.
+      if (recs.length === 0 && fullContent.length > 50
+          && !/^(what genre|what kind|what are you|i'm only set up)/i.test(fullContent.trim())) {
+        try {
+          const retryMessages = [
+            ...history,
+            { role: 'assistant', content: fullContent },
+            { role: 'user', content: '[System] You mentioned a title without a <recommendation> tag. Emit the tag now.' },
+          ];
+          const retryRes = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: retryMessages }),
+          });
+          if (retryRes.ok && retryRes.body) {
+            const retryReader = retryRes.body.getReader();
+            let retryContent = '';
+            while (true) {
+              const { done, value } = await retryReader.read();
+              if (done) break;
+              retryContent += new TextDecoder().decode(value, { stream: true });
+            }
+            recs = extractRecommendations(retryContent);
+          }
+        } catch { /* retry is best-effort — don't block the main flow */ }
+      }
+
       if (recs.length > 0) {
         setMessages((prev) =>
           prev.map((m) =>

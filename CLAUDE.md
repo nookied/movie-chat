@@ -46,14 +46,23 @@ The system prompt lives in `app/api/chat/route.ts`. Key rules:
 - **No hallucinated state**: the LLM must never claim a title is in Plex or available to download before emitting the tag — the app does the actual lookup.
 - **Few-shot examples** are more effective than abstract rules for instruction-following models — when adding new rules, add a concrete example alongside.
 - **Token efficiency**: the prompt is intentionally compact (~280 words). Don't add verbose wrong-response lists — a good positive example implies the wrong responses.
+- **Prescriptive system messages**: `[System]` info messages include the exact phrasing the model should use — the system prompt just says "follow the instruction". Don't re-add response-pattern rules to the prompt; put the logic in the info message string instead.
 
 Changing the system prompt requires a server restart (`pm2 restart movie-chat`) to take effect — it's not hot-reloaded.
+
+## Small-model reliability
+
+Three mechanisms compensate for unreliable tag emission from small/free LLMs:
+
+1. **Few-shot seeding** (`route.ts` → `SEED_MESSAGES`): A synthetic Arrival exchange is prepended to every conversation. The model sees itself already producing correct tags and continues the pattern. ~40 tokens cost.
+2. **Prescriptive info messages** (`ChatInterface.tsx`): Instead of teaching the model 6 response patterns, each `[System]` message includes the exact wording to use. Moves decision logic from the LLM to app code.
+3. **Silent tag retry** (`ChatInterface.tsx` → `sendMessage()`): After streaming, if no `<recommendation>` tag is found and the response is substantive, a background follow-up nudges the model to emit the tag. The card appears with a brief delay.
 
 ## Architecture notes
 
 - `instrumentation.ts` is stable in Next.js 15 — no config flag needed
 - All Transmission/Plex fetches use `cache: 'no-store'` — prevents Next.js data cache bloat
-- TMDB/OMDB fetches use `{ next: { revalidate: 28800 } }` — 8h TTL
+- TMDB/OMDB fetches use `{ next: { revalidate: METADATA_CACHE_SECONDS } }` — 8h TTL (constant defined in each module)
 - `lib/appTorrents.ts` uses a 30s TTL cache so the autoMove poller (separate Next.js bundle) picks up new registrations within one cache window
 - AutoMove poller: serialised moves, 15s gap between each to avoid I/O spikes
 - Post-move Plex re-check: 2 min → 10 min → 60 min backoff; stops early once Plex confirms; all timeouts cancelled on unmount

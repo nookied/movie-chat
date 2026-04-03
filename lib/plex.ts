@@ -1,6 +1,16 @@
 import { PlexStatus } from '@/types';
 import { cfg } from '@/lib/config';
 
+/** True if a Plex item's title (or originalTitle) matches the query — exact or subtitle variant. */
+function titleMatches(item: Record<string, unknown>, query: string): boolean {
+  const lc = query.toLowerCase();
+  const t = String(item.title ?? '').toLowerCase();
+  const o = String(item.originalTitle ?? '').toLowerCase();
+  if (t === lc || o === lc) return true;
+  if (t.startsWith(lc + ':') || t.startsWith(lc + ' -')) return true;
+  return false;
+}
+
 // Trigger a metadata refresh on every "movie" library section in Plex.
 // Fires-and-forgets — never throws; call without awaiting from the move route.
 export async function triggerLibraryRefresh(): Promise<void> {
@@ -57,17 +67,8 @@ export async function searchTvLibrary(title: string): Promise<PlexStatus> {
   const data = await res.json();
   const items: Array<Record<string, unknown>> = data?.MediaContainer?.Metadata ?? [];
 
-  const lc = title.toLowerCase();
-  function titleMatches(item: Record<string, unknown>): boolean {
-    const t = String(item.title ?? '').toLowerCase();
-    const o = String(item.originalTitle ?? '').toLowerCase();
-    if (t === lc || o === lc) return true;
-    if (t.startsWith(lc + ':') || t.startsWith(lc + ' -')) return true;
-    return false;
-  }
-
   // Only match show-type items
-  const shows = items.filter((item) => item.type === 'show' && titleMatches(item));
+  const shows = items.filter((item) => item.type === 'show' && titleMatches(item, title));
   if (shows.length === 0) return { found: false };
 
   // Multiple matches — pick the closest title (exact > subtitle)
@@ -117,28 +118,16 @@ export async function searchLibrary(title: string, year?: number): Promise<PlexS
   const items: Array<Record<string, unknown>> =
     data?.MediaContainer?.Metadata ?? [];
 
-  const lc = title.toLowerCase();
-
-  // Title passes if it's an exact match or the Plex title starts with the query
-  // followed by a colon/dash (handles "Anchorman 2" → "Anchorman 2: The Legend Continues")
-  function titleMatches(item: Record<string, unknown>): boolean {
-    const t = String(item.title ?? '').toLowerCase();
-    const o = String(item.originalTitle ?? '').toLowerCase();
-    if (t === lc || o === lc) return true;
-    if (t.startsWith(lc + ':') || t.startsWith(lc + ' -')) return true;
-    return false;
-  }
-
   // Step 1: title match + year ±1
   let match = items.find(
-    (item) => titleMatches(item) && (year === undefined || Math.abs(Number(item.year ?? 0) - year) <= 1)
+    (item) => titleMatches(item, title) && (year === undefined || Math.abs(Number(item.year ?? 0) - year) <= 1)
   );
 
   // Step 2: fallback — if only one item in the library has this title, use it when
   // the year is unknown OR the gap is small (≤5 years — handles LLM year guesses being
   // slightly off). A large gap means a different version/remake; don't cross-match.
   if (!match) {
-    const candidates = items.filter(titleMatches);
+    const candidates = items.filter((item) => titleMatches(item, title));
     if (candidates.length === 1) {
       const candidateYear = Number(candidates[0].year ?? 0);
       if (year === undefined || candidateYear === 0 || Math.abs(candidateYear - year) <= 5) {

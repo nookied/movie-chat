@@ -5,6 +5,22 @@ import Image from 'next/image';
 import { Recommendation, PlexStatus, ReviewData, TorrentOption } from '@/types';
 import { TvTorrentResult, TvTorrentOption } from '@/lib/eztv';
 
+/** Build a TorrentOption from TV torrent search data — shared across season select, option select, and default fetch. */
+function toSyntheticTorrent(
+  movieTitle: string,
+  opts: { quality?: string; sizeBytes?: number; seeders?: number; magnet?: string },
+): TorrentOption {
+  return {
+    quality: opts.quality ?? '1080p',
+    type: 'web',
+    codec: '',
+    size: opts.sizeBytes ? `${(opts.sizeBytes / 1e9).toFixed(1)} GB` : '',
+    seeders: opts.seeders ?? 0,
+    magnet: opts.magnet ?? '',
+    movieTitle,
+  };
+}
+
 interface Props {
   recommendation: Recommendation;
   onPlexFound: (title: string, year?: number) => void;
@@ -182,18 +198,8 @@ export default function RecommendationCard({
       });
       setTvTorrentOptions(d.options ?? null);
 
-      // Build a synthetic TorrentOption to reuse the existing download pipeline
-      const syntheticTorrent: TorrentOption = {
-        quality: d.quality ?? '1080p',
-        type: 'web',
-        codec: '',
-        size: d.sizeBytes ? `${(d.sizeBytes / 1e9).toFixed(1)} GB` : '',
-        seeders: d.seeders ?? 0,
-        magnet: d.magnet ?? '',
-        movieTitle: title,
-      };
-
       // No callback guard for TV — re-selecting a season must overwrite the pending entry
+      const syntheticTorrent = toSyntheticTorrent(title, d);
       onTorrentsReady(title, year, [syntheticTorrent], 'tv', season);
     } catch {
       setTvTorrentState('error');
@@ -208,16 +214,7 @@ export default function RecommendationCard({
       size: `${(opt.sizeBytes / 1e9).toFixed(1)} GB`,
       seeders: opt.seeders,
     });
-    const syntheticTorrent: TorrentOption = {
-      quality: opt.quality,
-      type: 'web',
-      codec: '',
-      size: `${(opt.sizeBytes / 1e9).toFixed(1)} GB`,
-      seeders: opt.seeders,
-      magnet: opt.magnet,
-      movieTitle: title,
-    };
-    onTorrentsReady(title, year, [syntheticTorrent], 'tv', selectedSeason!);
+    onTorrentsReady(title, year, [toSyntheticTorrent(title, opt)], 'tv', selectedSeason!);
   }
 
   // Silently fetch the torrent for `season` and register it in pendingTorrents
@@ -231,16 +228,7 @@ export default function RecommendationCard({
       if (!r.ok) return;
       const d: TvTorrentResult = await r.json();
       if (!d.found || d.noSeasonPack) return;
-      const syntheticTorrent: TorrentOption = {
-        quality: d.quality ?? '1080p',
-        type: 'web',
-        codec: '',
-        size: d.sizeBytes ? `${(d.sizeBytes / 1e9).toFixed(1)} GB` : '',
-        seeders: d.seeders ?? 0,
-        magnet: d.magnet ?? '',
-        movieTitle: title,
-      };
-      onTorrentsReady(title, year, [syntheticTorrent], 'tv', season);
+      onTorrentsReady(title, year, [toSyntheticTorrent(title, d)], 'tv', season);
     } catch { /* silently ignore — user can still click a season button manually */ }
   }
 

@@ -13,26 +13,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'title is required' }, { status: 400 });
   }
 
-  try {
-    let reviews: ReviewData;
+  const yearNum = year ? Number(year) : undefined;
 
-    if (type === 'tv') {
-      const [tmdbData, omdbData] = await Promise.all([
-        getTvDetails(title, year ? Number(year) : undefined),
-        getOmdbRatings(title, year ? Number(year) : undefined, 'series'),
-      ]);
-      reviews = { ...tmdbData, ...omdbData };
-    } else {
-      const [tmdbData, omdbData] = await Promise.all([
-        getMovieDetails(title, year ? Number(year) : undefined),
-        getOmdbRatings(title, year ? Number(year) : undefined),
-      ]);
-      reviews = { ...tmdbData, ...omdbData };
-    }
+  // Use allSettled so one provider failing doesn't block the other
+  const [tmdbResult, omdbResult] = await Promise.allSettled(
+    type === 'tv'
+      ? [getTvDetails(title, yearNum), getOmdbRatings(title, yearNum, 'series')]
+      : [getMovieDetails(title, yearNum), getOmdbRatings(title, yearNum)]
+  );
 
-    return NextResponse.json(reviews);
-  } catch (err) {
-    console.error('[reviews]', err);
-    return NextResponse.json({});
-  }
+  const tmdbData = tmdbResult.status === 'fulfilled' ? tmdbResult.value : {};
+  const omdbData = omdbResult.status === 'fulfilled' ? omdbResult.value : {};
+
+  if (tmdbResult.status === 'rejected') console.error('[reviews] TMDB failed:', tmdbResult.reason);
+  if (omdbResult.status === 'rejected') console.error('[reviews] OMDB failed:', omdbResult.reason);
+
+  const reviews: ReviewData = { ...tmdbData, ...omdbData } as ReviewData;
+  return NextResponse.json(reviews);
 }

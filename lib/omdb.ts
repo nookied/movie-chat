@@ -1,6 +1,7 @@
 import { cfg } from '@/lib/config';
 
 const OMDB_BASE = 'http://www.omdbapi.com';
+const METADATA_CACHE_SECONDS = 28800; // 8 hours — ratings rarely change
 
 interface OmdbRating {
   Source: string;
@@ -29,7 +30,7 @@ export async function getOmdbRatings(
 
   const res = await fetch(url.toString(), {
     signal: AbortSignal.timeout(6000),
-    next: { revalidate: 28800 }, // cache for 8 h
+    next: { revalidate: METADATA_CACHE_SECONDS },
   });
   if (!res.ok) return {};
 

@@ -8,6 +8,25 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 
 ---
 
+## [1.6.0] — 2026-04-03
+
+### Added
+- **Few-shot conversation seeding** (`app/api/chat/route.ts`): A synthetic Arrival exchange is prepended to every LLM conversation — small models mimic the tag format they see in context, dramatically improving `<recommendation>` tag compliance
+- **Silent tag retry** (`components/ChatInterface.tsx`): If the LLM mentions a title without a `<recommendation>` tag, a background follow-up nudge extracts the tag — the card appears a moment later with no visible retry to the user
+- **Prescriptive system messages** (`components/ChatInterface.tsx`): `[System]` info messages now include the exact phrasing the model should use (e.g. `Ask the user: "Want me to download Title?"`), removing 6 response-pattern rules from the system prompt
+
+### Changed
+- **System prompt** (`app/api/chat/route.ts`): `[System] messages` section reduced from 6-bullet decision tree to a single line — the instruction is now embedded in each info message, not taught as rules
+- **Download guard** (`app/api/chat/route.ts`): `<download>` tag now requires both a `[System]` availability message AND user confirmation — prevents hallucinated downloads
+- **Reviews resilience** (`app/api/reviews/route.ts`): Switched from `Promise.all` to `Promise.allSettled` — if TMDB or OMDB is down, the other provider's data still renders
+
+### Refactored
+- **Plex title matching** (`lib/plex.ts`): Extracted duplicated `titleMatches()` from `searchLibrary()` and `searchTvLibrary()` into a shared module-level function
+- **Cache TTL constant** (`lib/tmdb.ts`, `lib/omdb.ts`): Replaced magic number `28800` with named `METADATA_CACHE_SECONDS` constant
+- **TV torrent construction** (`components/RecommendationCard.tsx`): Extracted 3 identical `TorrentOption` builders into shared `toSyntheticTorrent()` helper
+
+---
+
 ## [1.5.0] — 2026-04-03
 
 ### Changed
