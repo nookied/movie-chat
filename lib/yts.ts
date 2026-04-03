@@ -36,6 +36,12 @@ interface YtsMovie {
   torrents?: YtsTorrent[];
 }
 
+// Strip punctuation and collapse whitespace so "Avatar: Fire and Ash" matches
+// "Avatar Fire and Ash" and vice-versa.
+function normalizeTitle(t: string): string {
+  return t.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
 // Query YTS and return matching torrents, or null if no exact-title match found.
 async function queryYts(searchTitle: string, matchTitle: string, year?: number): Promise<TorrentSearchResult | null> {
   const url = new URL(YTS_API);
@@ -50,13 +56,11 @@ async function queryYts(searchTitle: string, matchTitle: string, year?: number):
   const data = await res.json();
   const movies: YtsMovie[] = data?.data?.movies ?? [];
 
-  // Find the best matching movie — exact title required to avoid false positives
-  // (e.g. "Food and Shelter" matching a search for "Shelter")
-  const lc = matchTitle.toLowerCase();
+  const norm = normalizeTitle(matchTitle);
   const exactWithYear = movies.find(
-    (m) => m.title.toLowerCase() === lc && (year === undefined || Math.abs(m.year - year) <= 1)
+    (m) => normalizeTitle(m.title) === norm && (year === undefined || Math.abs(m.year - year) <= 1)
   );
-  const exactAnyYear = movies.find((m) => m.title.toLowerCase() === lc);
+  const exactAnyYear = movies.find((m) => normalizeTitle(m.title) === norm);
   const match = exactWithYear ?? exactAnyYear;
 
   if (!match?.torrents || match.torrents.length === 0) return null;
@@ -95,11 +99,18 @@ export async function searchTorrents(
   title: string,
   year?: number
 ): Promise<TorrentSearchResult> {
-  // Primary search: full title
   const primary = await queryYts(title, title, year);
   if (primary) return primary;
 
-  // Fallback: some films are indexed on YTS without their subtitle
+  // Fallback 1: retry with punctuation stripped from the query term
+  // e.g. "Avatar: Fire and Ash" → search "avatar fire and ash"
+  const normalized = normalizeTitle(title);
+  if (normalized !== title.toLowerCase()) {
+    const fallbackStripped = await queryYts(normalized, title, year);
+    if (fallbackStripped) return fallbackStripped;
+  }
+
+  // Fallback 2: some films are indexed on YTS without their subtitle
   // e.g. "Spiral: From the Book of Saw" → stored as "Spiral"
   // Strip everything after the first ": " or " - " and retry.
   const colonIdx = title.indexOf(': ');
