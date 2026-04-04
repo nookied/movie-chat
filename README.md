@@ -1,6 +1,8 @@
 # Movie Chat
 
-**v2.0.0** — An AI-powered media assistant for your Plex library. Chat naturally to get personalised recommendations, check what's already in your library, and download anything that isn't — all from one interface.
+**v2.0.0** — An AI companion that manages your Plex library. Tell it what you want to watch — it handles the rest.
+
+**Website:** [nookied.github.io/movie-chat](https://nookied.github.io/movie-chat)
 
 ---
 
@@ -24,7 +26,9 @@
 
 ## Prerequisites
 
-Before you start, you'll need:
+**Desktop app (Option A):** Just a Mac. The app installs everything else automatically on first launch.
+
+**Manual install (Options B & C):** You'll need these set up beforehand:
 
 | Service | What it's for | Cost |
 |---|---|---|
@@ -204,7 +208,9 @@ Click the **pencil icon** ✏️ in the top right to start fresh. Your previous 
 
 The app is restricted to your local network — requests from outside are blocked automatically.
 
-Open `http://<your-mac-ip>:3000` on your phone or tablet — find your Mac's IP in **System Settings → Wi-Fi → Details**. You can also use your Mac's hostname: `http://your-mac-name.local:3000`.
+**Easiest way:** Click the **globe icon** 🌐 in the app header → a QR code appears. Scan it with your phone and the app opens instantly. Share it with anyone on the same Wi-Fi.
+
+**Manual:** Open `http://your-mac-name.local:3000` on any device. You can also use your Mac's IP: `http://<your-mac-ip>:3000` (find it in **System Settings → Wi-Fi → Details**).
 
 > **Note:** `crypto.randomUUID()` requires a secure context (HTTPS). Over plain HTTP on a local IP, the app falls back to a `Math.random`-based UUID, which is fine for local use.
 
@@ -293,7 +299,11 @@ Switch to a specific model in Settings (e.g. `mistralai/mistral-small-3.1-24b-in
 
 ## Updating
 
-### Manual update
+### Desktop app
+
+Updates are automatic. The app checks for new versions every 4 hours. When an update is available, it downloads in the background and prompts you to restart.
+
+### Manual install — manual update
 
 Run this from inside the app folder:
 
@@ -303,7 +313,7 @@ npm run update
 
 It checks if a newer version is available, shows what changed, and — if you confirm — pulls the update, rebuilds, and restarts the app automatically.
 
-### Automatic updates
+### Manual install — automatic updates
 
 During setup (`npm run setup` or the one-liner installer) you're offered the option to enable **nightly auto-updates**. This adds a cron job that silently checks for updates every night at 3 AM and applies them if found.
 
@@ -328,6 +338,12 @@ crontab -e   # delete the movie-chat line and save
 ---
 
 ## Uninstalling
+
+### Desktop app
+
+Drag Movie Chat from Applications to the Trash. Your configuration is stored in `~/Library/Application Support/MovieChat/` — delete that folder too if you want a clean removal. Plex, Transmission, and Ollama were installed as separate apps and can be removed individually.
+
+### Manual install
 
 **One-liner (if you installed with the one-liner):**
 
@@ -380,14 +396,17 @@ pm2 stop movie-chat
 ## Development
 
 ```bash
-npm run dev    # development server with hot reload (port 3000)
-npm run build  # production build
-npm run start  # production server (requires a build first)
-npm run lint   # ESLint
-npm test       # run the test suite
+npm run dev            # development server with hot reload (port 3001)
+npm run build          # production build (includes standalone output)
+npm run start          # production server (requires a build first)
+npm run lint           # ESLint
+npm test               # run the test suite (152 tests)
+npm run electron:dev   # launch Electron app in dev mode (requires build first)
+npm run electron:build # build macOS .dmg in dist-electron/
+npm run release        # build + publish to GitHub Releases (needs GH_TOKEN)
 ```
 
-All configuration is read from `config.local.json` at runtime — no server restart needed after saving settings.
+All configuration is read from `config.local.json` at runtime — no server restart needed after saving settings (except system prompt changes, which require `pm2 restart movie-chat`).
 
 ---
 

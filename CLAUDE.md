@@ -109,6 +109,13 @@ Map out the architecture before attempting fixes: what services are involved, wh
 ### Electron desktop app
 - Dev: `npm run electron:dev` (requires `npm run build` first for standalone output)
 - Build: `npm run electron:build` → `.dmg` in `dist-electron/`
+- Release: `GH_TOKEN=<token> npm run release` → builds + publishes to GitHub Releases
 - First launch installs deps via Homebrew, then opens the setup wizard
+- Auto-updater checks GitHub Releases every 4h; prompts user to restart when update is ready
+
+### Landing page
+- Static site at `docs/index.html`, hosted via GitHub Pages at [nookied.github.io/movie-chat](https://nookied.github.io/movie-chat)
+- Download button auto-resolves to latest `.dmg` via GitHub API
+- Screenshots in `docs/images/` — strip metadata before committing (`sips -d all` or `exiftool -all=`)
 
 - **Never commit or push without explicit user instruction**

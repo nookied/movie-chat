@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Movie Chat — AI movie recommendations, one click away</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <meta name="description" content="Download Movie Chat for Mac. It installs everything you need — Plex, Transmission, and a local AI — and you're watching movies in minutes.">
+  <meta property="og:title" content="Movie Chat">
+  <meta property="og:description" content="AI movie recommendations with one-click downloads. Installs everything automatically.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://nookied.github.io/movie-chat">
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --card: #1a1a1a;
+      --border: #2a2a2a;
+      --accent: #e5a00d;
+      --accent-hover: #cc8f0c;
+      --text: #e5e5e5;
+      --muted: #888;
+      --dim: #555;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── Hero ─────────────────────────────────────────────────── */
+
+    .hero {
+      text-align: center;
+      padding: 100px 0 60px;
+    }
+
+    .hero-icon {
+      width: 80px;
+      height: 80px;
+      background: var(--accent);
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 28px;
+    }
+
+    .hero-icon svg {
+      width: 44px;
+      height: 44px;
+      fill: #1a1a1a;
+    }
+
+    h1 {
+      font-size: 48px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+
+    .tagline {
+      font-size: 20px;
+      color: var(--muted);
+      max-width: 500px;
+      margin: 0 auto 40px;
+    }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--accent);
+      color: #000;
+      font-size: 17px;
+      font-weight: 600;
+      padding: 14px 32px;
+      border-radius: 12px;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+
+    .cta:hover { background: var(--accent-hover); }
+
+    .cta svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    .cta-note {
+      display: block;
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--dim);
+    }
+
+    /* ── Screenshots ──────────────────────────────────────────── */
+
+    .screenshots {
+      padding: 0 0 60px;
+      overflow: hidden;
+    }
+
+    .screenshot-scroll {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: nowrap;
+      padding: 0 24px;
+    }
+
+    .screenshot-scroll img {
+      width: 220px;
+      height: auto;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 600px) {
+      .screenshot-scroll {
+        justify-content: flex-start;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 8px;
+      }
+      .screenshot-scroll img {
+        width: 200px;
+        scroll-snap-align: start;
+      }
+    }
+
+    /* ── Features ─────────────────────────────────────────────── */
+
+    .features {
+      padding: 40px 0 80px;
+    }
+
+    .features h2 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--accent);
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 600px) {
+      .feature-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 36px; }
+      .tagline { font-size: 17px; }
+      .hero { padding: 60px 0 40px; }
+    }
+
+    .feature {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+    }
+
+    .feature-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── How it works ─────────────────────────────────────────── */
+
+    .steps {
+      padding: 0 0 80px;
+    }
+
+    .steps h2 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--accent);
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .step-num {
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .step-content {
+      padding-top: 4px;
+    }
+
+    .step-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .step-desc {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    /* ── Dev section ──────────────────────────────────────────── */
+
+    .dev {
+      border-top: 1px solid var(--border);
+      padding: 60px 0;
+      text-align: center;
+    }
+
+    .dev h2 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .dev code {
+      display: inline-block;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 14px;
+      color: var(--text);
+      user-select: all;
+    }
+
+    .dev p {
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--dim);
+    }
+
+    /* ── Footer ───────────────────────────────────────────────── */
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 0;
+      text-align: center;
+      font-size: 13px;
+      color: var(--dim);
+    }
+
+    footer a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    footer a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+        </svg>
+      </div>
+      <h1>Movie Chat</h1>
+      <p class="tagline">
+        An AI companion that manages your Plex library.<br>
+        Tell it what you want to watch — it handles the rest.
+      </p>
+      <a class="cta" id="download-btn" href="https://github.com/nookied/movie-chat/releases/latest">
+        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        Download for Mac
+      </a>
+      <span class="cta-note">macOS only. Free and open source. Sets up everything automatically.</span>
+    </div>
+  </section>
+
+  <!-- Screenshots -->
+  <section class="screenshots">
+    <div class="screenshot-scroll">
+      <img src="images/chat-recommend.png" alt="Movie recommendation with poster, ratings, and download button">
+      <img src="images/chat-download.png" alt="Downloading a movie with progress tracking">
+      <img src="images/download-progress.png" alt="Multiple downloads with progress bars">
+      <img src="images/settings.png" alt="Settings page with service status indicators">
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features">
+    <div class="container">
+      <h2>Your home entertainment, handled</h2>
+      <div class="feature-grid">
+        <div class="feature">
+          <div class="feature-title">"Something like Interstellar"</div>
+          <div class="feature-desc">
+            That's all you say. The AI suggests a movie, shows you the poster, IMDb score, and Rotten Tomatoes rating. No browsing, no searching.
+          </div>
+        </div>
+        <div class="feature">
+          <div class="feature-title">"You already have that one"</div>
+          <div class="feature-desc">
+            It checks your Plex library before you even ask. Already own it? It tells you. Don't have it? One tap to download.
+          </div>
+        </div>
+        <div class="feature">
+          <div class="feature-title">Downloaded. Moved. Ready to watch.</div>
+          <div class="feature-desc">
+            Hit download and walk away. The movie downloads, gets moved into your Plex library, and shows up on your TV. Automatically.
+          </div>
+        </div>
+        <div class="feature">
+          <div class="feature-title">Open it and it just works</div>
+          <div class="feature-desc">
+            No setup guides. No Terminal. The app installs Plex, a download manager, and a local AI on its own. You just wait a few minutes.
+          </div>
+        </div>
+        <div class="feature">
+          <div class="feature-title">The whole family can use it</div>
+          <div class="feature-desc">
+            Show a QR code, your kids scan it, and they're browsing movies on their phone. Works for anyone on your Wi-Fi.
+          </div>
+        </div>
+        <div class="feature">
+          <div class="feature-title">Nothing leaves your house</div>
+          <div class="feature-desc">
+            The AI runs on your computer. Your movie taste, your library, your conversations — all private, all local.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Steps -->
+  <section class="steps">
+    <div class="container">
+      <h2>From download to movie night in 5 minutes</h2>
+      <div class="step-list">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Download and open the app</div>
+            <div class="step-desc">Drag to Applications, double-click. No account needed.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Wait while it sets up</div>
+            <div class="step-desc">A progress bar installs everything behind the scenes. Plex, a download manager, a local AI. You don't touch anything.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">A short wizard finishes up</div>
+            <div class="step-desc">Connect your Plex library and add a couple of free keys for movie posters and ratings. Everything else is already done.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <div class="step-title">"I want something dark and slow"</div>
+            <div class="step-desc">You get Under the Skin. Poster, 6.3 IMDb, 85% on Rotten Tomatoes, and a download button. One click and it's in your library.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Developer install -->
+  <section class="dev">
+    <div class="container">
+      <h2>Or install from the command line</h2>
+      <code>/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/nookied/movie-chat/main/install.sh)"</code>
+      <p>Requires Node.js 18+ and git. See <a href="https://github.com/nookied/movie-chat">GitHub</a> for full docs.</p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <a href="https://github.com/nookied/movie-chat">GitHub</a>
+      &nbsp;&middot;&nbsp;
+      <a href="https://github.com/nookied/movie-chat/releases">Releases</a>
+      &nbsp;&middot;&nbsp;
+      <a href="https://github.com/nookied/movie-chat/blob/main/CHANGELOG.md">Changelog</a>
+    </div>
+  </footer>
+
+  <script>
+    // Point download button directly to the latest .dmg asset
+    fetch('https://api.github.com/repos/nookied/movie-chat/releases/latest')
+      .then(r => r.json())
+      .then(release => {
+        const dmg = release.assets?.find(a => a.name.endsWith('.dmg'));
+        if (dmg) document.getElementById('download-btn').href = dmg.browser_download_url;
+      })
+      .catch(() => {}); // falls back to releases page
+  </script>
+</body>
+</html>
