@@ -105,6 +105,9 @@ fi
 npm run build --silent
 info "Build complete"
 
+# Prune Electron and other dev-only packages to save ~360 MB on the server
+npm prune --production --silent 2>/dev/null
+
 # ── restart pm2 ───────────────────────────────────────────────────────────────
 if command -v pm2 &>/dev/null && pm2 describe movie-chat &>/dev/null 2>&1; then
   pm2 restart movie-chat --silent

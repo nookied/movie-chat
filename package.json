@@ -1,7 +1,10 @@
 {
   "name": "movie-chat",
-  "version": "0.1.0",
+  "version": "2.0.0",
+  "description": "AI-powered movie recommendations with Plex integration",
+  "author": "nookied",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
@@ -12,9 +15,13 @@
     "lint": "next lint",
     "setup": "bash setup.sh",
     "update": "bash update.sh",
-    "uninstall:app": "bash uninstall.sh"
+    "uninstall:app": "bash uninstall.sh",
+    "electron:dev": "electron .",
+    "electron:build": "npm run build && electron-builder --mac",
+    "release": "npm run build && electron-builder --mac --publish always"
   },
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "next": "^15.5.12",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
@@ -28,6 +35,8 @@
     "@types/react-dom": "^18.3.0",
     "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.0",
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "^15.5.12",
     "postcss": "^8.4.0",

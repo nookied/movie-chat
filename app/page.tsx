@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import ChatInterface from '@/components/ChatInterface';
 import NewChatButton from '@/components/NewChatButton';
+import ShareButton from '@/components/ShareButton';
 
 export default function Home() {
   return (
@@ -29,6 +30,7 @@ export default function Home() {
           <p className="hidden sm:block text-gray-400 text-xs mt-0.5">An AI-powered Plex assistant</p>
         </div>
         <NewChatButton />
+        <ShareButton />
         <Link
           href="/settings"
           className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-700 transition-colors"

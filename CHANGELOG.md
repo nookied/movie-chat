@@ -8,6 +8,42 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 
 ---
 
+## [2.0.0] — 2026-04-04
+
+### Added
+- **Desktop app (Electron)** (`electron/`): macOS `.dmg` packaging — download, install, open. No Terminal required.
+- **Silent auto-setup** (`electron/setup.js`): First launch automatically installs Homebrew, Plex Media Server, Transmission, and Ollama via `brew install`. Progress screen shows each step with time estimates.
+- **Setup wizard** (`app/setup/page.tsx`): 3-step post-install wizard — summary of what was installed, Plex token entry, optional TMDB/OMDB keys. All steps skippable except LLM.
+- **OpenRouter OAuth** (`app/api/openrouter/callback/route.ts`): One-click "Sign in to OpenRouter" button instead of manual API key entry.
+- **Service auto-detection** (`app/api/setup/detect/route.ts`): Probes localhost for Ollama, Plex, and Transmission on startup — auto-fills URLs in wizard.
+- **Setup redirect** (`middleware.ts`): Redirects to `/setup` when config is incomplete; cookie-cached for 24h to avoid per-request overhead.
+- **Share with family** (`components/ShareButton.tsx`): QR code modal in app header — scan with phone to open Movie Chat on any device on the same Wi-Fi network.
+- **Hostname API** (`app/api/setup/hostname/route.ts`): Returns machine hostname for `.local` mDNS URL in share modal.
+- **Shared UI components** (`components/ui/`): Extracted StatusIcon, Section, Field, Toggle, ModelSelectField from settings page for reuse in setup wizard.
+- **Electron auto-updater** (`electron/main.js`): Desktop app checks GitHub Releases every 4 hours and prompts users to install updates.
+- **Config tests** (`__tests__/config.test.ts`): 10 new tests covering readConfig, writeConfig, cfg priority chain, caching, and error handling.
+
+### Changed
+- **Standalone output** (`next.config.mjs`): Added `output: 'standalone'` for Electron packaging — non-breaking for bare-metal installs.
+- **Configurable CONFIG_PATH** (`lib/config.ts`): Config file location configurable via `CONFIG_PATH` env var — enables Electron to store config in `~/Library/Application Support/`.
+- **Transmission install** (`electron/setup.js`): Installs GUI app (cask) with RPC enabled, instead of headless daemon — user has a visual download manager.
+
+### Fixed
+- **Process leak** (`electron/main.js`): Server process reference cleared on exit before respawn, preventing zombie processes.
+- **Server respawn loop** (`electron/main.js`): Added exponential backoff (1s→2s→4s→...) with 5-attempt cap — prevents infinite crash loops.
+- **Ollama orphaned process** (`electron/setup.js`): Ollama serve process tracked and killed on app quit.
+- **Ollama startup timeout** (`electron/setup.js`): Increased port wait from 20s to 30s, separated port check from timeout logic to prevent race.
+- **ShareButton race condition** (`components/ShareButton.tsx`): Merged two competing useEffects into one — URL is now deterministic, hostname cached per session.
+- **Hostname API error handling** (`app/api/setup/hostname/route.ts`): Graceful fallback on `os.hostname()` failure.
+- **IPC error handling** (`electron/preload.js`): Callbacks wrapped in try-catch to prevent renderer crashes.
+- **OAuth callback** (`app/api/openrouter/callback/route.ts`): Added error handling for malformed JSON response from OpenRouter.
+- **Setup wizard Suspense** (`app/setup/page.tsx`): Added fallback to prevent blank screen during hydration.
+- **Service detection** (`app/api/setup/detect/route.ts`): Parallel candidate probing via `Promise.any` — saves ~2s per unreachable host.
+- **Config saves batched** (`app/setup/page.tsx`): Plex and metadata steps now save all fields in one request instead of sequential writes.
+- **Update script** (`update.sh`): Full install for build, then prune dev deps post-build to save ~360MB on server.
+
+---
+
 ## [1.6.0] — 2026-04-03
 
 ### Added

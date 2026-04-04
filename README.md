@@ -1,6 +1,6 @@
 # Movie Chat
 
-**v1.5.0** — An AI-powered media assistant for your Plex library. Chat naturally to get personalised recommendations, check what's already in your library, and download anything that isn't — all from one interface.
+**v2.0.0** — An AI-powered media assistant for your Plex library. Chat naturally to get personalised recommendations, check what's already in your library, and download anything that isn't — all from one interface.
 
 ---
 
@@ -40,7 +40,13 @@ Before you start, you'll need:
 
 ## Installation
 
-### Option A — one-liner (easiest)
+### Option A — Desktop app (recommended)
+
+Download the `.dmg` from [Releases](https://github.com/nookied/movie-chat/releases), open it, and drag Movie Chat to your Applications folder. On first launch, the app automatically installs Plex, Transmission, Ollama, and a local AI model — no Terminal required. A setup wizard walks you through the final configuration.
+
+> **Note:** The app is not yet signed with an Apple Developer certificate. On first open, right-click the app → Open → Open to bypass Gatekeeper.
+
+### Option B — one-liner (for developers)
 
 Paste this into your terminal. It clones the repo, installs dependencies, builds, and optionally sets up auto-start:
 
@@ -50,7 +56,7 @@ Paste this into your terminal. It clones the repo, installs dependencies, builds
 
 You'll need [git](https://git-scm.com) and [Node.js](https://nodejs.org) v18.18+ installed first.
 
-### Option B — manual
+### Option C — manual
 
 ```bash
 git clone https://github.com/nookied/movie-chat.git
