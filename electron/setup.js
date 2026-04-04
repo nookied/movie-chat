@@ -120,6 +120,7 @@ function installTransmission(brew, onProgress) {
 
 // ── Step 4: Ollama ───────────────────────────────────────────────────────────
 
+/** Install Ollama and start the server. Returns true if Ollama is running (model pull happens separately). */
 function installOllama(brew, onProgress) {
   return new Promise((resolve) => {
     // Check if already installed and running
@@ -150,7 +151,8 @@ function installOllama(brew, onProgress) {
       attempts++;
       if (isPortOpen(11434)) {
         clearInterval(waitInterval);
-        pullModel(onProgress).then(resolve);
+        onProgress({ step: 'ollama', status: 'done', message: 'Ollama installed — model downloading in background' });
+        resolve(true);
       } else if (attempts > 30) {
         clearInterval(waitInterval);
         onProgress({ step: 'ollama', status: 'failed', message: 'Ollama failed to start' });
@@ -160,31 +162,34 @@ function installOllama(brew, onProgress) {
   });
 }
 
-function pullModel(onProgress) {
+/**
+ * Pull the Ollama model in the background. Sends progress events but doesn't block setup.
+ * Returns a promise that resolves when the pull completes (or fails).
+ */
+function pullModelInBackground(onProgress) {
   return new Promise((resolve) => {
-    onProgress({ step: 'ollama', status: 'installing', message: 'Downloading AI model (this may take a few minutes)...' });
+    onProgress({ step: 'model', status: 'installing', message: 'Downloading AI model in the background...' });
 
     const pull = spawn('ollama', ['pull', 'llama3.2']);
     let lastProgress = '';
 
     pull.stderr?.on('data', (data) => {
       const line = data.toString().trim();
-      // Ollama outputs progress like "pulling abc123... 45%"
       if (line && line !== lastProgress) {
         lastProgress = line;
         const pctMatch = line.match(/(\d+)%/);
         if (pctMatch) {
-          onProgress({ step: 'ollama', status: 'installing', message: `Downloading AI model... ${pctMatch[1]}%` });
+          onProgress({ step: 'model', status: 'installing', message: `Downloading AI model... ${pctMatch[1]}%` });
         }
       }
     });
 
     pull.on('close', (code) => {
       if (code === 0) {
-        onProgress({ step: 'ollama', status: 'done', message: 'AI model ready' });
+        onProgress({ step: 'model', status: 'done', message: 'AI model ready' });
         resolve(true);
       } else {
-        onProgress({ step: 'ollama', status: 'failed', message: 'Model download failed' });
+        onProgress({ step: 'model', status: 'failed', message: 'Model download failed — you can retry in Settings' });
         resolve(false);
       }
     });
@@ -193,16 +198,30 @@ function pullModel(onProgress) {
 
 // ── Step 5: Write config ─────────────────────────────────────────────────────
 
-function writeSetupConfig(configPath, onProgress) {
+function writeSetupConfig(configPath, onProgress, ollamaFailed = false) {
   onProgress({ step: 'config', status: 'installing', message: 'Saving configuration...' });
 
+  const homeDir = require('os').homedir();
+  const downloadDir = path.join(homeDir, 'Downloads', 'Movie Chat');
+  const libraryDir = path.join(homeDir, 'Movies', 'Plex');
+
+  // Create the directories so Transmission and the move logic don't fail on first use
+  if (!fs.existsSync(downloadDir)) fs.mkdirSync(downloadDir, { recursive: true });
+  if (!fs.existsSync(libraryDir)) fs.mkdirSync(libraryDir, { recursive: true });
+
   const config = {
-    ollamaBaseUrl: 'http://localhost:11434',
-    ollamaModel: 'llama3.2',
-    ollamaOnly: 'true',
     plexBaseUrl: 'http://localhost:32400',
     transmissionBaseUrl: 'http://localhost:9091',
+    transmissionDownloadDir: downloadDir,
+    libraryDir: libraryDir,
   };
+
+  // Only add Ollama config if it actually succeeded
+  if (!ollamaFailed) {
+    config.ollamaBaseUrl = 'http://localhost:11434';
+    config.ollamaModel = 'llama3.2';
+    config.ollamaOnly = 'true';
+  }
 
   // Only include services that are actually reachable
   if (!isPortOpen(32400)) delete config.plexBaseUrl;
@@ -246,17 +265,22 @@ async function runAutoSetup(configPath, onProgress) {
   installPlex(brew, onProgress);
   installTransmission(brew, onProgress);
 
-  // Step 4: Ollama (important — this is the LLM)
+  // Step 4: Install Ollama and start the server (blocks until running)
   const ollamaOk = await installOllama(brew, onProgress);
   if (!ollamaOk) ollamaFailed = true;
 
-  // Brief pause for newly installed services to start listening on their ports
-  await new Promise((r) => setTimeout(r, 3000));
-
-  // Step 5: Write config
-  if (!ollamaFailed) {
-    writeSetupConfig(configPath, onProgress);
+  // Start model download in background — doesn't block setup completion.
+  // The user proceeds to the wizard while the ~2GB model downloads.
+  if (ollamaOk) {
+    pullModelInBackground(onProgress); // fire-and-forget
   }
+
+  // Brief pause for newly installed services to start listening on their ports
+  await new Promise((r) => setTimeout(r, 5000));
+
+  // Step 5: Always write config — include whatever services succeeded.
+  // If Ollama failed, omit ollamaModel so the wizard prompts for OpenRouter.
+  writeSetupConfig(configPath, onProgress, ollamaFailed);
 
   return { success: !ollamaFailed, ollamaFailed };
 }

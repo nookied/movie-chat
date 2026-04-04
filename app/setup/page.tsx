@@ -19,12 +19,17 @@ const STEPS: { id: StepId; title: string; subtitle: string }[] = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function saveConfig(fields: Record<string, string>) {
-  await fetch('/api/config', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(fields),
-  });
+async function saveConfig(fields: Record<string, string>): Promise<boolean> {
+  try {
+    const res = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 async function testService(url: string): Promise<boolean> {

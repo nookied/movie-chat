@@ -106,6 +106,13 @@
           <div class="step-message">Connecting everything together</div>
         </div>
       </div>
+      <div class="step" id="step-model" style="display:none">
+        <div class="icon"><div class="icon-spinner"></div></div>
+        <div class="step-text">
+          <div class="step-title">AI Model</div>
+          <div class="step-message">Downloading in the background...</div>
+        </div>
+      </div>
     </div>
 
     <div class="retry-area">
@@ -121,6 +128,8 @@
     function updateStep(stepId, status, message) {
       const el = document.getElementById('step-' + stepId);
       if (!el) return;
+      // Show the model step when it first receives an event (hidden by default)
+      if (stepId === 'model') el.style.display = '';
 
       el.className = 'step ' + status;
       const icon = el.querySelector('.icon');

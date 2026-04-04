@@ -162,18 +162,33 @@ async function doAutoSetup() {
   createSetupWindow();
 
   const sendProgress = (data) => {
+    // Keep sending progress to setup window (model download continues in background)
     setupWindow?.webContents?.send('setup:progress', data);
+
+    // When model finishes downloading, close the setup window if it's still open
+    if (data.step === 'model' && (data.status === 'done' || data.status === 'failed')) {
+      setTimeout(() => {
+        setupWindow?.close();
+        setupWindow = null;
+      }, 2000);
+    }
   };
 
   const result = await runAutoSetup(CONFIG_PATH, sendProgress);
 
   setupWindow?.webContents?.send('setup:complete', result);
 
-  // Brief pause so user sees the final status before window closes
+  // Brief pause so user sees the final status, then proceed to server + wizard.
+  // The setup window stays open if the model is still downloading — it shows progress
+  // and closes automatically when the download finishes.
   await new Promise((r) => setTimeout(r, 1500));
-  setupWindow?.close();
-  setupWindow = null;
-  // The web-based wizard at /setup handles Plex token and API key collection
+  // Don't close setup window here — it may still be showing model download progress.
+  // It will close when the model download completes (see sendProgress above).
+  // If Ollama failed entirely, close now since there's no model download.
+  if (result.ollamaFailed) {
+    setupWindow?.close();
+    setupWindow = null;
+  }
 }
 
 // ── IPC handlers ─────────────────────────────────────────────────────────────
@@ -232,14 +247,17 @@ app.on('ready', async () => {
 
   try {
     await waitForServer();
+    createMainWindow();
+    if (app.isPackaged) setupAutoUpdater();
   } catch {
-    console.error('Failed to start server');
+    // Server failed to start — show error dialog instead of blank window
+    const { dialog: dlg } = require('electron');
+    dlg.showErrorBox(
+      'Movie Chat couldn\'t start',
+      'The server failed to start. Another app may be using port 3000, or the installation is incomplete.\n\nTry quitting and reopening the app.'
+    );
+    app.quit();
   }
-
-  createMainWindow();
-
-  // Check for updates after the app is fully loaded
-  if (app.isPackaged) setupAutoUpdater();
 });
 
 app.on('before-quit', () => {
