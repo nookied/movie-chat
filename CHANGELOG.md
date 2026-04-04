@@ -21,6 +21,8 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **Hostname API** (`app/api/setup/hostname/route.ts`): Returns machine hostname for `.local` mDNS URL in share modal.
 - **Shared UI components** (`components/ui/`): Extracted StatusIcon, Section, Field, Toggle, ModelSelectField from settings page for reuse in setup wizard.
 - **Electron auto-updater** (`electron/main.js`): Desktop app checks GitHub Releases every 4 hours and prompts users to install updates.
+- **Landing page** (`docs/index.html`): GitHub Pages site at nookied.github.io/movie-chat — download button auto-resolves to latest `.dmg`, app screenshots, responsive design.
+- **Setup test suite** (`__tests__/setup.test.ts`): 37 tests covering config completeness, probe logic, middleware exemptions, landing page integrity, and ShareButton URL construction. Total: 189 tests.
 - **Config tests** (`__tests__/config.test.ts`): 10 new tests covering readConfig, writeConfig, cfg priority chain, caching, and error handling.
 
 ### Changed
