@@ -19,7 +19,8 @@ export interface AppConfig {
   ollamaOnly?: string;  // 'true' = skip OpenRouter entirely, route all chat through Ollama
 }
 
-const CONFIG_PATH = path.join(process.cwd(), 'config.local.json');
+// Configurable via env var so Electron can store config in ~/Library/Application Support/MovieChat/
+const CONFIG_PATH = process.env.CONFIG_PATH ?? path.join(process.cwd(), 'config.local.json');
 
 // Cache config for 30 s to avoid a sync disk read on every cfg() call.
 // cfg() is called 6+ times per Transmission poll (every 5 s), so without

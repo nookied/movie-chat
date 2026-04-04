@@ -28,6 +28,16 @@
 | `lib/plex.ts` | Plex library check — movies and per-season TV |
 | `instrumentation.ts` | Next.js startup hook — starts autoMove poller |
 | `types/index.ts` | All shared TypeScript types |
+| `electron/main.js` | Electron main process — auto-setup → server → window lifecycle |
+| `electron/setup.js` | Silent dependency installer — Homebrew, Plex, Transmission, Ollama |
+| `electron/setup.html` | Static progress screen shown during auto-setup |
+| `electron/preload.js` | IPC bridge between setup.html and main process |
+| `app/setup/page.tsx` | Post-install wizard — summary, Plex token, metadata keys |
+| `app/api/setup/status/route.ts` | Config completeness check (at least one LLM configured) |
+| `app/api/setup/detect/route.ts` | Auto-detect Ollama/Plex/Transmission on network |
+| `app/api/openrouter/callback/route.ts` | OAuth PKCE callback — exchanges code for API key |
+| `components/ShareButton.tsx` | QR code modal for sharing app URL with household |
+| `components/ui/` | Shared UI: StatusIcon, Section, Field, Toggle |
 
 ## Development guidelines
 
@@ -58,6 +68,19 @@ Three mechanisms compensate for unreliable tag emission from small/free LLMs:
 2. **Prescriptive info messages** (`ChatInterface.tsx`): Instead of teaching the model 6 response patterns, each `[System]` message includes the exact wording to use. Moves decision logic from the LLM to app code.
 3. **Silent tag retry** (`ChatInterface.tsx` → `sendMessage()`): After streaming, if no `<recommendation>` tag is found and the response is substantive, a background follow-up nudges the model to emit the tag. The card appears with a brief delay.
 
+## Electron desktop app
+
+The app can be packaged as a macOS `.dmg` via Electron. The Electron wrapper:
+
+- **First launch**: `electron/setup.js` installs Homebrew → Plex → Transmission (GUI + RPC enabled) → Ollama + model via `brew install`. Progress shown in `electron/setup.html`.
+- **After setup**: Starts the Next.js standalone server as a child process, opens a BrowserWindow to `localhost:3000`. The post-install wizard at `/setup` collects Plex token and optional API keys.
+- **Normal launch**: Detects config exists, skips setup, goes straight to server → window.
+- **Lifecycle**: Window close → minimize to tray (macOS). App quit → kills server + ollama serve processes.
+- **Config storage**: `~/Library/Application Support/MovieChat/config/config.local.json` via `CONFIG_PATH` env var.
+- **Build**: `npm run electron:build` → `.dmg` in `dist-electron/`. Dev: `npm run electron:dev`.
+
+The setup wizard (`app/setup/page.tsx`) serves dual purpose: post-install guided config in Electron, and first-run redirect for bare-metal installs (middleware checks config completeness).
+
 ## Architecture notes
 
 - `instrumentation.ts` is stable in Next.js 15 — no config flag needed
@@ -76,9 +99,16 @@ Map out the architecture before attempting fixes: what services are involved, wh
 
 ## Deployment
 
-- Dev: `npm run dev` → http://localhost:3000
+### Bare-metal (current production)
+- Dev: `npm run dev` → http://localhost:3001
 - Production: `pm2 restart movie-chat` (server-side changes like system prompt or autoMove require this)
 - Server machine: user `mpbi5`, path `~/movie-chat`, pm2 managed
 - Auto-update: cron runs `update.sh --auto` nightly at 3 AM, logs to `~/.movie-chat-update.log`
 - If server has drifted: `git fetch origin && git reset --hard origin/main && npm run build && pm2 restart movie-chat`
+
+### Electron desktop app
+- Dev: `npm run electron:dev` (requires `npm run build` first for standalone output)
+- Build: `npm run electron:build` → `.dmg` in `dist-electron/`
+- First launch installs deps via Homebrew, then opens the setup wizard
+
 - **Never commit or push without explicit user instruction**

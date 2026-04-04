@@ -1,0 +1,28 @@
+appId: com.moviechat.app
+productName: Movie Chat
+
+mac:
+  target: dmg
+  category: public.app-category.entertainment
+  icon: electron/icon.icns
+  identity: null  # skip code signing for now
+
+publish:
+  provider: github
+  owner: nookied
+  repo: movie-chat
+
+directories:
+  output: dist-electron
+  buildResources: electron
+
+files:
+  - electron/**/*
+
+extraResources:
+  - from: .next/standalone
+    to: standalone
+  - from: .next/static
+    to: standalone/.next/static
+  - from: public
+    to: standalone/public

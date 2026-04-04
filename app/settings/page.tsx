@@ -2,6 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import StatusIcon from '@/components/ui/StatusIcon';
+import type { ServiceStatus } from '@/components/ui/StatusIcon';
+import Section from '@/components/ui/Section';
+import Field from '@/components/ui/Field';
+import Toggle from '@/components/ui/Toggle';
+import ModelSelectField from '@/components/ui/ModelSelectField';
 
 interface ConfigFields {
   openRouterApiKey: string;
@@ -32,176 +38,6 @@ const EMPTY: ConfigFields = {
 };
 
 const SENSITIVE = new Set(['openRouterApiKey', 'plexToken', 'tmdbApiKey', 'omdbApiKey', 'transmissionPassword']);
-
-type ServiceStatus = 'idle' | 'checking' | 'ok' | 'error';
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function StatusIcon({ status }: { status: ServiceStatus }) {
-  if (status === 'checking') {
-    return <span className="w-2 h-2 rounded-full bg-gray-500 animate-pulse block" />;
-  }
-  if (status === 'ok') {
-    return (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-green-500">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5l-4.5-4.5 1.41-1.41L10 13.67l7.09-7.09 1.41 1.41L10 16.5z" />
-      </svg>
-    );
-  }
-  if (status === 'error') {
-    return (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-red-500">
-        <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
-      </svg>
-    );
-  }
-  return <span className="w-4 h-4 block" />;
-}
-
-function Section({ title, description, children }: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <div className="mb-4">
-        <h2 className="text-white font-semibold text-sm">{title}</h2>
-        <p className="text-gray-500 text-xs mt-0.5">{description}</p>
-      </div>
-      <div className="rounded-xl border border-plex-border bg-plex-card divide-y divide-plex-border">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, value, placeholder, type = 'text', status, onChange }: {
-  label: string;
-  value: string;
-  placeholder?: string;
-  type?: 'text' | 'password';
-  status?: ServiceStatus;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="px-4 py-3">
-      {/* Mobile: label + status on one row, input below */}
-      <div className="flex items-center gap-2 mb-1.5 sm:hidden">
-        <label className="flex-1 text-gray-400 text-xs">{label}</label>
-        {status && status !== 'idle' && <StatusIcon status={status} />}
-      </div>
-      <div className="flex items-center gap-4">
-        <label className="hidden sm:block w-44 flex-shrink-0 text-gray-400 text-xs">{label}</label>
-        <input
-          type={type}
-          value={value}
-          placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
-          className="flex-1 min-w-0 bg-transparent text-gray-100 text-sm placeholder-gray-600
-            focus:outline-none focus:text-white transition-colors"
-          spellCheck={false}
-          autoComplete="off"
-        />
-        <div className="hidden sm:flex w-5 flex-shrink-0 items-center justify-center">
-          {status && status !== 'idle' && <StatusIcon status={status} />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ModelSelectField({ label, value, models, placeholder = 'Type a model name or connect to load list', onChange }: {
-  label: string;
-  value: string;
-  models: string[];
-  placeholder?: string;
-  onChange: (v: string) => void;
-}) {
-  // No models yet (service not connected) — fall back to plain text input
-  if (models.length === 0) {
-    return (
-      <Field
-        label={label}
-        value={value}
-        placeholder={placeholder}
-        onChange={onChange}
-      />
-    );
-  }
-
-  // If the saved value isn't in the list, keep it selected as a custom entry at the top
-  const inList = models.includes(value);
-  const effectiveValue = value || '';
-
-  return (
-    <div className="px-4 py-3">
-      {/* Mobile: label on its own row */}
-      <div className="mb-1.5 sm:hidden">
-        <label className="text-gray-400 text-xs">{label}</label>
-      </div>
-      <div className="flex items-center gap-4">
-        <label className="hidden sm:block w-44 flex-shrink-0 text-gray-400 text-xs">{label}</label>
-        <div className="flex-1 min-w-0 relative flex items-center">
-          <select
-            value={effectiveValue}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full bg-transparent text-gray-100 text-sm focus:outline-none
-              cursor-pointer border-0 appearance-none pr-5"
-          >
-            {!effectiveValue && <option value="" disabled>Select a model…</option>}
-            {!inList && effectiveValue && (
-              <option value={effectiveValue} style={{ background: '#252525' }}>{effectiveValue}</option>
-            )}
-            {models.map((m) => (
-              <option key={m} value={m} style={{ background: '#252525' }}>{m}</option>
-            ))}
-          </select>
-          <svg viewBox="0 0 24 24" fill="currentColor"
-            className="w-3 h-3 text-gray-500 pointer-events-none absolute right-0">
-            <path d="M7 10l5 5 5-5z" />
-          </svg>
-        </div>
-        <div className="w-5 flex-shrink-0 hidden sm:block" />
-      </div>
-    </div>
-  );
-}
-
-function Toggle({ label, description, enabled, onChange }: {
-  label: string;
-  description?: string;
-  enabled: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="px-4 py-3">
-      <div className="flex items-center gap-4">
-        <div className="hidden sm:block w-44 flex-shrink-0" />
-        <div className="flex-1 min-w-0 flex items-center justify-between gap-4">
-          <div>
-            <span className="text-gray-200 text-sm">{label}</span>
-            {description && <p className="text-gray-500 text-xs mt-0.5">{description}</p>}
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={enabled}
-            onClick={() => onChange(!enabled)}
-            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full
-              border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none
-              ${enabled ? 'bg-plex-accent' : 'bg-gray-600'}`}
-          >
-            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full
-              bg-white shadow ring-0 transition duration-200 ease-in-out
-              ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
-          </button>
-        </div>
-        <div className="w-5 flex-shrink-0 hidden sm:block" />
-      </div>
-    </div>
-  );
-}
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1e12) return `${(bytes / 1e12).toFixed(2)} TB`;

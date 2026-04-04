@@ -35,7 +35,32 @@ function isLocalAddress(ip: string): boolean {
   );
 }
 
+// Paths exempt from setup redirect — these must work before config exists
+const SETUP_EXEMPT = ['/setup', '/settings', '/api/', '/_next/', '/favicon.ico', '/icon', '/apple-icon', '/manifest'];
+
 export function middleware(req: NextRequest) {
+  // ── Setup redirect: if config is incomplete, send users to the wizard ──────
+  const path = req.nextUrl.pathname;
+  const isExempt = SETUP_EXEMPT.some((p) => path.startsWith(p));
+  if (!isExempt && !req.cookies.has('movie-chat-configured')) {
+    // No cookie → check config via internal API (avoids fs in Edge runtime)
+    const statusUrl = new URL('/api/setup/status', req.url);
+    return fetch(statusUrl, { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data: { complete?: boolean }) => {
+        if (data.complete) {
+          // Config is fine — set cookie so we skip this check for 24h
+          const res = NextResponse.next();
+          res.cookies.set('movie-chat-configured', '1', { maxAge: 86400, path: '/' });
+          return res;
+        }
+        // Config incomplete → redirect to setup wizard
+        return NextResponse.redirect(new URL('/setup', req.url));
+      })
+      .catch(() => NextResponse.next()); // if check fails, allow through — don't block the app
+  }
+
+  // ── Local-network access guard ─────────────────────────────────────────────
   // Allow mDNS .local hostnames (e.g. MBPi5.local:3000) — .local is a reserved
   // TLD only resolvable on the local network via Bonjour/mDNS, never on the internet
   const host = (req.headers.get('host') ?? '').split(':')[0];
