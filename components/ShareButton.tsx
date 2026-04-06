@@ -1,46 +1,56 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 
-/**
- * Generates a QR code as a data URL using the qrcode-generator algorithm.
- * Minimal inline implementation — no external dependencies.
- * Falls back to a Google Charts URL if anything goes wrong.
- */
-function qrDataUrl(text: string, size = 200): string {
-  // Use Google Charts API as a reliable QR generator (no dependency needed)
-  return `https://chart.googleapis.com/chart?cht=qr&chs=${size}x${size}&chl=${encodeURIComponent(text)}&choe=UTF-8&chld=M|2`;
-}
-
-// Cache the resolved URL — hostname doesn't change during a session
+// Cache resolved values — neither changes during a session
 let cachedUrl: string | null = null;
+let cachedQrDataUrl: string | null = null;
 
 export default function ShareButton() {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState('');
+  const [qrDataUrl, setQrDataUrl] = useState('');
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    if (cachedUrl) { setUrl(cachedUrl); return; }
 
-    const port = window.location.port || '3000';
-    const hostname = window.location.hostname;
+    async function resolve() {
+      if (cachedUrl && cachedQrDataUrl) {
+        setUrl(cachedUrl);
+        setQrDataUrl(cachedQrDataUrl);
+        return;
+      }
 
-    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      cachedUrl = `http://${hostname}:${port}`;
-      setUrl(cachedUrl);
-      return;
+      let resolved = cachedUrl;
+
+      if (!resolved) {
+        const port = window.location.port || '3000';
+        const hostname = window.location.hostname;
+
+        if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+          resolved = `http://${hostname}:${port}`;
+        } else {
+          resolved = `http://${hostname}:${port}`;
+          try {
+            const r = await fetch('/api/setup/hostname', { cache: 'no-store' });
+            const data: { hostname?: string } = await r.json();
+            resolved = data.hostname ? `http://${data.hostname}.local:${port}` : resolved;
+          } catch {
+            // keep the fallback
+          }
+        }
+        cachedUrl = resolved;
+      }
+
+      const dataUrl = await QRCode.toDataURL(resolved, { width: 180, margin: 1 });
+      cachedQrDataUrl = dataUrl;
+      setUrl(resolved);
+      setQrDataUrl(dataUrl);
     }
 
-    setUrl(`http://${hostname}:${port}`);
-    fetch('/api/setup/hostname', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((data: { hostname?: string }) => {
-        cachedUrl = data.hostname ? `http://${data.hostname}.local:${port}` : `http://${hostname}:${port}`;
-        setUrl(cachedUrl);
-      })
-      .catch(() => { cachedUrl = `http://${hostname}:${port}`; });
+    resolve();
   }, [open]);
 
   function copyUrl() {
@@ -81,15 +91,19 @@ export default function ShareButton() {
             {/* QR Code */}
             <div className="flex justify-center mb-5">
               <div className="bg-white rounded-xl p-3">
-                {url && (
+                {qrDataUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={qrDataUrl(url)}
+                    src={qrDataUrl}
                     alt="QR code"
                     width={180}
                     height={180}
                     className="block"
                   />
+                ) : (
+                  <div className="w-[180px] h-[180px] flex items-center justify-center text-gray-400 text-xs">
+                    Generating…
+                  </div>
                 )}
               </div>
             </div>
