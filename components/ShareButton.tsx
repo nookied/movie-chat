@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 
-// Cache the resolved URL — hostname doesn't change during a session
+// Cache resolved values — neither changes during a session
 let cachedUrl: string | null = null;
+let cachedQrDataUrl: string | null = null;
 
 export default function ShareButton() {
   const [open, setOpen] = useState(false);
@@ -16,6 +17,12 @@ export default function ShareButton() {
     if (!open) return;
 
     async function resolve() {
+      if (cachedUrl && cachedQrDataUrl) {
+        setUrl(cachedUrl);
+        setQrDataUrl(cachedQrDataUrl);
+        return;
+      }
+
       let resolved = cachedUrl;
 
       if (!resolved) {
@@ -37,8 +44,9 @@ export default function ShareButton() {
         cachedUrl = resolved;
       }
 
-      setUrl(resolved);
       const dataUrl = await QRCode.toDataURL(resolved, { width: 180, margin: 1 });
+      cachedQrDataUrl = dataUrl;
+      setUrl(resolved);
       setQrDataUrl(dataUrl);
     }
 
