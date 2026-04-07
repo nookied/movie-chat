@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { statfsSync, existsSync } from 'fs';
 import path from 'path';
+import { cfg } from '@/lib/config';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -13,6 +14,19 @@ export async function GET(req: NextRequest) {
   // Must be absolute path
   if (!path.isAbsolute(dirPath)) {
     return NextResponse.json({ error: 'path must be absolute' }, { status: 400 });
+  }
+
+  // Whitelist: only configured directories are allowed
+  const allowedDirs = [
+    cfg('libraryDir', 'LIBRARY_DIR'),
+    cfg('tvLibraryDir', 'TV_LIBRARY_DIR'),
+    cfg('transmissionDownloadDir', 'TRANSMISSION_DOWNLOAD_DIR'),
+  ].filter(Boolean) as string[];
+
+  const resolved = path.resolve(dirPath);
+  const isAllowed = allowedDirs.some((allowed) => resolved.startsWith(path.resolve(allowed)));
+  if (!isAllowed) {
+    return NextResponse.json({ error: 'path is not a configured directory' }, { status: 403 });
   }
 
   // Walk up to find an existing ancestor so we can still report space even if

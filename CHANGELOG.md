@@ -8,6 +8,17 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 
 ---
 
+## [2.0.1] — 2026-04-07
+
+### Fixed
+- **NaN year in Plex check** (`app/api/plex/check/route.ts`): Non-numeric `year` query param no longer passed as `NaN` to Plex library search — now silently dropped
+- **NaN/invalid season in torrent search** (`app/api/torrents/search/route.ts`): Non-numeric or negative `season` values now return a 400 error instead of being forwarded to the TV search
+- **Diskspace path whitelist** (`app/api/files/diskspace/route.ts`): Endpoint now validates that the requested path starts with a configured library or download directory — prevents arbitrary filesystem probing
+- **TypeScript errors in test files**: Fixed vitest v4 API incompatibility — `vi.fn<[Args], Return>()` updated to `vi.fn<(arg: T) => R>()`; all 189 tests pass, zero type errors
+- **Share button icon**: Swapped globe icon for standard share icon (three-dot network graph) matching iOS/Android/macOS convention
+
+---
+
 ## [2.0.0] — 2026-04-04
 
 ### Added

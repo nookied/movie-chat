@@ -1,6 +1,6 @@
 # Movie Chat
 
-**v2.0.0** — An AI companion that manages your Plex library. Tell it what you want to watch — it handles the rest.
+**v2.0.1** — An AI companion that manages your Plex library. Tell it what you want to watch — it handles the rest.
 
 **Website:** [nookied.github.io/movie-chat](https://nookied.github.io/movie-chat)
 

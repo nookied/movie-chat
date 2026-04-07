@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
       const status = await searchTvLibrary(title);
       return NextResponse.json(status);
     }
-    const status = await searchLibrary(title, year ? Number(year) : undefined);
+    const yearNum = year ? Number(year) : undefined;
+    const status = await searchLibrary(title, yearNum && !isNaN(yearNum) ? yearNum : undefined);
     return NextResponse.json(status);
   } catch (err) {
     console.error('[plex/check]', err);

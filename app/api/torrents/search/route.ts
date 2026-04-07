@@ -18,7 +18,11 @@ export async function GET(req: NextRequest) {
       if (!season) {
         return NextResponse.json({ error: 'season is required for TV' }, { status: 400 });
       }
-      const result = await searchTvSeason(title, Number(season));
+      const seasonNum = Number(season);
+      if (isNaN(seasonNum) || seasonNum < 1) {
+        return NextResponse.json({ error: 'season must be a positive integer' }, { status: 400 });
+      }
+      const result = await searchTvSeason(title, seasonNum);
       return NextResponse.json(result);
     }
 

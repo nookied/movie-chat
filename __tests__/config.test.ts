@@ -17,7 +17,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ---------------------------------------------------------------------------
 
 const fsMock = {
-  readFileSync: vi.fn<[string, string], string>(),
+  readFileSync: vi.fn<(path: string, encoding: string) => string>(),
   writeFileSync: vi.fn(),
   existsSync: vi.fn(() => true),
   renameSync: vi.fn(),
