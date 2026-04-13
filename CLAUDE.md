@@ -24,11 +24,11 @@
 | `lib/autoMove.ts` | Server-side background poller — moves one torrent at a time with 15s gap |
 | `lib/appTorrents.ts` | In-memory + on-disk registry of app torrent IDs + mediaType/season metadata |
 | `lib/config.ts` | `cfg()` helper — 30s in-memory cache avoids per-request sync disk reads |
-| `lib/yts.ts` | YTS torrent search + magnet link builder (movies) |
+| `lib/yts.ts` | YTS torrent search + magnet link builder (movies); `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries |
 | `lib/eztv.ts` | Knaben/EZTV torrent search + quality scoring (TV) |
 | `lib/tmdb.ts` | TMDB metadata — posters, overviews, year, season count |
 | `lib/omdb.ts` | OMDB ratings — IMDb score, Rotten Tomatoes |
-| `lib/plex.ts` | Plex library check — movies and per-season TV |
+| `lib/plex.ts` | Plex library check — movies and per-season TV; `titleMatches` also normalises `&` → `and` |
 | `instrumentation.ts` | Next.js startup hook — starts autoMove poller |
 | `types/index.ts` | All shared TypeScript types |
 | `electron/main.js` | Electron main process — auto-setup → server → window lifecycle |
