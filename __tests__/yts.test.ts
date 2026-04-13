@@ -117,6 +117,19 @@ describe('searchTorrents() — title matching', () => {
     const result = await searchTorrents('Inception');
     expect(result.torrents).toHaveLength(1);
   });
+
+  it('matches when LLM emits & but YTS stores "and"', async () => {
+    mockYts([makeMovie('Rosencrantz and Guildenstern Are Dead', 1990, [makeTorrent('1080p', 'bluray', 'x265', 100)])]);
+    const result = await searchTorrents('Rosencrantz & Guildenstern Are Dead', 1990);
+    expect(result.torrents).toHaveLength(1);
+    expect(result.torrents[0].movieTitle).toBe('Rosencrantz and Guildenstern Are Dead');
+  });
+
+  it('matches when LLM emits "and" but YTS stores &', async () => {
+    mockYts([makeMovie('Rosencrantz & Guildenstern Are Dead', 1990, [makeTorrent('1080p', 'bluray', 'x265', 100)])]);
+    const result = await searchTorrents('Rosencrantz and Guildenstern Are Dead', 1990);
+    expect(result.torrents).toHaveLength(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

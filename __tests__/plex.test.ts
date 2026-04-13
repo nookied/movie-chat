@@ -125,6 +125,18 @@ describe('searchLibrary() — basic matching', () => {
     const result = await searchLibrary('Blade Runner', 1982);
     expect(result.found).toBe(true);
   });
+
+  it('matches when query uses & but Plex stores "and"', async () => {
+    mockPlex([makeItem({ title: 'Rosencrantz and Guildenstern Are Dead', year: 1990 })]);
+    const result = await searchLibrary('Rosencrantz & Guildenstern Are Dead', 1990);
+    expect(result.found).toBe(true);
+  });
+
+  it('matches when query uses "and" but Plex stores &', async () => {
+    mockPlex([makeItem({ title: 'Rosencrantz & Guildenstern Are Dead', year: 1990 })]);
+    const result = await searchLibrary('Rosencrantz and Guildenstern Are Dead', 1990);
+    expect(result.found).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
