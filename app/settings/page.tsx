@@ -25,6 +25,7 @@ interface ConfigFields {
   ollamaBaseUrl: string;
   ollamaModel: string;
   ollamaOnly: string;  // 'true' | ''
+  diagnosticsToken: string;  // auto-generated server-side; read-only in UI
 }
 
 const EMPTY: ConfigFields = {
@@ -35,6 +36,7 @@ const EMPTY: ConfigFields = {
   transmissionPassword: '', transmissionDownloadDir: '',
   libraryDir: '', tvLibraryDir: '',
   ollamaBaseUrl: 'http://localhost:11434', ollamaModel: '', ollamaOnly: '',
+  diagnosticsToken: '',
 };
 
 const SENSITIVE = new Set(['openRouterApiKey', 'plexToken', 'tmdbApiKey', 'omdbApiKey', 'transmissionPassword']);
@@ -52,6 +54,8 @@ export default function SettingsPage() {
   const [sensitiveSet, setSensitiveSet] = useState<Set<string>>(new Set());
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveError, setSaveError] = useState('');
+  const [diagStatus, setDiagStatus] = useState<'idle' | 'downloading' | 'error'>('idle');
+  const [diagError, setDiagError] = useState('');
 
   // Per-service connectivity status
   const [openRouterStatus, setOpenRouterStatus] = useState<ServiceStatus>('idle');
@@ -128,6 +132,39 @@ export default function SettingsPage() {
       }),
     ]);
   }, []);
+
+  const handleDiagnosticsDownload = useCallback(async () => {
+    if (!form.diagnosticsToken) return;
+    setDiagStatus('downloading');
+    setDiagError('');
+    try {
+      const res = await fetch(`/api/diagnostics/bundle?token=${encodeURIComponent(form.diagnosticsToken)}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
+      // Pull the server-suggested filename out of Content-Disposition so we
+      // don't have to duplicate the timestamp logic on the client.
+      const disposition = res.headers.get('Content-Disposition') ?? '';
+      const match = /filename="([^"]+)"/.exec(disposition);
+      const filename = match?.[1] ?? 'movie-chat-diagnostics.json';
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setDiagStatus('idle');
+    } catch (e) {
+      setDiagStatus('error');
+      setDiagError(e instanceof Error ? e.message : 'Download failed');
+    }
+  }, [form.diagnosticsToken]);
 
   const testOllamaFallback = useCallback(async () => {
     setOllamaTestStatus('running');
@@ -432,6 +469,25 @@ export default function SettingsPage() {
               )}
             </div>
           )}
+        </Section>
+
+        <Section title="Diagnostics" description="Download recent logs and system info for troubleshooting">
+          <div className="px-4 py-3">
+            <button
+              onClick={handleDiagnosticsDownload}
+              disabled={!form.diagnosticsToken || diagStatus === 'downloading'}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700 text-gray-200
+                hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {diagStatus === 'downloading' ? 'Preparing…' : 'Download diagnostics bundle'}
+            </button>
+            {diagStatus === 'error' && (
+              <p className="text-red-400 text-xs mt-2">Error: {diagError}</p>
+            )}
+            <p className="text-gray-500 text-xs mt-1.5">
+              Includes 7 days of logs, redacted config, and version info. API keys and tokens are removed.
+            </p>
+          </div>
         </Section>
 
         <div className="flex items-center gap-4 pt-2 pb-8">

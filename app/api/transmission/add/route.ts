@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addTorrent } from '@/lib/transmission';
 import { registerAppTorrent } from '@/lib/appTorrents';
+import { getLogger } from '@/lib/logger';
+
+const log = getLogger('transmission');
 
 // Validates a magnet URI has a well-formed xt=urn:btih: infohash.
 // Accepts 40-char hex (SHA1) or 32-char uppercase base32 (BitTorrent v2).
@@ -23,10 +26,11 @@ export async function POST(req: NextRequest) {
     const id = await addTorrent(magnet);
     // Persist ownership + metadata so the auto-move poller knows where to put the file
     registerAppTorrent(id, mediaType, season, year);
+    log.info('torrent added', { id, mediaType, season, year });
     return NextResponse.json({ id });
   } catch (err) {
-    console.error('[transmission/add]', err);
     const message = err instanceof Error ? err.message : 'Failed to add torrent';
+    log.error('add failed', { error: message });
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

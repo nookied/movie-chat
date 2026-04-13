@@ -1,50 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cfg } from '@/lib/config';
+import { getLogger } from '@/lib/logger';
+import { getSystemPrompt, isGemmaModel } from '@/lib/chatPrompts';
 
-const SYSTEM_PROMPT = `You are a movie and TV assistant for a personal Plex library. Movies and TV only — anything else: "I'm only set up to help with movie and TV recommendations!"
-
-## Tone
-Warm, direct, opinionated. 1–3 sentences. One title at a time; wait for a response before offering more. Vague request → ask one focused question (genre? mood? pace?).
-
-## Tagging — every title, every time
-Every title you mention needs a tag on its own line:
-<recommendation>{"title":"Exact Title","year":YYYY,"type":"movie"}</recommendation>
-Use "tv" for shows. Omit year only when genuinely unknown.
-
-You don't know Plex status or availability — the app checks after the tag. Never claim a title is in the library or available before tagging it.
-
-## Examples
-
-User names a title — tag exactly as given, never substitute or question:
-
-"find me Solo Mio 2026" →
-On it!
-<recommendation>{"title":"Solo Mio","year":2026,"type":"movie"}</recommendation>
-
-Phrase-like titles (questions, kill/die/murder words) are still titles:
-
-"how to make a killing" →
-On it!
-<recommendation>{"title":"How to Make a Killing","type":"movie"}</recommendation>
-
-Your own suggestion — only titles you know well, don't guess years:
-
-"I want something dark and slow" →
-You'd love Under the Skin — hypnotic, unsettling, and completely absorbing.
-<recommendation>{"title":"Under the Skin","year":2013,"type":"movie"}</recommendation>
-
-If truly unsure whether input is a title or question, ask: "Are you looking for the film '[input]'?"
-
-## What the app shows — don't repeat
-Poster, year, runtime, director, scores, synopsis, Plex status, availability. Focus on why it fits the mood.
-
-## [System] messages
-Injected by the app — follow the instruction in each one. Never quote or mimic the [System] prefix.
-
-## Download
-Only after a [System] message confirms availability AND the user confirms (yes/sure/ok):
-<download>{"title":"Exact Title","year":YYYY}</download>
-Must match the <recommendation> tag exactly. Never emit without both conditions.`;
+const log = getLogger('llm');
 
 // Few-shot seed: small models mimic patterns in recent context.
 // Seeing a correct tag in the first exchange dramatically improves compliance.
@@ -106,6 +65,7 @@ export async function POST(req: NextRequest) {
     req.headers.get('x-real-ip') ??
     'unknown';
   if (!checkRateLimit(ip)) {
+    log.warn('rate limited', { ip });
     return NextResponse.json(
       { error: 'Too many requests — please wait a moment.' },
       { status: 429 }
@@ -124,6 +84,10 @@ export async function POST(req: NextRequest) {
 
   const trimmedMessages = trimHistory(messages);
 
+  // Captured at the start so latency includes both retry attempts and streaming.
+  const startedAt = Date.now();
+  const userMsg = messages[messages.length - 1]?.content ?? '';
+
   // ollamaOnly = persistent setting in config; forceOllama = one-off test flag from client
   const ollamaOnly = cfg('ollamaOnly', 'OLLAMA_ONLY') === 'true';
 
@@ -131,6 +95,9 @@ export async function POST(req: NextRequest) {
   // Skip entirely when forceOllama is set (test) or ollamaOnly is enabled (persistent)
   let apiRes: Response | null = null;
   let lastError = 'OpenRouter returned an error';
+  // Which provider actually served the response (set when the fetch succeeds)
+  let provider: 'openrouter' | 'ollama' | null = null;
+  let chatModel = '';
 
   if (!forceOllama && !ollamaOnly) {
     const apiKey = cfg('openRouterApiKey', 'OPENROUTER_API_KEY');
@@ -155,7 +122,7 @@ export async function POST(req: NextRequest) {
           },
           body: JSON.stringify({
             model,
-            messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...SEED_MESSAGES, ...trimmedMessages],
+            messages: [{ role: 'system', content: getSystemPrompt(model) }, ...SEED_MESSAGES, ...trimmedMessages],
             stream: true,
             max_tokens: 1024,
             temperature: 0.4,
@@ -165,6 +132,8 @@ export async function POST(req: NextRequest) {
 
         if (res.ok && res.body) {
           apiRes = res;
+          provider = 'openrouter';
+          chatModel = model;
           break;
         }
 
@@ -193,23 +162,37 @@ export async function POST(req: NextRequest) {
     const ollamaModel = cfg('ollamaModel', 'OLLAMA_MODEL');
     if (ollamaModel) {
       const ollamaBase = cfg('ollamaBaseUrl', 'OLLAMA_BASE_URL', 'http://localhost:11434');
+      // Gemma 3n / 4 docs recommend temperature=1.0, top_p=0.95, top_k=64.
+      // We use 0.7 (not full 1.0) to keep <recommendation> tag compliance reliable
+      // while letting tone breathe more than our old 0.4 default.
+      // Other models keep the conservative defaults.
+      const isGemma = isGemmaModel(ollamaModel);
       try {
         const ollamaRes = await fetch(`${ollamaBase}/v1/chat/completions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: ollamaModel,
-            messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...SEED_MESSAGES, ...trimHistory(messages, OLLAMA_MAX_HISTORY_MESSAGES)],
+            messages: [{ role: 'system', content: getSystemPrompt(ollamaModel) }, ...SEED_MESSAGES, ...trimHistory(messages, OLLAMA_MAX_HISTORY_MESSAGES)],
             stream: true,
             max_tokens: 2048,
-            temperature: 0.4,
+            temperature: isGemma ? 0.7 : 0.4,
+            ...(isGemma && { top_p: 0.95 }),
             think: false,
-            options: { num_ctx: 8192 },
+            options: {
+              num_ctx: 8192,
+              ...(isGemma && { top_k: 64 }),
+            },
           }),
           signal: AbortSignal.timeout(60000),
         });
-        if (ollamaRes.ok && ollamaRes.body) apiRes = ollamaRes;
-        else lastError = `Ollama returned HTTP ${ollamaRes.status}`;
+        if (ollamaRes.ok && ollamaRes.body) {
+          apiRes = ollamaRes;
+          provider = 'ollama';
+          chatModel = ollamaModel;
+        } else {
+          lastError = `Ollama returned HTTP ${ollamaRes.status}`;
+        }
       } catch {
         lastError = 'Cannot reach Ollama — is it running?';
       }
@@ -219,6 +202,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (!apiRes) {
+    log.error('all providers failed', { lastError });
     return NextResponse.json({ error: lastError }, { status: 502 });
   }
 
@@ -264,6 +248,9 @@ export async function POST(req: NextRequest) {
       const reader = apiRes!.body!.getReader();
       const decoder = new TextDecoder();
       const thinkFilter = new ThinkFilter();
+      // Accumulate tokens in an array so joining at the end is O(n) rather
+      // than the O(n²) that string += would give us for large responses.
+      const responseTokens: string[] = [];
       try {
         while (true) {
           const { done, value } = await reader.read();
@@ -279,12 +266,28 @@ export async function POST(req: NextRequest) {
               const token: string = parsed?.choices?.[0]?.delta?.content ?? '';
               if (token) {
                 const filtered = thinkFilter.filter(token);
-                if (filtered) controller.enqueue(encoder.encode(filtered));
+                if (filtered) {
+                  responseTokens.push(filtered);
+                  controller.enqueue(encoder.encode(filtered));
+                }
               }
             } catch { /* skip malformed lines */ }
           }
         }
       } finally {
+        // Swallow log errors so controller.close() always runs — otherwise
+        // the Response would hang for the client on a closed stdout or a
+        // disk-full condition.
+        try {
+          log.info('chat', {
+            provider,
+            model: chatModel,
+            turnCount: trimmedMessages.length,
+            latencyMs: Date.now() - startedAt,
+            userMsg,
+            assistantMsg: responseTokens.join(''),
+          });
+        } catch { /* intentionally swallowed */ }
         controller.close();
       }
     },

@@ -16,6 +16,9 @@
 import { listActiveTorrents } from './transmission';
 import { isAppTorrent, getAppTorrentMeta, pruneAppTorrents } from './appTorrents';
 import { moveTorrentFiles } from './moveFiles';
+import { getLogger } from './logger';
+
+const log = getLogger('autoMove');
 
 let started = false;
 let ticking = false;
@@ -41,7 +44,7 @@ async function tick(): Promise<void> {
     if (Date.now() - lastCleanupAt >= CLEANUP_INTERVAL) {
       const activeIds = new Set(torrents.map((t) => t.id));
       const pruned = pruneAppTorrents(activeIds);
-      if (pruned > 0) console.log(`[autoMove] Pruned ${pruned} stale entr${pruned === 1 ? 'y' : 'ies'} from app-torrents.json`);
+      if (pruned > 0) log.info('registry cleanup', { pruned });
       lastCleanupAt = Date.now();
     }
 
@@ -56,7 +59,7 @@ async function tick(): Promise<void> {
       if (!isDone) continue;
 
       if (!isAppTorrent(torrent.id)) {
-        console.log(`[autoMove] Skipping torrent ${torrent.id} "${torrent.name}" — not in app registry`);
+        log.info('skipping (not in registry)', { id: torrent.id, name: torrent.name });
         continue;
       }
 
@@ -68,16 +71,16 @@ async function tick(): Promise<void> {
 
       const meta = getAppTorrentMeta(torrent.id);
       try {
-        console.log(`[autoMove] Moving torrent ${torrent.id} "${torrent.name}"`);
+        log.info('move start', { id: torrent.id, name: torrent.name, mediaType: meta?.mediaType, season: meta?.season });
         await moveTorrentFiles(torrent.id, meta?.mediaType, meta?.season);
-        console.log(`[autoMove] Done — torrent ${torrent.id}`);
+        log.info('move complete', { id: torrent.id });
         movedCount++;
       } catch (err) {
         // moveTorrentFiles throws MoveError('already in progress') when the client
         // is simultaneously moving the same torrent — not a real error.
         const msg = err instanceof Error ? err.message : String(err);
         if (!msg.includes('already in progress')) {
-          console.error(`[autoMove] Failed to move torrent ${torrent.id}:`, err);
+          log.error('move failed', { id: torrent.id, error: msg });
         }
         // Count it so we still wait 15 s before the next torrent, preventing
         // a burst of rapid-fire moves after a series of "already in progress" skips.
@@ -89,19 +92,24 @@ async function tick(): Promise<void> {
   }
 }
 
+// Exported for tests — the poller is normally driven by the setInterval
+// in startAutoMovePoller(), but tests need to trigger a single pass without
+// waiting 60 s or juggling fake timers.
+export const __testHooks = { tick };
+
 export function startAutoMovePoller(): void {
   if (started) return;
   started = true;
 
-  console.log('[autoMove] Poller started — will check Transmission every 60 s');
+  log.info('poller started');
 
   // Delay the first check by 60 s so the server finishes booting before we
   // start hammering Transmission
   const initial = setTimeout(() => {
-    tick().catch(console.error);
+    tick().catch((e) => log.error('tick failed', { error: String(e) }));
 
     const interval = setInterval(() => {
-      tick().catch(console.error);
+      tick().catch((e) => log.error('tick failed', { error: String(e) }));
     }, 60_000);
 
     // unref() so this interval doesn't keep the Node.js process alive after

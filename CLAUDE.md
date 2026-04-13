@@ -12,7 +12,10 @@
 
 | File | Purpose |
 |---|---|
-| `app/api/chat/route.ts` | LLM proxy — system prompt, streaming, rate limiter |
+| `app/api/chat/route.ts` | LLM proxy — provider routing, streaming, rate limiter, per-turn chat log |
+| `lib/chatPrompts.ts` | `DEFAULT_SYSTEM_PROMPT`, `GEMMA_SYSTEM_PROMPT`, `isGemmaModel`, `getSystemPrompt` |
+| `lib/logger.ts` | Structured JSONL logger — daily rotation, 7-day retention, 32 KB entry / 50 MB file caps |
+| `app/api/diagnostics/bundle/route.ts` | GET endpoint — token-gated zip-less JSON bundle (logs + redacted config + version) |
 | `components/ChatInterface.tsx` | Main state machine — streams LLM, extracts `<recommendation>` tags |
 | `components/RecommendationCard.tsx` | Fires 3 parallel checks (Plex/reviews/YTS) on mount; post-move Plex re-check |
 | `components/DownloadTracker.tsx` | Polls `/api/transmission/status` every 5s; read-only, no client-side move logic |
@@ -49,7 +52,7 @@ These flows diverge significantly. If a change touches both, verify behaviour in
 
 ## System prompt design
 
-The system prompt lives in `app/api/chat/route.ts`. Key rules:
+The prompts and Gemma detection live in `lib/chatPrompts.ts`. The chat route picks one with `getSystemPrompt(modelName)` — Gemma models get `GEMMA_SYSTEM_PROMPT` (tighter, native system-role friendly), everything else gets `DEFAULT_SYSTEM_PROMPT` (verbose, defensive). Key rules:
 
 - **User-named titles**: always emit the `<recommendation>` tag — no verification, no substitution, no clarifying questions. The app handles all lookups.
 - **Phrase-like titles**: film titles that look like questions or phrases ("How to Make a Killing", "Get Out", "Kill Bill") must be tagged, never treated as general questions or safety issues.
@@ -59,6 +62,8 @@ The system prompt lives in `app/api/chat/route.ts`. Key rules:
 - **Prescriptive system messages**: `[System]` info messages include the exact phrasing the model should use — the system prompt just says "follow the instruction". Don't re-add response-pattern rules to the prompt; put the logic in the info message string instead.
 
 Changing the system prompt requires a server restart (`pm2 restart movie-chat`) to take effect — it's not hot-reloaded.
+
+For Gemma models, sampling is also tuned in `app/api/chat/route.ts`: `temperature=0.7`, `top_p=0.95`, `top_k=64` (Gemma's recommended values, slightly tempered for tag-emission reliability). Other Ollama models keep `temperature=0.4` and Ollama's defaults.
 
 ## Small-model reliability
 
@@ -96,6 +101,35 @@ The setup wizard (`app/setup/page.tsx`) serves dual purpose: post-install guided
 When debugging connection or API issues, always ask the user about the deployment topology first (e.g. "Is the server running locally or on a remote machine?"). Do not assume services are co-located.
 
 Map out the architecture before attempting fixes: what services are involved, where each one runs (local vs remote), and how they communicate.
+
+## Observability
+
+`lib/logger.ts` provides `getLogger(source)` returning `{ info, warn, error }`. Each call writes one JSONL line to the day's file AND mirrors to `console.*` so pm2's stdout capture and dev-mode terminals keep working unchanged.
+
+- **Sources in use**: `server`, `llm`, `autoMove`, `transmission`, `plex`, `move`, `reviews`, `torrents`. Tag new ones consistently.
+- **Log directory** (resolution order):
+  1. `process.env.MOVIE_CHAT_LOG_DIR` — set by `electron/main.js` to `~/Library/Application Support/MovieChat/logs/`
+  2. `dirname(CONFIG_PATH)/logs` — same root as `config.local.json`
+  3. `./logs` — bare-metal fallback alongside `pm2-out.log` / `pm2-error.log` (set in `ecosystem.config.js`)
+- **Caps**: 32 KB per entry (truncates with `_truncated: true`), 50 MB per daily file (drops to console-only with one warn), 7-day file retention. Electron's own lifecycle log (`electron.jsonl`) rotates at 2 MB by renaming to `electron.1.jsonl`.
+- **Chat content** is logged in full (user message + assistant response) per turn — useful for prompt debugging, but bundles contain household conversation data. Worth flagging to anyone you ship a bundle to.
+
+## Diagnostics bundle
+
+`GET /api/diagnostics/bundle?token=<diagnosticsToken>` returns one JSON document containing recent logs, redacted config, and version/system info. The token is auto-generated on first server start by `ensureDiagnosticsToken()` (called from `instrumentation.ts`) and stored in `config.local.json`. The Settings page reads it from `GET /api/config` and wires it into the download URL — no manual setup.
+
+`SENSITIVE` (in `lib/config.ts`) drives both UI masking (`GET /api/config` returns `"set"`/`""`) and bundle redaction (replaces with `"[REDACTED]"`). Bundle redaction additionally covers `diagnosticsToken` so a leaked bundle can't be used to pull more bundles.
+
+## Testing
+
+`npm test` (Vitest, Node env). 21 test files under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), and the logger/diagnostics surfaces. Conventions:
+
+- Mock `fs` with `vi.mock('fs', () => ({ default: fsMock, ...fsMock }))` so both ESM and CJS imports see the mock.
+- `vi.resetModules()` in `beforeEach` so module-level state (rate-limit map, logger caches, etc.) is fresh per test.
+- Stream-based tests (`__tests__/chat-route.test.ts`) build a `ReadableStream` of SSE chunks and pass it through the real route handler.
+- `lib/autoMove.ts` exposes `__testHooks = { tick }` so tests can drive a single poll pass without fake-timer juggling.
+
+CI runs `npm test` on push and PRs (`.github/workflows/test.yml`, `TZ=UTC` for deterministic date tests).
 
 ## Deployment
 

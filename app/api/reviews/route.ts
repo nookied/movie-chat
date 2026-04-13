@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMovieDetails, getTvDetails } from '@/lib/tmdb';
 import { getOmdbRatings } from '@/lib/omdb';
 import { ReviewData } from '@/types';
+import { getLogger } from '@/lib/logger';
+
+const log = getLogger('reviews');
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -25,8 +28,12 @@ export async function GET(req: NextRequest) {
   const tmdbData = tmdbResult.status === 'fulfilled' ? tmdbResult.value : {};
   const omdbData = omdbResult.status === 'fulfilled' ? omdbResult.value : {};
 
-  if (tmdbResult.status === 'rejected') console.error('[reviews] TMDB failed:', tmdbResult.reason);
-  if (omdbResult.status === 'rejected') console.error('[reviews] OMDB failed:', omdbResult.reason);
+  if (tmdbResult.status === 'rejected') {
+    log.error('TMDB failed', { title, year: yearNum, error: String(tmdbResult.reason) });
+  }
+  if (omdbResult.status === 'rejected') {
+    log.error('OMDB failed', { title, year: yearNum, error: String(omdbResult.reason) });
+  }
 
   const reviews: ReviewData = { ...tmdbData, ...omdbData } as ReviewData;
   return NextResponse.json(reviews);
