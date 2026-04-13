@@ -38,6 +38,8 @@ vi.mock('path', async () => {
 let readConfig: typeof import('@/lib/config').readConfig;
 let writeConfig: typeof import('@/lib/config').writeConfig;
 let cfg: typeof import('@/lib/config').cfg;
+let ensureDiagnosticsToken: typeof import('@/lib/config').ensureDiagnosticsToken;
+let SENSITIVE: typeof import('@/lib/config').SENSITIVE;
 
 beforeEach(async () => {
   vi.resetModules();
@@ -48,6 +50,8 @@ beforeEach(async () => {
   readConfig = mod.readConfig;
   writeConfig = mod.writeConfig;
   cfg = mod.cfg;
+  ensureDiagnosticsToken = mod.ensureDiagnosticsToken;
+  SENSITIVE = mod.SENSITIVE;
 });
 
 describe('readConfig', () => {
@@ -120,5 +124,61 @@ describe('cfg', () => {
     process.env.PLEX_BASE_URL = 'http://env:32400';
     expect(cfg('plexBaseUrl', 'PLEX_BASE_URL')).toBe('http://config:32400');
     delete process.env.PLEX_BASE_URL;
+  });
+});
+
+describe('SENSITIVE', () => {
+  it('contains all fields that must never leave the machine', () => {
+    expect(SENSITIVE).toEqual(
+      expect.arrayContaining([
+        'openRouterApiKey',
+        'plexToken',
+        'tmdbApiKey',
+        'omdbApiKey',
+        'transmissionPassword',
+      ])
+    );
+  });
+
+  it('does not include diagnosticsToken (masked separately by bundle redactor)', () => {
+    // The UI Settings page needs the unmasked diagnostics token to wire into
+    // the download URL, so it is intentionally excluded from the UI-mask list.
+    expect(SENSITIVE).not.toContain('diagnosticsToken');
+  });
+});
+
+describe('ensureDiagnosticsToken', () => {
+  it('generates a new token when none exists in config', () => {
+    fsMock.readFileSync.mockReturnValue('{}');
+    const token = ensureDiagnosticsToken();
+    expect(typeof token).toBe('string');
+    expect(token.length).toBeGreaterThan(0);
+    // Should persist the new token via writeConfig
+    expect(fsMock.writeFileSync).toHaveBeenCalledTimes(1);
+    const written = JSON.parse(fsMock.writeFileSync.mock.calls[0][1] as string);
+    expect(written.diagnosticsToken).toBe(token);
+  });
+
+  it('returns existing token when already set, without rewriting', () => {
+    fsMock.readFileSync.mockReturnValue('{"diagnosticsToken":"existing-uuid"}');
+    const token = ensureDiagnosticsToken();
+    expect(token).toBe('existing-uuid');
+    expect(fsMock.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('generates a UUID-shaped token (v4 hex-dash pattern)', () => {
+    fsMock.readFileSync.mockReturnValue('{}');
+    const token = ensureDiagnosticsToken();
+    // crypto.randomUUID returns 8-4-4-4-12 hex groups
+    expect(token).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  });
+
+  it('preserves other config fields when writing the new token', () => {
+    fsMock.readFileSync.mockReturnValue('{"plexToken":"abc","ollamaModel":"gemma4:e2b"}');
+    ensureDiagnosticsToken();
+    const written = JSON.parse(fsMock.writeFileSync.mock.calls[0][1] as string);
+    expect(written.plexToken).toBe('abc');
+    expect(written.ollamaModel).toBe('gemma4:e2b');
+    expect(written.diagnosticsToken).toBeDefined();
   });
 });

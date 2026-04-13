@@ -9,17 +9,53 @@ const { runAutoSetup, cleanupOllama } = require('./setup');
 const PORT = 3000;
 const CONFIG_DIR = path.join(app.getPath('userData'), 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.local.json');
+const LOG_DIR = path.join(app.getPath('userData'), 'logs');
+const ELECTRON_LOG = path.join(LOG_DIR, 'electron.jsonl');
+const ELECTRON_LOG_PREV = path.join(LOG_DIR, 'electron.1.jsonl');
+// Per-file cap protects against runaway lifecycle spam. Electron-side log
+// volume is very low (a few lines per app lifecycle). When the cap hits we
+// rename the current file to electron.1.jsonl (overwriting any previous .1)
+// so one generation of history is preserved — crucial when the lines we
+// actually need are leading up to a crash loop.
+const MAX_ELECTRON_LOG_BYTES = 2 * 1024 * 1024;
 
 let mainWindow = null;
 let setupWindow = null;
 let tray = null;
 let serverProcess = null;
 
-// ── Config helpers ───────────────────────────────────────────────────────────
+// ── Config & log helpers ─────────────────────────────────────────────────────
 
 function ensureConfigDir() {
   if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
   if (!fs.existsSync(CONFIG_PATH)) fs.writeFileSync(CONFIG_PATH, '{}', 'utf-8');
+  if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+}
+
+/** Append one JSONL line to electron.jsonl. Same shape as lib/logger.ts so
+ *  the diagnostics bundle can consume both files identically. */
+function appendElectronLog(level, source, msg, meta) {
+  const entry = { ts: new Date().toISOString(), level, source, msg };
+  if (meta && Object.keys(meta).length > 0) entry.meta = meta;
+  try {
+    try {
+      const stat = fs.statSync(ELECTRON_LOG);
+      if (stat.size >= MAX_ELECTRON_LOG_BYTES) {
+        // Rotate to .1.jsonl (overwriting any existing previous file) so one
+        // generation of history survives. renameSync is atomic on POSIX —
+        // no torn state visible to a concurrent reader.
+        try { fs.renameSync(ELECTRON_LOG, ELECTRON_LOG_PREV); } catch { /* ignore */ }
+      }
+    } catch {
+      // file doesn't exist yet — fine
+    }
+    fs.appendFileSync(ELECTRON_LOG, JSON.stringify(entry) + '\n');
+  } catch {
+    // silent — the console mirror below still surfaces the event
+  }
+  const method = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+  if (meta) method(`[${source}] ${msg}`, meta);
+  else method(`[${source}] ${msg}`);
 }
 
 /** Check if minimum config exists (at least one LLM configured). */
@@ -50,11 +86,15 @@ function startServer() {
       ...process.env,
       PORT: String(PORT),
       CONFIG_PATH,
+      MOVIE_CHAT_LOG_DIR: LOG_DIR,
       NODE_ENV: isDev ? 'development' : 'production',
     },
     stdio: 'pipe',
   });
 
+  // Forward spawned server stdout/stderr to Electron's console. The server
+  // already writes its own structured JSONL via lib/logger.ts into LOG_DIR,
+  // so we do NOT re-write these lines to any file — that would duplicate.
   serverProcess.stdout?.on('data', (d) => console.log('[server]', d.toString().trim()));
   serverProcess.stderr?.on('data', (d) => console.error('[server]', d.toString().trim()));
   serverProcess.on('exit', (code) => {
@@ -62,11 +102,11 @@ function startServer() {
     if (app.isQuitting) return;
     serverRestarts++;
     if (serverRestarts > MAX_RESTARTS) {
-      console.error(`Server crashed ${serverRestarts} times — giving up`);
+      appendElectronLog('error', 'electron', 'Server exceeded max restarts — giving up', { restarts: serverRestarts, code });
       return;
     }
     const delay = Math.min(1000 * Math.pow(2, serverRestarts - 1), 30000);
-    console.log(`Server exited (code ${code}), restarting in ${delay}ms (attempt ${serverRestarts}/${MAX_RESTARTS})`);
+    appendElectronLog('warn', 'electron', 'Server exited — restarting', { code, delayMs: delay, attempt: serverRestarts, maxRestarts: MAX_RESTARTS });
     setTimeout(startServer, delay);
   });
 }
@@ -204,7 +244,7 @@ function setupAutoUpdater() {
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('update-available', (info) => {
-    console.log(`[updater] Update available: v${info.version}`);
+    appendElectronLog('info', 'updater', 'Update available', { version: info.version });
   });
 
   autoUpdater.on('update-downloaded', (info) => {
@@ -222,7 +262,7 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on('error', (err) => {
-    console.error('[updater] Error:', err.message);
+    appendElectronLog('error', 'updater', 'Auto-update error', { error: err.message });
   });
 
   // Check for updates every 4 hours
@@ -236,6 +276,7 @@ function setupAutoUpdater() {
 
 app.on('ready', async () => {
   ensureConfigDir();
+  appendElectronLog('info', 'electron', 'App ready', { version: app.getVersion(), platform: process.platform, arch: process.arch, packaged: app.isPackaged });
   createTray();
 
   if (needsSetup()) {

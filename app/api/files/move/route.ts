@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { moveTorrentFiles, MoveError } from '@/lib/moveFiles';
+import { getLogger } from '@/lib/logger';
+
+const log = getLogger('move');
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -17,8 +20,8 @@ export async function POST(req: NextRequest) {
     const result = await moveTorrentFiles(torrentId, mediaType, season);
     return NextResponse.json(result);
   } catch (err) {
-    console.error('[files/move]', err);
     const message = err instanceof Error ? err.message : 'Failed to move file';
+    log.error('move failed', { torrentId, error: message });
     const status = err instanceof MoveError ? err.httpStatus : 500;
     return NextResponse.json({ error: message }, { status });
   }

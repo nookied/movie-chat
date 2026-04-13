@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchLibrary, searchTvLibrary } from '@/lib/plex';
+import { getLogger } from '@/lib/logger';
+
+const log = getLogger('plex');
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -20,7 +23,7 @@ export async function GET(req: NextRequest) {
     const status = await searchLibrary(title, yearNum && !isNaN(yearNum) ? yearNum : undefined);
     return NextResponse.json(status);
   } catch (err) {
-    console.error('[plex/check]', err);
+    log.error('check failed', { title, type, error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ found: false });
   }
 }

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTorrentStatus, listActiveTorrents } from '@/lib/transmission';
 import { isAppTorrent, getAppTorrentMeta } from '@/lib/appTorrents';
+import { getLogger } from '@/lib/logger';
+
+const log = getLogger('transmission');
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -15,8 +18,8 @@ export async function GET(req: NextRequest) {
       const annotated = torrents.map((t) => ({ ...t, isAppTorrent: isAppTorrent(t.id), appMeta: getAppTorrentMeta(t.id) }));
       return NextResponse.json(annotated);
     } catch (err) {
-      console.error('[transmission/status]', err);
       const message = err instanceof Error ? err.message : 'Failed to list torrents';
+      log.error('list failed', { error: message });
       return NextResponse.json({ error: message }, { status: 502 });
     }
   }
@@ -29,8 +32,8 @@ export async function GET(req: NextRequest) {
     const status = await getTorrentStatus(Number(id));
     return NextResponse.json(status);
   } catch (err) {
-    console.error('[transmission/status]', err);
     const message = err instanceof Error ? err.message : 'Failed to get status';
+    log.error('status failed', { id: Number(id), error: message });
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

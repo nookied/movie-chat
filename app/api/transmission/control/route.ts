@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pauseTorrent, resumeTorrent, removeTorrent } from '@/lib/transmission';
 import { isAppTorrent, unregisterAppTorrent } from '@/lib/appTorrents';
+import { getLogger } from '@/lib/logger';
+
+const log = getLogger('transmission');
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -26,8 +29,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('[transmission/control]', err);
     const message = err instanceof Error ? err.message : 'Failed';
+    log.error('control failed', { id, action, error: message });
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

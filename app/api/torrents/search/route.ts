@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchTorrents } from '@/lib/yts';
 import { searchTvSeason } from '@/lib/eztv';
+import { getLogger } from '@/lib/logger';
+
+const log = getLogger('torrents');
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -29,7 +32,7 @@ export async function GET(req: NextRequest) {
     const result = await searchTorrents(title, year ? Number(year) : undefined);
     return NextResponse.json(result);
   } catch (err) {
-    console.error('[torrents/search]', err);
+    log.error('search failed', { title, type, season, error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ torrents: [], noSuitableQuality: false });
   }
 }

@@ -9,6 +9,7 @@
 
 # production
 /build
+/logs
 
 # env files
 .env

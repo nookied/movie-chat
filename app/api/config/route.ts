@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AppConfig, cfg, readConfig, writeConfig } from '@/lib/config';
+import { AppConfig, cfg, readConfig, writeConfig, SENSITIVE } from '@/lib/config';
 
 // URL fields that are used in server-side fetches must stay on localhost / RFC-1918.
 // This prevents SSRF attacks where a crafted URL redirects our server to internal services.
@@ -9,7 +9,9 @@ function isSafeLocalUrl(urlStr: string): boolean {
   try {
     const url = new URL(urlStr);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
-    const host = url.hostname.toLowerCase();
+    // WHATWG URL keeps brackets on IPv6 hostnames (e.g. "[::1]"); strip them
+    // so the loopback comparison matches.
+    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
     if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return true;
     if (/^10\./.test(host)) return true;                          // 10.0.0.0/8
     if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;   // 172.16–31.x.x
@@ -17,14 +19,6 @@ function isSafeLocalUrl(urlStr: string): boolean {
     return false;
   } catch { return false; }
 }
-
-const SENSITIVE: Array<keyof AppConfig> = [
-  'openRouterApiKey',
-  'plexToken',
-  'tmdbApiKey',
-  'omdbApiKey',
-  'transmissionPassword',
-];
 
 /** GET — return effective config; sensitive fields masked as "set" or "" */
 export async function GET() {
@@ -44,6 +38,11 @@ export async function GET() {
     ollamaBaseUrl:          cfg('ollamaBaseUrl',          'OLLAMA_BASE_URL',          'http://localhost:11434'),
     ollamaModel:            cfg('ollamaModel',            'OLLAMA_MODEL'),
     ollamaOnly:             cfg('ollamaOnly',             'OLLAMA_ONLY'),
+    // Returned unmasked — the Settings page needs the actual value to wire
+    // into the /api/diagnostics/bundle?token=... download URL. Effectively
+    // LAN-scoped; for stronger isolation, front the app with a reverse proxy
+    // that requires its own auth.
+    diagnosticsToken:       cfg('diagnosticsToken',       'DIAGNOSTICS_TOKEN'),
   };
 
   // Mask sensitive fields — client only needs to know if they are set or not

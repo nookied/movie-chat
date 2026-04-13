@@ -10,6 +10,17 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'edge') {
     const { startAutoMovePoller } = await import('./lib/autoMove');
+    const { getLogger } = await import('./lib/logger');
+    const { ensureDiagnosticsToken } = await import('./lib/config');
+    // Generate the diagnostics token on first boot so the bundle endpoint
+    // always has a value to check against.
+    ensureDiagnosticsToken();
+    // Forces the logger to initialise and write the first line; also gives
+    // us a clean marker in the daily log file for each server (re)start.
+    getLogger('server').info('Server started', {
+      nodeEnv: process.env.NODE_ENV,
+      pid: process.pid,
+    });
     startAutoMovePoller();
   }
 }
