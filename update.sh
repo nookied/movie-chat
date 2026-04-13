@@ -93,20 +93,15 @@ fi
 git pull --quiet
 info "Downloaded latest code"
 
-# ── npm install (only if package.json changed) ────────────────────────────────
-if git diff HEAD~1 HEAD --name-only 2>/dev/null | grep -q "package.json"; then
-  [ "$AUTO" -eq 0 ] && echo "  package.json changed — updating dependencies..."
-  npm install --silent
-  info "Dependencies updated"
-fi
+# ── npm install (always — restores any deps removed by previous prune/update) ──
+[ "$AUTO" -eq 0 ] && echo "  Installing dependencies..."
+npm install --silent
+info "Dependencies ready"
 
 # ── build (always required for production mode) ───────────────────────────────
 [ "$AUTO" -eq 0 ] && echo "  Building..."
 npm run build --silent
 info "Build complete"
-
-# Prune Electron and other dev-only packages to save ~360 MB on the server
-npm prune --production --silent 2>/dev/null
 
 # ── restart pm2 ───────────────────────────────────────────────────────────────
 if command -v pm2 &>/dev/null && pm2 describe movie-chat &>/dev/null 2>&1; then
