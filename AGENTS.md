@@ -1,4 +1,4 @@
-# movie-chat — Claude Instructions
+# movie-chat — Codex Instructions
 
 ## Architecture
 
@@ -59,8 +59,6 @@ The prompts and Gemma detection live in `lib/chatPrompts.ts`. The chat route pic
 - **No hallucinated state**: the LLM must never claim a title is in Plex or available to download before emitting the tag — the app does the actual lookup.
 - **Few-shot examples** are more effective than abstract rules for instruction-following models — when adding new rules, add a concrete example alongside.
 - **Token efficiency**: the prompt is intentionally compact (~280 words). Don't add verbose wrong-response lists — a good positive example implies the wrong responses.
-- **Clarification threshold**: only ask a follow-up when the request gives literally nothing to work with — any attribute (actor type, mood, genre, era) is enough to just pick something. Without this rule, models over-ask.
-- **Follow-up questions**: the model must answer questions about a film it already recommended from its own knowledge, not deflect or pivot to a different title.
 - **Prescriptive system messages**: `[System]` info messages include the exact phrasing the model should use — the system prompt just says "follow the instruction". Don't re-add response-pattern rules to the prompt; put the logic in the info message string instead.
 
 Changing the system prompt requires a server restart (`pm2 restart movie-chat`) to take effect — it's not hot-reloaded.

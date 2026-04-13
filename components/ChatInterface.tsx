@@ -421,8 +421,10 @@ export default function ChatInterface() {
 
       // Silent retry: if the model mentioned a title but forgot the tag, nudge it once.
       // Skip short replies (likely clarifying questions) and out-of-scope responses.
+      const trimmedContent = fullContent.trim();
       if (recs.length === 0 && fullContent.length > 50
-          && !/^(what genre|what kind|what are you|i'm only set up)/i.test(fullContent.trim())) {
+          && !trimmedContent.endsWith('?')
+          && !/^(what genre|what kind|what are you|to give you|to get you|i'm only set up)/i.test(trimmedContent)) {
         try {
           const retryMessages = [
             ...history,

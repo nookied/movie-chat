@@ -10,6 +10,15 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 
 ## [2.0.1] — 2026-04-07
 
+### Changed
+- **Clarification threshold** (`lib/chatPrompts.ts`): AI now only asks a follow-up question when the request gives it nothing to work with — any attribute (actor type, mood, genre, era) is enough to just pick something
+- **Follow-up handling** (`lib/chatPrompts.ts`): AI now answers questions about a film it already recommended from its own knowledge, instead of deflecting or pivoting to a different title
+- **Spinner freeze fix** (`components/ChatInterface.tsx`): Silent tag-retry no longer fires when the model's response ends with `?` or starts with "To give you / To get you" — prevents hang when Gemma rephrases a clarifying question
+
+### Security
+- Patched 5 vulnerabilities via `npm audit fix` (`brace-expansion`, `flatted`, `next`, `picomatch`, `vite`)
+- Upgraded Electron v35 → v41.2.0 (resolves 17 CVEs)
+
 ### Added
 - **Version label in Settings** (`app/settings/page.tsx`, `app/api/config/route.ts`): Current app version (e.g. `v2.0.1`) displayed bottom-right next to the Save settings button
 
