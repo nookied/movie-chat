@@ -1,5 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AppConfig, cfg, readConfig, writeConfig, SENSITIVE } from '@/lib/config';
+import fs from 'fs';
+import path from 'path';
+
+function getVersion(): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8')) as { version?: string };
+    return pkg.version ?? 'unknown';
+  } catch {
+    return process.env.npm_package_version ?? 'unknown';
+  }
+}
 
 // URL fields that are used in server-side fetches must stay on localhost / RFC-1918.
 // This prevents SSRF attacks where a crafted URL redirects our server to internal services.
@@ -43,6 +54,7 @@ export async function GET() {
     // LAN-scoped; for stronger isolation, front the app with a reverse proxy
     // that requires its own auth.
     diagnosticsToken:       cfg('diagnosticsToken',       'DIAGNOSTICS_TOKEN'),
+    version:                getVersion(),
   };
 
   // Mask sensitive fields — client only needs to know if they are set or not

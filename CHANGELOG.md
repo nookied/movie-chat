@@ -10,6 +10,9 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 
 ## [2.0.1] — 2026-04-07
 
+### Added
+- **Version label in Settings** (`app/settings/page.tsx`, `app/api/config/route.ts`): Current app version (e.g. `v2.0.1`) displayed bottom-right next to the Save settings button
+
 ### Fixed
 - **NaN year in Plex check** (`app/api/plex/check/route.ts`): Non-numeric `year` query param no longer passed as `NaN` to Plex library search — now silently dropped
 - **NaN/invalid season in torrent search** (`app/api/torrents/search/route.ts`): Non-numeric or negative `season` values now return a 400 error instead of being forwarded to the TV search

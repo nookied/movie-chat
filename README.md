@@ -74,7 +74,7 @@ npm run setup
 
 ### After installing — configure your services
 
-Open **http://localhost:3000/settings** (or click the gear icon ⚙️ in the top right) and fill in each section. Everything is saved locally to `config.local.json` — no environment variables needed.
+Open **http://localhost:3000/settings** (or click the gear icon ⚙️ in the top right) and fill in each section. Everything is saved locally to `config.local.json` — no environment variables needed. The current app version is shown bottom-right next to the Save button.
 
 ---
 

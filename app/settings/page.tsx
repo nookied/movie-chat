@@ -26,6 +26,7 @@ interface ConfigFields {
   ollamaModel: string;
   ollamaOnly: string;  // 'true' | ''
   diagnosticsToken: string;  // auto-generated server-side; read-only in UI
+  version: string;
 }
 
 const EMPTY: ConfigFields = {
@@ -36,7 +37,7 @@ const EMPTY: ConfigFields = {
   transmissionPassword: '', transmissionDownloadDir: '',
   libraryDir: '', tvLibraryDir: '',
   ollamaBaseUrl: 'http://localhost:11434', ollamaModel: '', ollamaOnly: '',
-  diagnosticsToken: '',
+  diagnosticsToken: '', version: '',
 };
 
 const SENSITIVE = new Set(['openRouterApiKey', 'plexToken', 'tmdbApiKey', 'omdbApiKey', 'transmissionPassword']);
@@ -501,6 +502,9 @@ export default function SettingsPage() {
           </button>
           {saveStatus === 'saved' && <span className="text-green-400 text-sm">Saved</span>}
           {saveStatus === 'error' && <span className="text-red-400 text-sm">Error: {saveError}</span>}
+          {form.version && (
+            <span className="ml-auto text-gray-600 text-xs">v{form.version}</span>
+          )}
         </div>
 
       </div>
