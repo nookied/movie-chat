@@ -1,12 +1,19 @@
 import { PlexStatus } from '@/types';
 import { cfg } from '@/lib/config';
 
+/** Normalise a title for comparison: lowercase, & → and, collapse whitespace. */
+function normalizeTitle(t: string): string {
+  return t.toLowerCase().replace(/\s*&\s*/g, ' and ').replace(/\s+/g, ' ').trim();
+}
+
 /** True if a Plex item's title (or originalTitle) matches the query — exact or subtitle variant. */
 function titleMatches(item: Record<string, unknown>, query: string): boolean {
   const lc = query.toLowerCase();
+  const norm = normalizeTitle(query);
   const t = String(item.title ?? '').toLowerCase();
   const o = String(item.originalTitle ?? '').toLowerCase();
   if (t === lc || o === lc) return true;
+  if (normalizeTitle(t) === norm || normalizeTitle(o) === norm) return true;
   if (t.startsWith(lc + ':') || t.startsWith(lc + ' -')) return true;
   return false;
 }

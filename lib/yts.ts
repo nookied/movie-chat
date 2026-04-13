@@ -38,8 +38,10 @@ interface YtsMovie {
 
 // Strip punctuation and collapse whitespace so "Avatar: Fire and Ash" matches
 // "Avatar Fire and Ash" and vice-versa.
+// Replace & with "and" before stripping so "Rosencrantz & Guildenstern Are Dead"
+// matches the YTS entry "Rosencrantz and Guildenstern Are Dead".
 function normalizeTitle(t: string): string {
-  return t.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+  return t.toLowerCase().replace(/\s*&\s*/g, ' and ').replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 // Query YTS and return matching torrents, or null if no exact-title match found.
