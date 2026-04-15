@@ -1,6 +1,6 @@
 {
   "name": "movie-chat",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "AI-powered movie recommendations with Plex integration",
   "author": "nookied",
   "private": true,

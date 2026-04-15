@@ -8,6 +8,28 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 
 ---
 
+## [2.1.0] — 2026-04-16
+
+### Added
+- **Direct title shortcut** (`lib/directTitleLookup.ts`, `app/api/chat/route.ts`): Quoted titles and explicit title declarations (e.g. `"Send Help"`, `the film is titled "Send Help"`) now skip provider latency and immediately emit the `<recommendation>` tag
+- **Handoff note** (`HANDOFF.md`): Added a concise operator/developer handoff summary with verification, deployment, and follow-up notes for this prompt/title-lookup pass
+- **Refactor recommendation** (`REFACTOR_RECOMMENDATIONS.md`): Added a phased high-value refactor plan covering the chat state machine, recommendation flow split, chat route modularization, and config workflow consolidation
+
+### Changed
+- **System prompts** (`lib/chatPrompts.ts`): Both prompt families now explicitly cover quoted titles, title declarations, and stricter exact-title passthrough behaviour
+- **Few-shot seed** (`app/api/chat/route.ts`): Seed conversation now includes a quoted-title lookup so smaller models see the desired pattern before the real chat starts
+- **README** (`README.md`): User docs now mention the fast exact-title path and updated chat architecture
+
+### Refactored
+- **Chat tag parsing** (`lib/chatTags.ts`, `components/ChatInterface.tsx`, `components/Message.tsx`): Shared `<recommendation>` / `<download>` parsing, stripping, and tag serialization extracted into one utility module
+- **Settings disk usage UI** (`app/settings/page.tsx`): Repeated disk-space fetch/render logic extracted into a reusable hook and summary component
+- **Refactor planning docs** (`REFACTOR_RECOMMENDATIONS.md`, `AGENTS.md`, `CLAUDE.md`, `HANDOFF.md`): Maintainer docs now point to a recommended next-pass refactor order instead of leaving the hotspots implicit
+
+### Tests
+- Added dedicated coverage for shared chat-tag helpers and direct-title lookup flows; suite now stands at 23 test files / 417 tests
+
+---
+
 ## [2.0.1] — 2026-04-07
 
 ### Changed

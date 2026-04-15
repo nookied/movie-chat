@@ -75,6 +75,13 @@ describe('system prompt content invariants', () => {
     expect(GEMMA_SYSTEM_PROMPT.toLowerCase()).toContain('[system]');
   });
 
+  it('both prompts explicitly cover quoted titles and title declarations', () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('"Send Help"');
+    expect(GEMMA_SYSTEM_PROMPT).toContain('"Send Help"');
+    expect(DEFAULT_SYSTEM_PROMPT.toLowerCase()).toContain('titled');
+    expect(GEMMA_SYSTEM_PROMPT.toLowerCase()).toContain('titled');
+  });
+
   it('Gemma prompt is shorter or comparable to the default (tight prompt goal)', () => {
     // The Gemma prompt is tuned to be more direct; not a hard cap but a
     // sanity check that it doesn't accidentally balloon past the default.

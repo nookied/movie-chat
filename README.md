@@ -1,6 +1,6 @@
 # Movie Chat
 
-**v2.0.1** — An AI companion that manages your Plex library. Tell it what you want to watch — it handles the rest.
+**v2.1.0** — An AI companion that manages your Plex library. Tell it what you want to watch — it handles the rest.
 
 **Website:** [nookied.github.io/movie-chat](https://nookied.github.io/movie-chat)
 
@@ -13,6 +13,7 @@
 - **One-click downloads** — each recommendation card has a Download button; no need to type anything
 - **TV season picker** — for TV shows, choose which season to download; seasons already in your library are greyed out automatically
 - **Moves completed downloads** to your Plex folder automatically and triggers a library scan
+- **Fast title lookup** — quoted titles and explicit title declarations skip the LLM and go straight to search
 - Works from **any device on your local network** — desktop, phone, tablet
 - **Resilient AI** — falls back to a local Ollama model automatically if the cloud API is unavailable
 
@@ -174,7 +175,7 @@ The assistant recommends one title at a time. Each recommendation shows as a car
 - Whether it's **already in your Plex library**
 - A **Download button** if a copy is available
 
-You can also name a specific title directly — including very recent releases the AI may not know about, or titles that sound like everyday phrases (e.g. "How to Make a Killing", "Get Out", "Don't Look Up") — and it will look it up and show a card for it.
+You can also name a specific title directly — including very recent releases the AI may not know about, or titles that sound like everyday phrases (e.g. "How to Make a Killing", "Get Out", "Don't Look Up") — and it will look it up and show a card for it. Titles in quotes (for example `"Send Help"`) and declarations like `the film is titled "Send Help"` go straight to lookup without waiting on the model.
 
 ### TV show downloads
 
@@ -221,6 +222,8 @@ The app is restricted to your local network — requests from outside are blocke
 ```
 Browser
   └── ChatInterface (Next.js / React)
+        ├── Direct title lookup
+        │     └── quoted / explicit title inputs → local recommendation tag
         ├── Sends messages to /api/chat
         │     ├── OpenRouter (cloud LLM, retry + backoff)
         │     └── Ollama (local fallback — server-side after retries,
@@ -242,12 +245,21 @@ Server (background)
 ```
 
 **Key design choices:**
+- Quoted single-title lookups and explicit title declarations can be resolved locally before calling the LLM — reduces latency for exact-title searches
 - All config lives in `config.local.json` (gitignored) — no `.env` files needed
 - The LLM communicates intent via XML tags: `<recommendation>` triggers a card, `<download>` triggers a torrent
 - Movies use the YTS API (1080p only); TV seasons use Knaben (aggregates TPB, 1337x, EZTV; strict 1080p filter)
 - Chat history is persisted to `localStorage` (up to 200 messages)
 - App-initiated torrent IDs are tracked server-side in `app-torrents.json` so downloads started on one device are visible from any device
 - OpenRouter's free tier sometimes returns an empty stream; the client automatically retries via Ollama before surfacing an error
+
+---
+
+## Maintainer docs
+
+- `HANDOFF.md` — current deployment and validation notes
+- `REFACTOR_RECOMMENDATIONS.md` — phased high-value refactor roadmap
+- `AGENTS.md` / `CLAUDE.md` — architecture and implementation guidance for AI-assisted development
 
 ---
 

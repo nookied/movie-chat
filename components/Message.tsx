@@ -1,30 +1,11 @@
 'use client';
 
 import { ChatMessage } from '@/types';
+import { stripChatActionTags } from '@/lib/chatTags';
 
 interface Props {
   message: ChatMessage;
   thinking?: boolean;
-}
-
-// Strip action tags from display text — they are handled by the app silently.
-// Handles both the canonical format <recommendation>{...}</recommendation>
-// and the malformed self-closing variant <recommendation{...}> some models emit.
-// Also strips partial tags that are still arriving mid-stream.
-function cleanContent(content: string): string {
-  return content
-    // Complete canonical tags
-    .replace(/<recommendation>[\s\S]*?<\/recommendation>/g, '')
-    .replace(/<download>[\s\S]*?<\/download>/g, '')
-    // Malformed self-closing opening: <recommendation{...}>
-    .replace(/<recommendation\s*\{[^>]*\}>/g, '')
-    .replace(/<download\s*\{[^>]*\}>/g, '')
-    // Orphaned opening/closing tags left when model mixes formats
-    .replace(/<\/?recommendation>/g, '')
-    .replace(/<\/?download>/g, '')
-    // Partial tag still mid-stream at end of content
-    .replace(/<(recommendation|download)[^>]*$/g, '')
-    .trim();
 }
 
 export default function Message({ message, thinking = false }: Props) {
@@ -34,7 +15,7 @@ export default function Message({ message, thinking = false }: Props) {
   if (role === 'info') return null;
 
   const isUser = role === 'user';
-  const displayText = cleanContent(message.content);
+  const displayText = stripChatActionTags(message.content);
 
   if (!displayText && !isUser && !thinking) return null;
 

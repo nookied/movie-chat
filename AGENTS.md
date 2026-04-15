@@ -14,9 +14,12 @@
 |---|---|
 | `app/api/chat/route.ts` | LLM proxy — provider routing, streaming, rate limiter, per-turn chat log |
 | `lib/chatPrompts.ts` | `DEFAULT_SYSTEM_PROMPT`, `GEMMA_SYSTEM_PROMPT`, `isGemmaModel`, `getSystemPrompt` |
+| `lib/directTitleLookup.ts` | Deterministic exact-title parser — quoted titles and `the film is titled ...` declarations bypass provider latency |
+| `lib/chatTags.ts` | Shared `<recommendation>` / `<download>` parsing, stripping, and tag serialization helpers |
+| `REFACTOR_RECOMMENDATIONS.md` | Phased high-value refactor plan — recommendation flow split, chat-state extraction, route modularization, config workflow consolidation |
 | `lib/logger.ts` | Structured JSONL logger — daily rotation, 7-day retention, 32 KB entry / 50 MB file caps |
 | `app/api/diagnostics/bundle/route.ts` | GET endpoint — token-gated zip-less JSON bundle (logs + redacted config + version) |
-| `components/ChatInterface.tsx` | Main state machine — streams LLM, extracts `<recommendation>` tags |
+| `components/ChatInterface.tsx` | Main state machine — streams LLM, handles silent retry, uses shared tag helpers |
 | `components/RecommendationCard.tsx` | Fires 3 parallel checks (Plex/reviews/YTS) on mount; post-move Plex re-check |
 | `components/DownloadTracker.tsx` | Polls `/api/transmission/status` every 5s; read-only, no client-side move logic |
 | `lib/transmission.ts` | Transmission RPC with session-ID handshake (always 409 first) |
@@ -50,11 +53,14 @@
 
 These flows diverge significantly. If a change touches both, verify behaviour in each separately.
 
+If you are planning a broad cleanup rather than a bugfix, consult `REFACTOR_RECOMMENDATIONS.md` first and prefer that ordering over ad-hoc restructuring.
+
 ## System prompt design
 
 The prompts and Gemma detection live in `lib/chatPrompts.ts`. The chat route picks one with `getSystemPrompt(modelName)` — Gemma models get `GEMMA_SYSTEM_PROMPT` (tighter, native system-role friendly), everything else gets `DEFAULT_SYSTEM_PROMPT` (verbose, defensive). Key rules:
 
 - **User-named titles**: always emit the `<recommendation>` tag — no verification, no substitution, no clarifying questions. The app handles all lookups.
+- **Quoted titles / title declarations**: inputs like `"Send Help"` or `the film is titled "Send Help"` should also tag immediately. Prefer a concrete example over a long prose rule.
 - **Phrase-like titles**: film titles that look like questions or phrases ("How to Make a Killing", "Get Out", "Kill Bill") must be tagged, never treated as general questions or safety issues.
 - **No hallucinated state**: the LLM must never claim a title is in Plex or available to download before emitting the tag — the app does the actual lookup.
 - **Few-shot examples** are more effective than abstract rules for instruction-following models — when adding new rules, add a concrete example alongside.
@@ -67,11 +73,12 @@ For Gemma models, sampling is also tuned in `app/api/chat/route.ts`: `temperatur
 
 ## Small-model reliability
 
-Three mechanisms compensate for unreliable tag emission from small/free LLMs:
+Four mechanisms compensate for unreliable tag emission from small/free LLMs:
 
-1. **Few-shot seeding** (`route.ts` → `SEED_MESSAGES`): A synthetic Arrival exchange is prepended to every conversation. The model sees itself already producing correct tags and continues the pattern. ~40 tokens cost.
-2. **Prescriptive info messages** (`ChatInterface.tsx`): Instead of teaching the model 6 response patterns, each `[System]` message includes the exact wording to use. Moves decision logic from the LLM to app code.
-3. **Silent tag retry** (`ChatInterface.tsx` → `sendMessage()`): After streaming, if no `<recommendation>` tag is found and the response is substantive, a background follow-up nudges the model to emit the tag. The card appears with a brief delay.
+1. **Deterministic direct-title shortcut** (`lib/directTitleLookup.ts` → `route.ts`): Quoted titles and explicit title declarations skip the model entirely and emit the recommendation tag immediately.
+2. **Few-shot seeding** (`route.ts` → `SEED_MESSAGES`): Synthetic exchanges are prepended to every conversation, including a quoted-title lookup, so the model sees itself already producing correct tags.
+3. **Prescriptive info messages** (`ChatInterface.tsx`): Instead of teaching the model 6 response patterns, each `[System]` message includes the exact wording to use. Moves decision logic from the LLM to app code.
+4. **Silent tag retry** (`ChatInterface.tsx` → `sendMessage()`): After streaming, if no `<recommendation>` tag is found and the response is substantive, a background follow-up nudges the model to emit the tag. The card appears with a brief delay.
 
 ## Electron desktop app
 
@@ -92,6 +99,7 @@ The setup wizard (`app/setup/page.tsx`) serves dual purpose: post-install guided
 - All Transmission/Plex fetches use `cache: 'no-store'` — prevents Next.js data cache bloat
 - TMDB/OMDB fetches use `{ next: { revalidate: METADATA_CACHE_SECONDS } }` — 8h TTL (constant defined in each module)
 - `lib/appTorrents.ts` uses a 30s TTL cache so the autoMove poller (separate Next.js bundle) picks up new registrations within one cache window
+- `lib/chatTags.ts` centralises chat-tag parsing/stripping so `Message`, `ChatInterface`, and the route stay in sync when tag formats evolve
 - AutoMove poller: serialised moves, 15s gap between each to avoid I/O spikes
 - Post-move Plex re-check: 2 min → 10 min → 60 min backoff; stops early once Plex confirms; all timeouts cancelled on unmount
 - Card year display comes from TMDB (`ReviewData.year`), not the LLM — `RecommendationCard` shows `reviews?.year ?? year`
@@ -122,7 +130,7 @@ Map out the architecture before attempting fixes: what services are involved, wh
 
 ## Testing
 
-`npm test` (Vitest, Node env). 21 test files under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), and the logger/diagnostics surfaces. Conventions:
+`npm test` (Vitest, Node env). 23 test files under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, and the logger/diagnostics surfaces. Conventions:
 
 - Mock `fs` with `vi.mock('fs', () => ({ default: fsMock, ...fsMock }))` so both ESM and CJS imports see the mock.
 - `vi.resetModules()` in `beforeEach` so module-level state (rate-limit map, logger caches, etc.) is fresh per test.

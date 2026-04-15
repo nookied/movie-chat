@@ -48,6 +48,77 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1e6).toFixed(0)} MB`;
 }
 
+type DiskInfo = { total: number; free: number; used: number; percent: number };
+
+function diskBarColor(percent: number): string {
+  if (percent > 95) return 'bg-red-500';
+  if (percent > 85) return 'bg-amber-500';
+  return 'bg-plex-accent';
+}
+
+function useDiskInfo(path: string) {
+  const [info, setInfo] = useState<DiskInfo | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const dir = path.trim();
+    if (!dir) {
+      setInfo(null);
+      setError('');
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      fetch(`/api/files/diskspace?path=${encodeURIComponent(dir)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.error) {
+            setInfo(null);
+            setError(data.error);
+            return;
+          }
+          setInfo(data as DiskInfo);
+          setError('');
+        })
+        .catch(() => {
+          setInfo(null);
+          setError('Could not read disk info');
+        });
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [path]);
+
+  return { info, error };
+}
+
+function DiskUsageSummary({ info, error }: { info: DiskInfo | null; error: string }) {
+  if (!info && !error) return null;
+
+  return (
+    <div className="px-4 py-3">
+      {error && <p className="text-xs text-red-400">{error}</p>}
+      {info && (
+        <div>
+          <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+            <span>{formatBytes(info.free)} free</span>
+            <span>{info.percent}% used</span>
+          </div>
+          <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${diskBarColor(info.percent)}`}
+              style={{ width: `${info.percent}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-600 mt-1.5">
+            {formatBytes(info.used)} used of {formatBytes(info.total)}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -69,14 +140,8 @@ export default function SettingsPage() {
   const [tmdbStatus, setTmdbStatus] = useState<ServiceStatus>('idle');
   const [omdbStatus, setOmdbStatus] = useState<ServiceStatus>('idle');
   const [transmissionStatus, setTransmissionStatus] = useState<ServiceStatus>('idle');
-
-  // Disk space for the library directory
-  type DiskInfo = { total: number; free: number; used: number; percent: number };
-  const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
-  const [diskError, setDiskError] = useState('');
-  const [tvDiskInfo, setTvDiskInfo] = useState<DiskInfo | null>(null);
-  const [tvDiskError, setTvDiskError] = useState('');
-
+  const { info: diskInfo, error: diskError } = useDiskInfo(form.libraryDir);
+  const { info: tvDiskInfo, error: tvDiskError } = useDiskInfo(form.tvLibraryDir);
 
   const runChecks = useCallback(async (currentSensitiveSet: Set<string>) => {
     // OpenRouter — special: also captures available free models list
@@ -225,38 +290,6 @@ export default function SettingsPage() {
       })
       .catch(() => {});
   }, [runChecks]);
-
-  // Fetch disk space whenever the library directory changes (debounced 600ms)
-  useEffect(() => {
-    const dir = form.libraryDir.trim();
-    if (!dir) { setDiskInfo(null); setDiskError(''); return; }
-    const timer = setTimeout(() => {
-      fetch(`/api/files/diskspace?path=${encodeURIComponent(dir)}`, { cache: 'no-store' })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.error) { setDiskInfo(null); setDiskError(data.error); }
-          else { setDiskInfo(data as DiskInfo); setDiskError(''); }
-        })
-        .catch(() => { setDiskInfo(null); setDiskError('Could not read disk info'); });
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [form.libraryDir]);
-
-  // Same disk space indicator for the TV library directory
-  useEffect(() => {
-    const dir = form.tvLibraryDir.trim();
-    if (!dir) { setTvDiskInfo(null); setTvDiskError(''); return; }
-    const timer = setTimeout(() => {
-      fetch(`/api/files/diskspace?path=${encodeURIComponent(dir)}`, { cache: 'no-store' })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.error) { setTvDiskInfo(null); setTvDiskError(data.error); }
-          else { setTvDiskInfo(data as DiskInfo); setTvDiskError(''); }
-        })
-        .catch(() => { setTvDiskInfo(null); setTvDiskError('Could not read disk info'); });
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [form.tvLibraryDir]);
 
   function handleChange(key: keyof ConfigFields, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -416,60 +449,10 @@ export default function SettingsPage() {
         <Section title="File Management" description="Plex library paths for moving completed downloads">
           <Field label="Movies directory" value={form.libraryDir} placeholder="/Volumes/ExternalDrive/Movies"
             onChange={(v) => handleChange('libraryDir', v)} />
-          {(diskInfo || diskError) && (
-            <div className="px-4 py-3">
-              {diskError && <p className="text-xs text-red-400">{diskError}</p>}
-              {diskInfo && (
-                <div>
-                  <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                    <span>{formatBytes(diskInfo.free)} free</span>
-                    <span>{diskInfo.percent}% used</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        diskInfo.percent > 95 ? 'bg-red-500'
-                        : diskInfo.percent > 85 ? 'bg-amber-500'
-                        : 'bg-plex-accent'
-                      }`}
-                      style={{ width: `${diskInfo.percent}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-600 mt-1.5">
-                    {formatBytes(diskInfo.used)} used of {formatBytes(diskInfo.total)}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+          <DiskUsageSummary info={diskInfo} error={diskError} />
           <Field label="TV shows directory" value={form.tvLibraryDir} placeholder="/Volumes/ExternalDrive/TV Shows"
             onChange={(v) => handleChange('tvLibraryDir', v)} />
-          {(tvDiskInfo || tvDiskError) && (
-            <div className="px-4 py-3">
-              {tvDiskError && <p className="text-xs text-red-400">{tvDiskError}</p>}
-              {tvDiskInfo && (
-                <div>
-                  <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                    <span>{formatBytes(tvDiskInfo.free)} free</span>
-                    <span>{tvDiskInfo.percent}% used</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        tvDiskInfo.percent > 95 ? 'bg-red-500'
-                        : tvDiskInfo.percent > 85 ? 'bg-amber-500'
-                        : 'bg-plex-accent'
-                      }`}
-                      style={{ width: `${tvDiskInfo.percent}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-600 mt-1.5">
-                    {formatBytes(tvDiskInfo.used)} used of {formatBytes(tvDiskInfo.total)}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+          <DiskUsageSummary info={tvDiskInfo} error={tvDiskError} />
         </Section>
 
         <Section title="Diagnostics" description="Download recent logs and system info for troubleshooting">

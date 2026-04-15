@@ -158,6 +158,23 @@ describe('missing configuration', () => {
 // ─── Successful OpenRouter stream ───────────────────────────────────────
 
 describe('OpenRouter success', () => {
+  it('short-circuits explicit title lookups without calling any provider', async () => {
+    cfgMock.mockReturnValue('');
+
+    const res = await POST(makeReq({ messages: [{ role: 'user', content: '"send help"' }] }, '4.4.4.3'));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('On it!\n<recommendation>{"title":"Send Help","type":"movie"}</recommendation>');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(logMock.info).toHaveBeenCalledWith(
+      'chat',
+      expect.objectContaining({
+        provider: 'shortcut',
+        model: 'direct-title-lookup',
+        userMsg: '"send help"',
+      })
+    );
+  });
+
   it('proxies the SSE stream as plain text to the client', async () => {
     cfgMock.mockImplementation(openRouterKeyOnly);
     fetchSpy.mockResolvedValue(sseResponse(['Hel', 'lo ', 'world']));

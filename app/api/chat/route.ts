@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cfg } from '@/lib/config';
 import { getLogger } from '@/lib/logger';
 import { getSystemPrompt, isGemmaModel } from '@/lib/chatPrompts';
+import { extractDirectTitleLookup } from '@/lib/directTitleLookup';
+import { recommendationTag } from '@/lib/chatTags';
 
 const log = getLogger('llm');
 
@@ -10,6 +12,8 @@ const log = getLogger('llm');
 const SEED_MESSAGES = [
   { role: 'user' as const, content: 'Have you seen Arrival?' },
   { role: 'assistant' as const, content: 'Arrival is phenomenal — smart sci-fi that stays with you.\n<recommendation>{"title":"Arrival","year":2016,"type":"movie"}</recommendation>' },
+  { role: 'user' as const, content: 'can you find "Send Help"' },
+  { role: 'assistant' as const, content: 'On it!\n<recommendation>{"title":"Send Help","type":"movie"}</recommendation>' },
 ];
 
 // Simple in-memory rate limiter: max 30 requests per minute per IP.
@@ -17,6 +21,10 @@ const SEED_MESSAGES = [
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60_000;
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const TEXT_STREAM_HEADERS = {
+  'Content-Type': 'text/plain; charset=utf-8',
+  'Cache-Control': 'no-cache',
+};
 
 // Prune expired entries so the map doesn't grow unbounded over days of use.
 // Runs at most once per minute — O(n) over the number of unique IPs seen.
@@ -87,6 +95,22 @@ export async function POST(req: NextRequest) {
   // Captured at the start so latency includes both retry attempts and streaming.
   const startedAt = Date.now();
   const userMsg = messages[messages.length - 1]?.content ?? '';
+
+  const directTitle = extractDirectTitleLookup(userMsg);
+  if (directTitle) {
+    const assistantMsg = `On it!\n${recommendationTag(directTitle)}`;
+    log.info('chat', {
+      provider: 'shortcut',
+      model: 'direct-title-lookup',
+      turnCount: trimmedMessages.length,
+      latencyMs: Date.now() - startedAt,
+      userMsg,
+      assistantMsg,
+    });
+    return new Response(assistantMsg, {
+      headers: TEXT_STREAM_HEADERS,
+    });
+  }
 
   // ollamaOnly = persistent setting in config; forceOllama = one-off test flag from client
   const ollamaOnly = cfg('ollamaOnly', 'OLLAMA_ONLY') === 'true';
@@ -294,9 +318,6 @@ export async function POST(req: NextRequest) {
   });
 
   return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-cache',
-    },
+    headers: TEXT_STREAM_HEADERS,
   });
 }

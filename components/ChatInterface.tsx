@@ -2,71 +2,10 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatMessage, Recommendation, ActiveDownload, TorrentOption } from '@/types';
+import { extractDownloadActions, extractRecommendations } from '@/lib/chatTags';
 import Message from './Message';
 import RecommendationCard from './RecommendationCard';
 import DownloadsPanel from './DownloadsPanel';
-
-// Parse recommendation tags from a string.
-// Handles both the canonical format: <recommendation>{"json"}</recommendation>
-// and the malformed self-closing variant: <recommendation{"json"}> some models emit.
-function extractRecommendations(text: string): Recommendation[] {
-  const results: Recommendation[] = [];
-  const seen = new Set<string>();
-
-  function tryAdd(json: string) {
-    try {
-      const parsed = JSON.parse(json);
-      if (parsed.title) {
-        const yearVal = parsed.year ? Number(parsed.year) : undefined;
-        const key = `${String(parsed.title)}-${yearVal ?? 'unknown'}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          results.push({
-            title: String(parsed.title),
-            year: yearVal,
-            type: parsed.type === 'tv' ? 'tv' : 'movie',
-          });
-        }
-      }
-    } catch { /* skip malformed */ }
-  }
-
-  let match;
-  const r1 = /<recommendation>([\s\S]*?)<\/recommendation>/g;
-  while ((match = r1.exec(text)) !== null) tryAdd(match[1]);
-  const r2 = /<recommendation(\{[\s\S]*?\})>/g;
-  while ((match = r2.exec(text)) !== null) tryAdd(match[1]);
-
-  return results;
-}
-
-// Parse download tags from a string. Same dual-format tolerance as above.
-function extractDownloadActions(text: string): Array<{ title: string; year?: number }> {
-  const results: Array<{ title: string; year?: number }> = [];
-  const seen = new Set<string>();
-
-  function tryAdd(json: string) {
-    try {
-      const parsed = JSON.parse(json);
-      if (parsed.title) {
-        const yearVal = parsed.year ? Number(parsed.year) : undefined;
-        const key = `${String(parsed.title)}-${yearVal ?? 'unknown'}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          results.push({ title: String(parsed.title), year: yearVal });
-        }
-      }
-    } catch { /* skip malformed */ }
-  }
-
-  let match;
-  const r1 = /<download>([\s\S]*?)<\/download>/g;
-  while ((match = r1.exec(text)) !== null) tryAdd(match[1]);
-  const r2 = /<download(\{[\s\S]*?\})>/g;
-  while ((match = r2.exec(text)) !== null) tryAdd(match[1]);
-
-  return results;
-}
 
 // Strip torrent noise: "Dead Mans Wire (2025) [1080p] [WEBRip]..." → "Dead Mans Wire"
 function cleanTorrentName(raw: string): string {
