@@ -227,11 +227,7 @@ function SetupWizardInner() {
                 </div>
                 {!openRouterConnected && (
                   <a
-                    href={`https://openrouter.ai/auth?callback_url=${encodeURIComponent(
-                      typeof window !== 'undefined'
-                        ? `${window.location.origin}/api/openrouter/callback`
-                        : 'http://localhost:3000/api/openrouter/callback'
-                    )}`}
+                    href="/api/openrouter/auth"
                     className="inline-block mt-2 ml-8 bg-plex-card border border-plex-border text-gray-300 text-xs px-4 py-1.5 rounded-lg
                       hover:border-gray-500 hover:text-white transition-colors"
                   >

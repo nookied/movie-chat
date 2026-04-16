@@ -347,4 +347,105 @@ describe('path-traversal defence', () => {
     expect(result.destFolder.startsWith('/library/movies/')).toBe(true);
     expect(result.destFolder).not.toContain('/etc/');
   });
+
+  it('sanitizes backslashes in torrent names (Windows-style traversal)', async () => {
+    getTorrentStatusMock.mockResolvedValue(
+      torrentStatus({
+        name: '..\\..\\sensitive',
+        files: [{ name: 'movie.mkv', length: 1, bytesCompleted: 1 }],
+      })
+    );
+    const result = await moveTorrentFiles(1, 'movie');
+    expect(result.destFolder.startsWith('/library/movies/')).toBe(true);
+    expect(result.destFolder).not.toContain('\\');
+  });
+
+  it('replaces "." and ".." torrent names with "Unknown"', async () => {
+    getTorrentStatusMock.mockResolvedValue(
+      torrentStatus({
+        name: '..',
+        files: [{ name: 'movie.mkv', length: 1, bytesCompleted: 1 }],
+      })
+    );
+    const result = await moveTorrentFiles(1, 'movie');
+    expect(result.destFolder).toBe('/library/movies/Unknown');
+  });
+
+  it('rejects file names that escape the download directory', async () => {
+    getTorrentStatusMock.mockResolvedValue(
+      torrentStatus({
+        name: 'Movie',
+        downloadDir: '/downloads',
+        files: [{ name: '../../etc/shadow.mkv', length: 1, bytesCompleted: 1 }],
+      })
+    );
+    await expect(moveTorrentFiles(1, 'movie')).rejects.toThrow(/Path traversal/);
+  });
+
+  it('replaces slashes in torrent names with dashes', async () => {
+    getTorrentStatusMock.mockResolvedValue(
+      torrentStatus({
+        name: '////',
+        files: [{ name: 'movie.mkv', length: 1, bytesCompleted: 1 }],
+      })
+    );
+    const result = await moveTorrentFiles(1, 'movie');
+    // sanitizeName replaces / with -, so //// → ---- (still valid, no "Unknown" fallback)
+    expect(result.destFolder).toBe('/library/movies/----');
+    expect(result.destFolder.startsWith('/library/movies/')).toBe(true);
+  });
+});
+
+// ─── Extension allowlist ────────────────────────────────────────────────
+
+describe('extension allowlist', () => {
+  it('allows all subtitle formats', async () => {
+    getTorrentStatusMock.mockResolvedValue(
+      torrentStatus({
+        name: 'Movie',
+        files: [
+          { name: 'movie.srt', length: 1, bytesCompleted: 1 },
+          { name: 'movie.sub', length: 1, bytesCompleted: 1 },
+          { name: 'movie.ass', length: 1, bytesCompleted: 1 },
+          { name: 'movie.ssa', length: 1, bytesCompleted: 1 },
+          { name: 'movie.vtt', length: 1, bytesCompleted: 1 },
+        ],
+      })
+    );
+    const result = await moveTorrentFiles(1, 'movie');
+    expect(result.moved).toHaveLength(5);
+    expect(result.skipped).toHaveLength(0);
+  });
+
+  it('skips common junk files from torrent sites', async () => {
+    getTorrentStatusMock.mockResolvedValue(
+      torrentStatus({
+        name: 'Movie',
+        files: [
+          { name: 'RARBG.txt', length: 1, bytesCompleted: 1 },
+          { name: 'poster.jpg', length: 1, bytesCompleted: 1 },
+          { name: 'movie.nfo', length: 1, bytesCompleted: 1 },
+          { name: 'Subs/movie.idx', length: 1, bytesCompleted: 1 },
+          { name: 'movie.exe', length: 1, bytesCompleted: 1 },
+        ],
+      })
+    );
+    const result = await moveTorrentFiles(1, 'movie');
+    expect(result.moved).toHaveLength(0);
+    expect(result.skipped).toHaveLength(5);
+  });
+
+  it('handles case-insensitive extensions (.MKV, .Mp4)', async () => {
+    getTorrentStatusMock.mockResolvedValue(
+      torrentStatus({
+        name: 'Movie',
+        files: [
+          { name: 'movie.MKV', length: 1, bytesCompleted: 1 },
+          { name: 'movie.Mp4', length: 1, bytesCompleted: 1 },
+        ],
+      })
+    );
+    const result = await moveTorrentFiles(1, 'movie');
+    expect(result.moved).toEqual(['movie.MKV', 'movie.Mp4']);
+  });
 });

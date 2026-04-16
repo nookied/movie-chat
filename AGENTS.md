@@ -29,11 +29,11 @@
 | `lib/autoMove.ts` | Server-side background poller — moves one torrent at a time with 15s gap |
 | `lib/appTorrents.ts` | In-memory + on-disk registry of app torrent IDs + mediaType/season/title metadata |
 | `lib/config.ts` | `cfg()` helper — 30s in-memory cache avoids per-request sync disk reads |
-| `lib/yts.ts` | YTS torrent search + magnet link builder (movies) |
+| `lib/yts.ts` | YTS torrent search + magnet link builder (movies); `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries |
 | `lib/eztv.ts` | Knaben/EZTV torrent search + quality scoring (TV) |
 | `lib/tmdb.ts` | TMDB metadata — posters, overviews, year, season count |
 | `lib/omdb.ts` | OMDB ratings — IMDb score, Rotten Tomatoes |
-| `lib/plex.ts` | Plex library check — movies and per-season TV |
+| `lib/plex.ts` | Plex library check — movies and per-season TV; `titleMatches` also normalises `&` → `and` |
 | `instrumentation.ts` | Next.js startup hook — starts autoMove poller |
 | `types/index.ts` | All shared TypeScript types |
 | `electron/main.js` | Electron main process — auto-setup → server → window lifecycle |
@@ -43,7 +43,8 @@
 | `app/setup/page.tsx` | Post-install wizard — summary, Plex token, metadata keys |
 | `app/api/setup/status/route.ts` | Config completeness check (at least one LLM configured) |
 | `app/api/setup/detect/route.ts` | Auto-detect Ollama/Plex/Transmission on network |
-| `app/api/openrouter/callback/route.ts` | OAuth PKCE callback — exchanges code for API key |
+| `app/api/openrouter/auth/route.ts` | OAuth initiation — CSRF state cookie + redirect to OpenRouter |
+| `app/api/openrouter/callback/route.ts` | OAuth PKCE callback — CSRF state verification, fixed-origin redirects, key exchange |
 | `components/ShareButton.tsx` | QR code modal for sharing app URL with household |
 | `components/ui/` | Shared UI: StatusIcon, Section, Field, Toggle |
 
@@ -134,7 +135,7 @@ Map out the architecture before attempting fixes: what services are involved, wh
 
 ## Testing
 
-`npm test` (Vitest, Node env). 25 test files under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, and the logger/diagnostics surfaces. Conventions:
+`npm test` (Vitest, Node env). 29 test files, 544 tests under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, and ThinkFilter streaming. Conventions:
 
 - Mock `fs` with `vi.mock('fs', () => ({ default: fsMock, ...fsMock }))` so both ESM and CJS imports see the mock.
 - `vi.resetModules()` in `beforeEach` so module-level state (rate-limit map, logger caches, etc.) is fresh per test.

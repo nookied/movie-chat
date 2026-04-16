@@ -95,9 +95,10 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
 
   # register pm2 with the OS so it starts on reboot
   # pm2 startup prints a sudo command we can capture and run directly
-  STARTUP_CMD=$(pm2 startup 2>&1 | grep "^sudo")
+  STARTUP_CMD=$(pm2 startup 2>&1 | grep "^sudo.*pm2")
   if [ -n "$STARTUP_CMD" ]; then
     echo "       Registering pm2 with system startup"
+    echo "       Running: $STARTUP_CMD"
     echo "       (you may be prompted for your password)..."
     eval "$STARTUP_CMD"
     info "pm2 registered — will start automatically on reboot"
@@ -125,7 +126,7 @@ INSTALL_DIR="$(pwd)"
 if [[ "$REPLY_UPDATE" =~ ^[Yy]$ ]]; then
   CRON_CMD="0 3 * * * cd \"$INSTALL_DIR\" && bash update.sh --auto >> \"$HOME/.movie-chat-update.log\" 2>&1"
   # Add only if not already present
-  if crontab -l 2>/dev/null | grep -qF "movie-chat"; then
+  if crontab -l 2>/dev/null | grep -qF "update.sh --auto"; then
     warn "A Movie Chat cron job already exists — skipping"
   else
     (crontab -l 2>/dev/null; echo "$CRON_CMD") | crontab -

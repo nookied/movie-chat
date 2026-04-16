@@ -317,6 +317,9 @@ export async function POST(req: NextRequest) {
           }
         }
       } finally {
+        // Cancel the upstream reader so we don't keep consuming tokens/bandwidth
+        // from the provider after the client has disconnected.
+        try { await reader.cancel(); } catch { /* already closed */ }
         // Swallow log errors so controller.close() always runs — otherwise
         // the Response would hang for the client on a closed stdout or a
         // disk-full condition.

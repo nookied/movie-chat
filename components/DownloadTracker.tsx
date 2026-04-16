@@ -77,7 +77,7 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
       // Stop polling after 3 consecutive errors (e.g. Transmission down)
       if (consecutiveErrors.current >= 3) stopPolling();
     }
-  }, [download.torrentId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [download.torrentId, download.fromApp, download.torrentName, download.year, onMoved, onComplete]);
 
   useEffect(() => {
     fetchStatus();

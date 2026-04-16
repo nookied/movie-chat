@@ -13,12 +13,12 @@ This document proposes a high-value refactor pass for `movie-chat` without chang
 
 The highest-value refactor is not a broad rewrite. It is a focused pass across four seams:
 
-1. Split `components/RecommendationCard.tsx` into movie-specific and TV-specific orchestration plus smaller shared presentation pieces.
-2. Extract the chat state machine in `components/ChatInterface.tsx` into hooks/services so message streaming, download control, and persistence stop living in one component.
+1. ~~Split `components/RecommendationCard.tsx`~~ — **DONE** (v2.1.0–v2.2.0)
+2. ~~Extract the chat state machine in `components/ChatInterface.tsx`~~ — **DONE** (v2.1.0–v2.2.0)
 3. Break `app/api/chat/route.ts` into provider clients, request builders, and stream adapters so the route stops carrying transport details, retry logic, prompt wiring, and SSE parsing at once.
 4. Consolidate setup/settings config workflows around shared config form/test helpers.
 
-If only one refactor is funded, do `RecommendationCard` plus `ChatInterface` first. That pair carries the most state, side effects, and feature branching.
+Phases 1 and 2 are complete. The next high-value work is Phase 3 (chat route modularization).
 
 ## Why This Pass Is High Value
 
@@ -26,28 +26,17 @@ If only one refactor is funded, do `RecommendationCard` plus `ChatInterface` fir
 
 | Area | Current shape | Why it matters |
 |---|---|---|
-| `components/RecommendationCard.tsx` | ~599 lines, 5 `useEffect`s, 6 fetch sites, movie and TV flows in one component, 3 `react-hooks/exhaustive-deps` suppressions | Highest UI complexity and the clearest source of accidental regressions between movie vs TV behavior |
-| `components/ChatInterface.tsx` | ~536 lines, 8 `useCallback`s, 7 fetch sites, streaming + persistence + downloads + LLM retry all together | Hard to reason about state transitions and difficult to test in isolation |
-| `app/settings/page.tsx` | ~496 lines, multiple service-test responsibilities, config load/save, diagnostics download, provider fallback test | Manageable now, but still shaped like a second orchestration page rather than a composition of smaller sections |
-| `app/setup/page.tsx` | ~405 lines, step flow + service tests + config writes in one component | Lower risk than the chat surfaces, but shares patterns that should be aligned with settings |
-| `app/api/chat/route.ts` | ~323 lines, direct-title shortcut + rate limiting + prompt selection + provider retries + SSE parsing + think-filter + logging | High leverage server-side entry point; difficult to extend safely with new providers or logging rules |
+| `components/RecommendationCard.tsx` | **Refactored** — now ~120 lines, thin layout. Data logic in `useRecommendationCardState`. | Phases 1 complete |
+| `components/ChatInterface.tsx` | **Refactored** — now ~120 lines, composition root. Logic in focused hooks. | Phase 2 complete |
+| `app/settings/page.tsx` | ~496 lines, multiple service-test responsibilities, config load/save, diagnostics download | Still pending (Phase 4) |
+| `app/setup/page.tsx` | ~400 lines, step flow + service tests + config writes | Still pending (Phase 4) |
+| `app/api/chat/route.ts` | ~323 lines, direct-title shortcut + rate limiting + prompt selection + provider retries + SSE parsing + think-filter + logging | Still pending (Phase 3) — highest remaining leverage |
 
 ### Secondary signals
 
-- `RecommendationCard` currently mixes:
-  - movie availability logic
-  - TV season-pack selection
-  - post-move Plex backoff polling
-  - metadata loading
-  - multiple callback side effects to influence chat behavior
-- `ChatInterface` currently mixes:
-  - persisted message history
-  - streaming transport
-  - fallback provider retry
-  - silent recommendation-tag retry
-  - Transmission download bookkeeping
-  - UI rendering concerns
-- The route and client both still encode significant transport/state-machine behavior inline rather than through reusable services.
+- ~~`RecommendationCard` mixing~~ — **resolved**: data logic now in `useRecommendationCardState`, UI sections in `components/recommendation/`
+- ~~`ChatInterface` mixing~~ — **resolved**: streaming in `useChatSendMessage`, history in `useChatHistory`, downloads in `useAppDownloads`
+- The chat route still encodes transport/state-machine behavior inline rather than through reusable services (Phase 3 target).
 
 ## Recommended Scope
 
@@ -69,104 +58,39 @@ If only one refactor is funded, do `RecommendationCard` plus `ChatInterface` fir
 
 ## Recommended Refactor Order
 
-## Phase 1: Recommendation Flow Split
+## Phase 1: Recommendation Flow Split — COMPLETE
 
-### Target
+**Status:** Done. Implemented in v2.1.0–v2.2.0.
 
-- [components/RecommendationCard.tsx](/Users/karolnowacki/Documents/GitHub/movie-chat/components/RecommendationCard.tsx:45)
+### What was done
 
-### Current problems
+- `RecommendationCard.tsx` is now ~120 lines of layout/wiring
+- All fetch logic lives in `hooks/useRecommendationCardState.ts`
+- Presentational pieces extracted to `components/recommendation/`: `LibraryStatusBadge`, `MovieDownloadSection`, `TvDownloadSection`, `ScoreBadge`
+- No `react-hooks/exhaustive-deps` suppressions remain in the recommendation flow
+- Post-move Plex recheck (2 min → 10 min → 60 min backoff) and TV season selection are in the hook with full AbortController cleanup
 
-- Movie and TV flows diverge heavily but are rendered from one component.
-- Network orchestration, retry logic, derived library state, and UI rendering are all interwoven.
-- Three effects currently suppress `react-hooks/exhaustive-deps`, which is a sign that responsibilities and closure boundaries are doing too much.
+### Remaining refinement
 
-### Proposed shape
+- Movie and TV availability logic still lives in one combined hook (`useRecommendationCardState`) rather than separate `useMovieAvailability`/`useTvAvailability` hooks. This is functional but could be split further for narrower testing.
 
-- `components/recommendation/RecommendationCardShell.tsx`
-  - Shared layout: poster, title, overview, scores, Plex badge shell
-- `components/recommendation/MovieRecommendationActions.tsx`
-  - Movie torrent availability and download button UI
-- `components/recommendation/TvRecommendationActions.tsx`
-  - Season picker, pack status, option select, TV download button UI
-- `hooks/useRecommendationMetadata.ts`
-  - Fetch reviews/TMDB/OMDB and expose `{ reviews, reviewState, notFound }`
-- `hooks/useMovieAvailability.ts`
-  - Fetch Plex and movie torrent availability for movie recommendations
-- `hooks/useTvAvailability.ts`
-  - Fetch Plex seasons, TV pack availability, selected option state, default season prefetch
-- `hooks/usePlexRecheck.ts`
-  - Own the 2 min → 10 min → 60 min post-move recheck loop
+## Phase 2: Chat State Machine Extraction — COMPLETE
 
-### Why this is worth doing first
+**Status:** Done. Implemented in v2.1.0–v2.2.0.
 
-- It isolates the movie flow and TV flow, which the project docs already treat as fundamentally different.
-- It reduces the chance that a TV change breaks movie availability or vice versa.
-- It allows narrower tests for each flow instead of asserting everything through one giant card component.
+### What was done
 
-### Acceptance criteria
+- `ChatInterface.tsx` is now ~120 lines — pure composition root
+- Hooks extracted: `useChatHistory`, `useChatSendMessage`, `useAppDownloads`, `usePendingTorrents`, `useDownloadTrigger`
+- `lib/chat/systemMessages.ts` centralises all `[System]` message strings
+- Components extracted: `components/chat/ChatMessageList`, `components/chat/ChatComposer`
+- All hooks use AbortController cleanup on unmount
+- Silent tag retry, streaming, and fallback logic live in `useChatSendMessage`
 
-- `RecommendationCard.tsx` becomes a thin composition layer under ~150 lines.
-- No `react-hooks/exhaustive-deps` suppressions remain in the recommendation flow.
-- Movie-only changes can be made without opening TV-specific code paths.
-- TV flow logic can be tested without exercising movie torrent branches.
+### Remaining refinement
 
-### Suggested test additions
-
-- `__tests__/movie-recommendation-flow.test.ts`
-- `__tests__/tv-recommendation-flow.test.ts`
-- `__tests__/usePlexRecheck.test.ts`
-
-## Phase 2: Chat State Machine Extraction
-
-### Target
-
-- [components/ChatInterface.tsx](/Users/karolnowacki/Documents/GitHub/movie-chat/components/ChatInterface.tsx:66)
-
-### Current problems
-
-- The component owns message persistence, streaming, provider fallback handling, silent retry, download triggering, active download syncing, and rendering.
-- `sendMessage()` spans a large portion of the file and carries transport concerns that should be testable without rendering the entire UI.
-- Message state and download state are coordinated through local component state and refs instead of explicit domain boundaries.
-
-### Proposed shape
-
-- `hooks/useChatHistory.ts`
-  - Load/save localStorage history and welcome-message handling
-- `hooks/useStreamingChat.ts`
-  - Own `/api/chat` calls, stream draining, fallback to Ollama, silent tag retry, and returned assistant payload
-- `hooks/useAppDownloads.ts`
-  - Own Transmission sync, app torrent id persistence, and completion/removal updates
-- `hooks/usePendingTorrents.ts`
-  - Own pending torrent registry and recommendation-to-download mapping
-- `lib/chat/systemMessages.ts`
-  - Build `[System]` messages in one place instead of inline strings in the component
-- Optional:
-  - replace multi-piece local state with a reducer if state transitions still feel implicit after extraction
-
-### Proposed post-refactor component split
-
-- `ChatInterface.tsx`
-  - layout + wiring only
-- `ChatMessageList.tsx`
-  - messages + recommendation cards
-- `ChatComposer.tsx`
-  - textarea + send button
-- `useStreamingChat()`
-  - request/response state machine
-
-### Acceptance criteria
-
-- `ChatInterface.tsx` is reduced to view composition plus a small set of hook calls.
-- `sendMessage()` no longer contains raw retry loops and stream-drain internals inline.
-- Download sync and chat streaming can be tested independently.
-- System-message wording lives in one helper module.
-
-### Suggested test additions
-
-- `__tests__/useStreamingChat.test.ts`
-- `__tests__/useAppDownloads.test.ts`
-- `__tests__/chat-system-messages.test.ts`
+- `useChatSendMessage` is the largest hook and could be further decomposed (streaming vs retry vs fallback)
+- No hook-level unit tests yet — streaming/retry logic is tested via the route-level tests in `chat-route.test.ts`
 
 ## Phase 3: Chat API Route Modularization
 
@@ -279,22 +203,18 @@ Server
 
 ## Work Breakdown Recommendation
 
-### Sprint 1
+### Sprint 1 — COMPLETE
 
 - Phase 1: `RecommendationCard` split
-- Add targeted tests for movie vs TV orchestration
-
-### Sprint 2
-
 - Phase 2: `ChatInterface` extraction
-- Stabilize chat streaming and download hooks
+- Both completed in v2.1.0–v2.2.0
 
-### Sprint 3
+### Next sprint
 
 - Phase 3: chat route modularization
 - Add provider/stream unit tests
 
-### Sprint 4
+### Following sprint
 
 - Phase 4: config workflow consolidation
 - Optional lint migration in parallel if desired

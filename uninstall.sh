@@ -50,8 +50,8 @@ fi
 # ── 2. Cron job ───────────────────────────────────────────────────────────────
 heading "Remove auto-update cron job"
 
-if crontab -l 2>/dev/null | grep -qF "movie-chat"; then
-  crontab -l 2>/dev/null | grep -vF "movie-chat" | crontab -
+if crontab -l 2>/dev/null | grep -qF "update.sh --auto"; then
+  crontab -l 2>/dev/null | grep -vF "update.sh --auto" | crontab -
   info "Cron job removed"
   # Remove the log file too (if it exists)
   if [ -f "$HOME/.movie-chat-update.log" ]; then

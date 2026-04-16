@@ -271,10 +271,13 @@ The app is designed for trusted local-network use only. It includes:
 
 - **Local-network restriction** — middleware blocks all requests from non-LAN IPs; only RFC-1918 addresses and `.local` mDNS hostnames are allowed
 - **Rate limiting** — 30 requests/minute per IP on the chat endpoint
+- **OAuth CSRF protection** — OpenRouter OAuth flow uses a random state token in an httpOnly cookie, verified with timing-safe comparison; redirects use a fixed origin, never the client-controlled Host header
+- **Request validation** — POST routes enforce a 64 KB body limit and validate all input fields; malformed JSON returns 400 instead of a stack trace
 - **Magnet URL validation** — only well-formed `magnet:?xt=urn:btih:` links are accepted
-- **SSRF protection** — Plex, Transmission, and Ollama URLs must be localhost or RFC-1918 addresses
+- **SSRF protection** — Plex, Transmission, and Ollama URLs must be localhost or RFC-1918 addresses; internal redirects use a fixed origin
 - **Torrent ownership** — Transmission control actions (pause/cancel) only work on torrents added through this app
-- **Path traversal protection** — file move operations are restricted to the configured library directory
+- **Path traversal protection** — file move operations are restricted to the configured library directory; symlinks to outside the boundary are rejected
+- **Atomic config writes** — config saves use write-to-temp + rename to prevent corruption from concurrent writes
 
 > Do not expose this app to the public internet.
 
@@ -325,7 +328,7 @@ Run this from inside the app folder:
 npm run update
 ```
 
-It checks if a newer version is available, shows what changed, and — if you confirm — pulls the update, rebuilds, and restarts the app automatically.
+It checks if a newer version is available, shows what changed, and — if you confirm — pulls the update, rebuilds, and restarts the app automatically. If something goes wrong during the update (pull, install, or build failure), it **rolls back** to the previous version and restarts the app. A lock file prevents concurrent runs.
 
 ### Manual install — automatic updates
 
@@ -414,7 +417,7 @@ npm run dev            # development server with hot reload (port 3001)
 npm run build          # production build (includes standalone output)
 npm run start          # production server (requires a build first)
 npm run lint           # ESLint
-npm test               # run the test suite (464 tests)
+npm test               # run the test suite (544 tests)
 npm run electron:dev   # launch Electron app in dev mode (requires build first)
 npm run electron:build # build macOS .dmg in dist-electron/
 npm run release        # build + publish to GitHub Releases (needs GH_TOKEN)

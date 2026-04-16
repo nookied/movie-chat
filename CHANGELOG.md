@@ -11,6 +11,7 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 ## [2.2.0] — 2026-04-16
 
 ### Security
+- **OAuth CSRF protection** (`app/api/openrouter/auth/route.ts`, `app/api/openrouter/callback/route.ts`): OAuth flow now generates a random state token stored in an httpOnly cookie; the callback verifies the state with `crypto.timingSafeEqual` before exchanging the code. Redirects use a fixed `APP_ORIGIN` instead of reflecting the client-controlled Host header, preventing OAuth code theft via URL hijacking
 - **Body size limit + JSON error handling** (`lib/requestBody.ts`): All POST routes now reject requests over 64 KB (413) and return 400 on malformed JSON instead of a 500 with stack trace
 - **IP spoofing hardened** (`lib/requestIp.ts`): LAN guard and rate limiter now use the last hop of `X-Forwarded-For` instead of the first, preventing client-controlled header bypass
 - **Atomic config writes** (`lib/config.ts`): `writeConfig` now uses write-to-temp + rename so concurrent saves cannot corrupt `config.local.json`
@@ -19,7 +20,13 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **Input validation** (`app/api/transmission/add/route.ts`): `mediaType`, `season`, `title` (max 500 chars), and `year` (1888–3000) are now validated and rejected with 400 on bad input
 
 ### Fixed
+- **Stream reader leak** (`app/api/chat/route.ts`): Upstream LLM stream reader is now cancelled in a `finally` block when the client disconnects, preventing wasted tokens and bandwidth
+- **Stale closure in DownloadTracker** (`components/DownloadTracker.tsx`): `fetchStatus` callback now includes all referenced props in its dependency array, fixing stale `torrentName`/`year`/callback captures
+- **Inline function identity** (`components/DownloadsPanel.tsx`): Extracted `DownloadTrackerWrapper` with `useCallback`-memoized `onComplete` to prevent poll timer resets on every parent render
 - **File move data loss** (`lib/moveFiles.ts`): On `unlink` failure the rollback no longer deletes the already-copied destination — the copy is kept and the error is logged
+
+### Changed
+- **Update script hardened** (`update.sh`): Added PID-based lock file to prevent concurrent cron runs, `set -euo pipefail` for strict error handling, dirty-worktree detection with stash option, rollback on pull/install/build failure, and post-restart health check polling `/api/setup/status`
 
 ### Refactored
 - **Shared request utilities** (`lib/requestBody.ts`, `lib/requestIp.ts`, `lib/randomId.ts`): Extracted into standalone modules used by all routes
@@ -29,7 +36,7 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **Recommendation card composition** (`components/RecommendationCard.tsx`, `hooks/useRecommendationCardState.ts`, `components/recommendation/`): Card is now ~120-line layout/wiring; fetch logic and UI sections are fully separated
 
 ### Tests
-- 26 test files / 464 tests passing
+- 29 test files / 544 tests passing — new suites: middleware IP validation (33 tests), OAuth CSRF flows (12 tests), system prompt routing (7 tests); expanded: chat-tags (+16), ThinkFilter streaming (+5), moveFiles path traversal (+7)
 
 ---
 

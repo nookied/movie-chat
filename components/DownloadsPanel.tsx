@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { ActiveDownload } from '@/types';
 import DownloadTracker from './DownloadTracker';
 
@@ -8,6 +8,30 @@ interface Props {
   downloads: ActiveDownload[];
   onMoved: (name: string, year?: number) => void;
   onComplete: (torrentId: number) => void;
+}
+
+// Thin wrapper that memoizes the onComplete binding per torrent ID so
+// DownloadTracker receives a stable function reference across re-renders.
+function DownloadTrackerWrapper({
+  download,
+  onMoved,
+  onComplete,
+}: {
+  download: ActiveDownload;
+  onMoved: (name: string, year?: number) => void;
+  onComplete: (torrentId: number) => void;
+}) {
+  const handleComplete = useCallback(
+    () => onComplete(download.torrentId),
+    [onComplete, download.torrentId],
+  );
+  return (
+    <DownloadTracker
+      download={download}
+      onMoved={onMoved}
+      onComplete={handleComplete}
+    />
+  );
 }
 
 export default function DownloadsPanel({ downloads, onMoved, onComplete }: Props) {
@@ -65,11 +89,11 @@ export default function DownloadsPanel({ downloads, onMoved, onComplete }: Props
           style={{ maxHeight: '40vh' }}
         >
           {downloads.map((dl) => (
-            <DownloadTracker
+            <DownloadTrackerWrapper
               key={dl.torrentId}
               download={dl}
               onMoved={onMoved}
-              onComplete={() => onComplete(dl.torrentId)}
+              onComplete={onComplete}
             />
           ))}
         </div>
