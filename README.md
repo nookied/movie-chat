@@ -1,6 +1,6 @@
 # Movie Chat
 
-**v2.1.0** — An AI companion that manages your Plex library. Tell it what you want to watch — it handles the rest.
+**v2.2.0** — An AI companion that manages your Plex library. Tell it what you want to watch — it handles the rest.
 
 **Website:** [nookied.github.io/movie-chat](https://nookied.github.io/movie-chat)
 
@@ -222,6 +222,7 @@ The app is restricted to your local network — requests from outside are blocke
 ```
 Browser
   └── ChatInterface (Next.js / React)
+        ├── useChatHistory / useChatSendMessage / useAppDownloads
         ├── Direct title lookup
         │     └── quoted / explicit title inputs → local recommendation tag
         ├── Sends messages to /api/chat
@@ -229,10 +230,11 @@ Browser
         │     └── Ollama (local fallback — server-side after retries,
         │                 or client-side if OpenRouter streams nothing)
         ├── RecommendationCard
+        │     ├── useRecommendationCardState
         │     ├── /api/plex/check      → is it in the library?
         │     ├── /api/reviews         → TMDB metadata + OMDB ratings
         │     ├── /api/torrents/search → YTS (movies) / Knaben (TV) availability
-        │     └── Download button      → triggers triggerDownload()
+        │     └── Download button      → triggers shared download hook
         └── DownloadTracker
               ├── /api/transmission/add    → start download
               ├── /api/transmission/status → poll progress (cross-device)
@@ -412,7 +414,7 @@ npm run dev            # development server with hot reload (port 3001)
 npm run build          # production build (includes standalone output)
 npm run start          # production server (requires a build first)
 npm run lint           # ESLint
-npm test               # run the test suite (152 tests)
+npm test               # run the test suite (464 tests)
 npm run electron:dev   # launch Electron app in dev mode (requires build first)
 npm run electron:build # build macOS .dmg in dist-electron/
 npm run release        # build + publish to GitHub Releases (needs GH_TOKEN)

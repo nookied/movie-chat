@@ -5,6 +5,7 @@
  * - GET returns effective config with SENSITIVE fields masked "set"/""
  * - GET includes diagnosticsToken unmasked (needed by Settings UI)
  * - POST merges incoming fields into config
+ * - POST rejects malformed / oversized / invalid bodies
  * - POST preserves existing sensitive value when client sends the "set" placeholder
  * - POST clears a field when client sends empty string
  * - POST rejects public/non-RFC1918 URL fields (SSRF defence)
@@ -38,6 +39,14 @@ function postReq(body: unknown): NextRequest {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+  }) as unknown as NextRequest;
+}
+
+function rawPostReq(body: string, headers: Record<string, string> = {}): NextRequest {
+  return new Request('http://localhost/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body,
   }) as unknown as NextRequest;
 }
 
@@ -152,6 +161,24 @@ describe('POST /api/config — merging', () => {
     const written = writeConfigMock.mock.calls[0][0];
     expect(written.ollamaModel).toBeUndefined();
     expect(written.plexToken).toBe('secret'); // unrelated fields preserved
+  });
+
+  it('returns 400 on malformed JSON bodies', async () => {
+    const res = await POST(rawPostReq('{'));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/malformed json/i);
+  });
+
+  it('returns 413 on oversized JSON bodies', async () => {
+    const huge = `"${'x'.repeat(70_000)}"`;
+    const res = await POST(rawPostReq(huge, { 'Content-Length': String(huge.length) }));
+    expect(res.status).toBe(413);
+  });
+
+  it('returns 400 when a config field is not a string', async () => {
+    const res = await POST(postReq({ ollamaModel: 123 }));
+    expect(res.status).toBe(400);
+    expect(writeConfigMock).not.toHaveBeenCalled();
   });
 });
 

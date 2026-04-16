@@ -32,6 +32,14 @@ function postReq(body: unknown): NextRequest {
   }) as unknown as NextRequest;
 }
 
+function rawPostReq(body: string, headers: Record<string, string> = {}): NextRequest {
+  return new Request('http://localhost/api/files/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body,
+  }) as unknown as NextRequest;
+}
+
 let POST: typeof import('@/app/api/files/move/route').POST;
 
 beforeEach(async () => {
@@ -49,6 +57,32 @@ describe('POST /api/files/move', () => {
 
   it('returns 400 when torrentId is not a number', async () => {
     const res = await POST(postReq({ torrentId: 'abc' }));
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 on malformed JSON', async () => {
+    const res = await POST(rawPostReq('{'));
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 413 on oversized JSON', async () => {
+    const huge = `"${'x'.repeat(70_000)}"`;
+    const res = await POST(rawPostReq(huge, { 'Content-Length': String(huge.length) }));
+    expect(res.status).toBe(413);
+  });
+
+  it('returns 400 when mediaType is invalid', async () => {
+    const res = await POST(postReq({ torrentId: 5, mediaType: 'anime' }));
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when season is negative', async () => {
+    const res = await POST(postReq({ torrentId: 5, mediaType: 'tv', season: -1 }));
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when season is provided for a non-TV move', async () => {
+    const res = await POST(postReq({ torrentId: 5, mediaType: 'movie', season: 1 }));
     expect(res.status).toBe(400);
   });
 

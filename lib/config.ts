@@ -57,7 +57,11 @@ export function readConfig(): AppConfig {
 
 export function writeConfig(config: AppConfig): void {
   configCache = null; // invalidate so the next read picks up the new values
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+  const dir = path.dirname(CONFIG_PATH);
+  const tempPath = path.join(dir, `.config.${process.pid}.${Date.now()}.tmp`);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(tempPath, JSON.stringify(config, null, 2), 'utf-8');
+  fs.renameSync(tempPath, CONFIG_PATH);
 }
 
 /** Read a config value: config.local.json first, then env var, then default. */

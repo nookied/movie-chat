@@ -34,13 +34,18 @@ function cleanTvFolderName(raw: string): string {
 // relative segment that escapes assertWithinDir (belt-and-suspenders — the
 // check already catches this, but defence in depth is cheap here).
 function sanitizeName(name: string): string {
-  return name.replace(/[/\\]/g, '-').trim() || 'Unknown';
+  const cleaned = name.replace(/[/\\]/g, '-').trim();
+  if (!cleaned || cleaned === '.' || cleaned === '..') return 'Unknown';
+  return cleaned;
 }
 
 // Throws if filePath resolves outside the allowed parent directory.
-function assertWithinDir(filePath: string, dir: string): void {
+function assertWithinDir(filePath: string, dir: string, allowSameDir = true): void {
   const resolved = path.resolve(filePath);
   const resolvedDir = path.resolve(dir);
+  if (!allowSameDir && resolved === resolvedDir) {
+    throw new Error('Path traversal detected: file is outside allowed directory');
+  }
   if (resolved !== resolvedDir && !resolved.startsWith(resolvedDir + path.sep)) {
     throw new Error('Path traversal detected: file is outside allowed directory');
   }
@@ -164,14 +169,11 @@ async function _moveTorrentFiles(
 
     await fs.copyFile(sourcePath, destPath);
 
-    // If the delete fails, roll back by removing the destination copy so the
-    // file remains in exactly one place rather than being duplicated.
     try {
       await fs.unlink(sourcePath);
     } catch (unlinkErr) {
-      try { await fs.unlink(destPath); } catch { /* best-effort rollback */ }
       throw new Error(
-        `Copied ${fileName} but failed to remove source: ${unlinkErr instanceof Error ? unlinkErr.message : unlinkErr}`,
+        `Copied ${fileName} but failed to remove source (destination kept): ${unlinkErr instanceof Error ? unlinkErr.message : unlinkErr}`,
       );
     }
 
@@ -186,6 +188,7 @@ async function _moveTorrentFiles(
   if (status.name) {
     const torrentFolder = path.join(DOWNLOAD_DIR, status.name);
     try {
+      assertWithinDir(torrentFolder, DOWNLOAD_DIR, false);
       await fs.rm(torrentFolder, { recursive: true, force: true });
     } catch { /* folder may not exist — ignore */ }
   }

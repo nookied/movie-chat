@@ -83,8 +83,14 @@ describe('getAppTorrentMeta()', () => {
 
   it('stores year when provided', async () => {
     const { registerAppTorrent, getAppTorrentMeta } = await fresh();
-    registerAppTorrent(20, 'movie', undefined, 2024);
+    registerAppTorrent(20, 'movie', undefined, undefined, 2024);
     expect(getAppTorrentMeta(20)?.year).toBe(2024);
+  });
+
+  it('stores title when provided', async () => {
+    const { registerAppTorrent, getAppTorrentMeta } = await fresh();
+    registerAppTorrent(21, 'tv', 2, 'Severance', 2025);
+    expect(getAppTorrentMeta(21)?.title).toBe('Severance');
   });
 
   it('stores registeredAt timestamp on registration', async () => {

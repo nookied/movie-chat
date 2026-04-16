@@ -45,6 +45,8 @@ beforeEach(async () => {
   vi.resetModules();
   fsMock.readFileSync.mockReset();
   fsMock.writeFileSync.mockReset();
+  fsMock.renameSync.mockReset();
+  fsMock.mkdirSync.mockReset();
   delete process.env.CONFIG_PATH;
   const mod = await import('@/lib/config');
   readConfig = mod.readConfig;
@@ -83,11 +85,13 @@ describe('readConfig', () => {
 });
 
 describe('writeConfig', () => {
-  it('writes JSON to disk', () => {
+  it('writes JSON to a temp file and renames it atomically', () => {
     writeConfig({ ollamaModel: 'llama3.2' });
+    expect(fsMock.mkdirSync).toHaveBeenCalledTimes(1);
     expect(fsMock.writeFileSync).toHaveBeenCalledTimes(1);
     const written = fsMock.writeFileSync.mock.calls[0][1] as string;
     expect(JSON.parse(written)).toEqual({ ollamaModel: 'llama3.2' });
+    expect(fsMock.renameSync).toHaveBeenCalledTimes(1);
   });
 
   it('invalidates cache so next read hits disk', () => {

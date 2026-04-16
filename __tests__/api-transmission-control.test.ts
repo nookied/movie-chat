@@ -35,6 +35,14 @@ function postReq(body: unknown): NextRequest {
   }) as unknown as NextRequest;
 }
 
+function rawPostReq(body: string, headers: Record<string, string> = {}): NextRequest {
+  return new Request('http://localhost/api/transmission/control', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body,
+  }) as unknown as NextRequest;
+}
+
 let POST: typeof import('@/app/api/transmission/control/route').POST;
 
 beforeEach(async () => {
@@ -52,6 +60,19 @@ describe('POST /api/transmission/control', () => {
   it('returns 400 when id or action is missing', async () => {
     expect((await POST(postReq({ action: 'pause' }))).status).toBe(400);
     expect((await POST(postReq({ id: 1 }))).status).toBe(400);
+  });
+
+  it('returns 400 on malformed JSON', async () => {
+    expect((await POST(rawPostReq('{'))).status).toBe(400);
+  });
+
+  it('returns 413 on oversized JSON', async () => {
+    const huge = `"${'x'.repeat(70_000)}"`;
+    expect((await POST(rawPostReq(huge, { 'Content-Length': String(huge.length) }))).status).toBe(413);
+  });
+
+  it('returns 400 when id is not a positive integer', async () => {
+    expect((await POST(postReq({ id: 0, action: 'pause' }))).status).toBe(400);
   });
 
   it('returns 403 when the torrent is not managed by this app', async () => {

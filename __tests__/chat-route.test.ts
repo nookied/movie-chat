@@ -37,6 +37,14 @@ function makeReq(body: unknown, ip = '1.2.3.4'): NextRequest {
   }) as unknown as NextRequest;
 }
 
+function makeRawReq(body: string, headers: Record<string, string> = {}): NextRequest {
+  return new Request('http://localhost/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body,
+  }) as unknown as NextRequest;
+}
+
 function sseResponse(tokens: string[]): Response {
   const encoder = new TextEncoder();
   const body = new ReadableStream({
@@ -106,6 +114,31 @@ describe('input validation', () => {
     const res = await POST(makeReq({ messages: 'not-an-array' }, '10.0.0.2'));
     expect(res.status).toBe(400);
   });
+
+  it('returns 400 on malformed JSON', async () => {
+    cfgMock.mockReturnValue('');
+    const res = await POST(makeRawReq('{', { 'x-forwarded-for': '10.0.0.3' }));
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 413 on oversized JSON', async () => {
+    cfgMock.mockReturnValue('');
+    const huge = `"${'x'.repeat(70_000)}"`;
+    const res = await POST(makeRawReq(huge, {
+      'Content-Length': String(huge.length),
+      'x-forwarded-for': '10.0.0.4',
+    }));
+    expect(res.status).toBe(413);
+  });
+
+  it('returns 400 when forceOllama is not a boolean', async () => {
+    cfgMock.mockReturnValue('');
+    const res = await POST(makeReq({
+      messages: [{ role: 'user', content: 'hi' }],
+      forceOllama: 'yes',
+    }, '10.0.0.5'));
+    expect(res.status).toBe(400);
+  });
 });
 
 // ─── Rate limiting ───────────────────────────────────────────────────────
@@ -140,6 +173,16 @@ describe('rate limiting', () => {
     }) as unknown as NextRequest;
     const res = await POST(req);
     expect(res.status).toBe(400);
+  });
+
+  it('uses the last x-forwarded-for hop for rate limiting instead of a spoofed first hop', async () => {
+    cfgMock.mockReturnValue('');
+    for (let i = 0; i < 30; i++) {
+      await POST(makeRawReq(JSON.stringify({}), { 'x-forwarded-for': `8.8.8.8, 9.9.9.9` }));
+    }
+    const res = await POST(makeReq({}, '9.9.9.9'));
+    expect(res.status).toBe(429);
+    expect(logMock.warn).toHaveBeenCalledWith('rate limited', expect.objectContaining({ ip: '9.9.9.9' }));
   });
 });
 

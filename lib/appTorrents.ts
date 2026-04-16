@@ -15,6 +15,7 @@ import path from 'path';
 export interface AppTorrentMeta {
   mediaType?: 'movie' | 'tv';
   season?: number;
+  title?: string;
   year?: number;
   registeredAt?: number; // Unix ms — used by the cleanup poller to skip recently-added entries
 }
@@ -74,10 +75,11 @@ export function registerAppTorrent(
   id: number,
   mediaType?: 'movie' | 'tv',
   season?: number,
+  title?: string,
   year?: number,
 ): void {
   const m = loadCache();
-  m.set(id, { mediaType, season, year, registeredAt: Date.now() });
+  m.set(id, { mediaType, season, title, year, registeredAt: Date.now() });
   flushCache(m);
 }
 

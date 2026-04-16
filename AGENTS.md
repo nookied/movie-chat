@@ -19,13 +19,15 @@
 | `REFACTOR_RECOMMENDATIONS.md` | Phased high-value refactor plan — recommendation flow split, chat-state extraction, route modularization, config workflow consolidation |
 | `lib/logger.ts` | Structured JSONL logger — daily rotation, 7-day retention, 32 KB entry / 50 MB file caps |
 | `app/api/diagnostics/bundle/route.ts` | GET endpoint — token-gated zip-less JSON bundle (logs + redacted config + version) |
-| `components/ChatInterface.tsx` | Main state machine — streams LLM, handles silent retry, uses shared tag helpers |
-| `components/RecommendationCard.tsx` | Fires 3 parallel checks (Plex/reviews/YTS) on mount; post-move Plex re-check |
+| `components/ChatInterface.tsx` | Chat composition root — wires history, streaming, downloads, and message rendering together |
+| `hooks/useChatSendMessage.ts` | Streaming chat request orchestration — retry/backoff, Ollama fallback, silent recommendation-tag retry |
+| `components/RecommendationCard.tsx` | Thin recommendation renderer — movie/TV sections sit on top of `useRecommendationCardState()` |
+| `hooks/useRecommendationCardState.ts` | Recommendation card data hook — Plex/reviews/torrent fetches, TV season selection, post-move Plex re-check |
 | `components/DownloadTracker.tsx` | Polls `/api/transmission/status` every 5s; read-only, no client-side move logic |
 | `lib/transmission.ts` | Transmission RPC with session-ID handshake (always 409 first) |
 | `lib/moveFiles.ts` | Core file-move logic — shared between HTTP route and autoMove poller |
 | `lib/autoMove.ts` | Server-side background poller — moves one torrent at a time with 15s gap |
-| `lib/appTorrents.ts` | In-memory + on-disk registry of app torrent IDs + mediaType/season metadata |
+| `lib/appTorrents.ts` | In-memory + on-disk registry of app torrent IDs + mediaType/season/title metadata |
 | `lib/config.ts` | `cfg()` helper — 30s in-memory cache avoids per-request sync disk reads |
 | `lib/yts.ts` | YTS torrent search + magnet link builder (movies) |
 | `lib/eztv.ts` | Knaben/EZTV torrent search + quality scoring (TV) |
@@ -77,8 +79,8 @@ Four mechanisms compensate for unreliable tag emission from small/free LLMs:
 
 1. **Deterministic direct-title shortcut** (`lib/directTitleLookup.ts` → `route.ts`): Quoted titles and explicit title declarations skip the model entirely and emit the recommendation tag immediately.
 2. **Few-shot seeding** (`route.ts` → `SEED_MESSAGES`): Synthetic exchanges are prepended to every conversation, including a quoted-title lookup, so the model sees itself already producing correct tags.
-3. **Prescriptive info messages** (`ChatInterface.tsx`): Instead of teaching the model 6 response patterns, each `[System]` message includes the exact wording to use. Moves decision logic from the LLM to app code.
-4. **Silent tag retry** (`ChatInterface.tsx` → `sendMessage()`): After streaming, if no `<recommendation>` tag is found and the response is substantive, a background follow-up nudges the model to emit the tag. The card appears with a brief delay.
+3. **Prescriptive info messages** (`lib/chat/systemMessages.ts` + `ChatInterface.tsx`): Instead of teaching the model 6 response patterns, each `[System]` message includes the exact wording to use. Moves decision logic from the LLM to app code.
+4. **Silent tag retry** (`hooks/useChatSendMessage.ts`): After streaming, if no `<recommendation>` tag is found and the response is substantive, a background follow-up nudges the model to emit the tag. The card appears with a brief delay.
 
 ## Electron desktop app
 
@@ -100,6 +102,8 @@ The setup wizard (`app/setup/page.tsx`) serves dual purpose: post-install guided
 - TMDB/OMDB fetches use `{ next: { revalidate: METADATA_CACHE_SECONDS } }` — 8h TTL (constant defined in each module)
 - `lib/appTorrents.ts` uses a 30s TTL cache so the autoMove poller (separate Next.js bundle) picks up new registrations within one cache window
 - `lib/chatTags.ts` centralises chat-tag parsing/stripping so `Message`, `ChatInterface`, and the route stay in sync when tag formats evolve
+- The refactored client hooks abort in-flight fetches/timers on unmount; preserve that cleanup when extending `useChatSendMessage`, `useAppDownloads`, or `useRecommendationCardState`
+- `components/chat/` and `components/recommendation/` now hold the presentational pieces; the heavier orchestration lives in `hooks/`
 - AutoMove poller: serialised moves, 15s gap between each to avoid I/O spikes
 - Post-move Plex re-check: 2 min → 10 min → 60 min backoff; stops early once Plex confirms; all timeouts cancelled on unmount
 - Card year display comes from TMDB (`ReviewData.year`), not the LLM — `RecommendationCard` shows `reviews?.year ?? year`
@@ -130,7 +134,7 @@ Map out the architecture before attempting fixes: what services are involved, wh
 
 ## Testing
 
-`npm test` (Vitest, Node env). 23 test files under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, and the logger/diagnostics surfaces. Conventions:
+`npm test` (Vitest, Node env). 25 test files under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, and the logger/diagnostics surfaces. Conventions:
 
 - Mock `fs` with `vi.mock('fs', () => ({ default: fsMock, ...fsMock }))` so both ESM and CJS imports see the mock.
 - `vi.resetModules()` in `beforeEach` so module-level state (rate-limit map, logger caches, etc.) is fresh per test.

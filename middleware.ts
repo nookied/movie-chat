@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractRequestIp, isLocalAddress } from '@/lib/requestIp';
 
 /**
  * Local-network access guard.
@@ -13,27 +14,10 @@ import { NextRequest, NextResponse } from 'next/server';
  *
  * Everything else gets a 403.
  */
-function isLocalAddress(ip: string): boolean {
-  if (!ip) return false;
 
-  // Strip IPv4-mapped IPv6 prefix so the rest of the checks work uniformly
-  const addr = ip.replace(/^::ffff:/i, '');
-
-  // IPv6 loopback
-  if (addr === '::1') return true;
-
-  // IPv4 checks
-  const parts = addr.split('.').map(Number);
-  if (parts.length !== 4 || parts.some(isNaN)) return false;
-  const [a, b] = parts;
-
-  return (
-    a === 127 ||                          // 127.0.0.0/8  loopback
-    a === 10 ||                           // 10.0.0.0/8
-    (a === 172 && b >= 16 && b <= 31) ||  // 172.16.0.0/12
-    (a === 192 && b === 168)              // 192.168.0.0/16
-  );
-}
+const INTERNAL_APP_ORIGIN =
+  process.env.INTERNAL_APP_ORIGIN ??
+  `http://127.0.0.1:${process.env.PORT ?? '3000'}`;
 
 // Paths exempt from setup redirect — these must work before config exists
 const SETUP_EXEMPT = ['/setup', '/settings', '/api/', '/_next/', '/favicon.ico', '/icon', '/apple-icon', '/manifest'];
@@ -44,7 +28,8 @@ export function middleware(req: NextRequest) {
   const isExempt = SETUP_EXEMPT.some((p) => path.startsWith(p));
   if (!isExempt && !req.cookies.has('movie-chat-configured')) {
     // No cookie → check config via internal API (avoids fs in Edge runtime)
-    const statusUrl = new URL('/api/setup/status', req.url);
+    // without reflecting the client-controlled Host header back into fetch().
+    const statusUrl = new URL('/api/setup/status', INTERNAL_APP_ORIGIN);
     return fetch(statusUrl, { cache: 'no-store' })
       .then((res) => res.json())
       .then((data: { complete?: boolean }) => {
@@ -66,14 +51,7 @@ export function middleware(req: NextRequest) {
   const host = (req.headers.get('host') ?? '').split(':')[0];
   if (host.endsWith('.local')) return NextResponse.next();
 
-  // Next.js 15+ no longer exposes req.ip; read from standard proxy / forwarded headers
-  // (Next.js's own server populates x-forwarded-for for direct connections too)
-  const raw =
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    req.headers.get('x-real-ip') ??
-    '';
-
-  if (isLocalAddress(raw)) return NextResponse.next();
+  if (isLocalAddress(extractRequestIp(req.headers))) return NextResponse.next();
 
   // Return a minimal HTML page for browser requests, plain text for API calls
   const wantHtml = req.headers.get('accept')?.includes('text/html');

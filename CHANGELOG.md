@@ -8,6 +8,31 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 
 ---
 
+## [2.2.0] — 2026-04-16
+
+### Security
+- **Body size limit + JSON error handling** (`lib/requestBody.ts`): All POST routes now reject requests over 64 KB (413) and return 400 on malformed JSON instead of a 500 with stack trace
+- **IP spoofing hardened** (`lib/requestIp.ts`): LAN guard and rate limiter now use the last hop of `X-Forwarded-For` instead of the first, preventing client-controlled header bypass
+- **Atomic config writes** (`lib/config.ts`): `writeConfig` now uses write-to-temp + rename so concurrent saves cannot corrupt `config.local.json`
+- **Path traversal guard on file delete** (`lib/moveFiles.ts`): `assertWithinDir` check added before `fs.rm` prevents a maliciously-named torrent from wiping the download directory
+- **Middleware SSRF fix** (`middleware.ts`): Internal setup-status URL now uses a fixed `http://127.0.0.1:<PORT>` base instead of reflecting the client-supplied Host header
+- **Input validation** (`app/api/transmission/add/route.ts`): `mediaType`, `season`, `title` (max 500 chars), and `year` (1888–3000) are now validated and rejected with 400 on bad input
+
+### Fixed
+- **File move data loss** (`lib/moveFiles.ts`): On `unlink` failure the rollback no longer deletes the already-copied destination — the copy is kept and the error is logged
+
+### Refactored
+- **Shared request utilities** (`lib/requestBody.ts`, `lib/requestIp.ts`, `lib/randomId.ts`): Extracted into standalone modules used by all routes
+- **Media key utilities** (`lib/mediaKeys.ts`): Title normalisation, torrent/download key generation, and capped-set helpers centralised in one pure-function module
+- **System messages** (`lib/chat/systemMessages.ts`): All `[System]` message strings consolidated out of `ChatInterface.tsx`
+- **Chat composition** (`components/ChatInterface.tsx`, `hooks/`): `ChatInterface` is now a ~120-line composition root; all streaming/download/history logic lives in focused hooks with AbortController cleanup
+- **Recommendation card composition** (`components/RecommendationCard.tsx`, `hooks/useRecommendationCardState.ts`, `components/recommendation/`): Card is now ~120-line layout/wiring; fetch logic and UI sections are fully separated
+
+### Tests
+- 26 test files / 464 tests passing
+
+---
+
 ## [2.1.0] — 2026-04-16
 
 ### Added
@@ -22,11 +47,20 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 
 ### Refactored
 - **Chat tag parsing** (`lib/chatTags.ts`, `components/ChatInterface.tsx`, `components/Message.tsx`): Shared `<recommendation>` / `<download>` parsing, stripping, and tag serialization extracted into one utility module
+- **Chat interface composition** (`components/ChatInterface.tsx`, `hooks/useChatHistory.ts`, `hooks/useChatSendMessage.ts`, `hooks/useAppDownloads.ts`, `hooks/usePendingTorrents.ts`, `hooks/useDownloadTrigger.ts`, `components/chat/`): The chat UI now composes focused hooks/components for history persistence, streaming, download orchestration, and message rendering instead of keeping one large client-side state machine
+- **Recommendation card composition** (`components/RecommendationCard.tsx`, `hooks/useRecommendationCardState.ts`, `components/recommendation/`): Recommendation fetching/retry logic was extracted into a dedicated hook and split into focused movie/TV/status UI sections without changing movie-vs-TV behaviour
 - **Settings disk usage UI** (`app/settings/page.tsx`): Repeated disk-space fetch/render logic extracted into a reusable hook and summary component
 - **Refactor planning docs** (`REFACTOR_RECOMMENDATIONS.md`, `AGENTS.md`, `CLAUDE.md`, `HANDOFF.md`): Maintainer docs now point to a recommended next-pass refactor order instead of leaving the hotspots implicit
 
+### Fixed
+- **Unmounted chat updates** (`hooks/useChatSendMessage.ts`): Streaming chat requests, fallback requests, and retry timers are now aborted on unmount so the rewritten chat flow does not keep updating dead state
+- **Stale TV season responses** (`hooks/useRecommendationCardState.ts`): Rapid season changes now cancel/ignore older torrent lookups so an earlier response cannot overwrite a newer selection
+- **Post-move/request cleanup** (`hooks/useRecommendationCardState.ts`, `hooks/useAppDownloads.ts`): Recheck fetches and download-sync polling now clean up in-flight requests on teardown, reducing leak risk in the refactored client flow
+- **TV download tracking drift** (`lib/appTorrents.ts`, `app/api/transmission/add/route.ts`, `hooks/useAppDownloads.ts`, `lib/mediaKeys.ts`): App-managed torrents now persist canonical title metadata so TV downloads keep matching their recommendation cards and post-move "On Plex" forcing works reliably
+- **Stuck download CTA state** (`hooks/useDownloadTrigger.ts`, `hooks/useRecommendationCardState.ts`): Movie/TV cards now reset their local "Starting…" state when a download is skipped or fails instead of staying disabled indefinitely
+
 ### Tests
-- Added dedicated coverage for shared chat-tag helpers and direct-title lookup flows; suite now stands at 23 test files / 417 tests
+- Current validation after the refactor/debug pass: 25 test files / 437 tests passing, plus a successful production build
 
 ---
 

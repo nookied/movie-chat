@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AppConfig, cfg, readConfig, writeConfig, SENSITIVE } from '@/lib/config';
+import { isPlainObject, readJsonBody, RequestBodyError } from '@/lib/requestBody';
 import fs from 'fs';
 import path from 'path';
 
@@ -67,7 +68,20 @@ export async function GET() {
 
 /** POST — merge incoming fields into config.local.json */
 export async function POST(req: NextRequest) {
-  const body = await req.json() as Partial<Record<string, string>>;
+  let body: Partial<Record<string, unknown>>;
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  }
+
+  if (!isPlainObject(body)) {
+    return NextResponse.json({ error: 'JSON object body required' }, { status: 400 });
+  }
+
   const existing = readConfig();
 
   const updated: AppConfig = { ...existing };
@@ -84,6 +98,9 @@ export async function POST(req: NextRequest) {
   for (const key of fields) {
     const value = body[key];
     if (value === undefined) continue; // not sent — keep existing
+    if (typeof value !== 'string') {
+      return NextResponse.json({ error: `${key} must be a string` }, { status: 400 });
+    }
 
     if (SENSITIVE.includes(key as keyof AppConfig) && value === 'set') {
       // Client sent back the placeholder — don't overwrite

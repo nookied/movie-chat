@@ -4,6 +4,8 @@ import { getLogger } from '@/lib/logger';
 import { getSystemPrompt, isGemmaModel } from '@/lib/chatPrompts';
 import { extractDirectTitleLookup } from '@/lib/directTitleLookup';
 import { recommendationTag } from '@/lib/chatTags';
+import { extractRequestIp } from '@/lib/requestIp';
+import { isPlainObject, readJsonBody, RequestBodyError } from '@/lib/requestBody';
 
 const log = getLogger('llm');
 
@@ -68,10 +70,7 @@ const RETRY_DELAYS_MS = [500, 1000, 2000];
 
 export async function POST(req: NextRequest) {
   // Rate limit by IP — prevents runaway cost if app is exposed on LAN
-  const ip =
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    req.headers.get('x-real-ip') ??
-    'unknown';
+  const ip = extractRequestIp(req.headers);
   if (!checkRateLimit(ip)) {
     log.warn('rate limited', { ip });
     return NextResponse.json(
@@ -80,7 +79,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = await req.json();
+  let body: unknown;
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  }
+
+  if (!isPlainObject(body)) {
+    return NextResponse.json({ error: 'JSON object body required' }, { status: 400 });
+  }
+
   const { messages, forceOllama } = body as {
     messages: Array<{ role: string; content: string }>;
     forceOllama?: boolean;
@@ -88,6 +100,12 @@ export async function POST(req: NextRequest) {
 
   if (!messages || !Array.isArray(messages)) {
     return NextResponse.json({ error: 'messages array required' }, { status: 400 });
+  }
+  if (!messages.every((message) => isPlainObject(message) && typeof message.role === 'string' && typeof message.content === 'string')) {
+    return NextResponse.json({ error: 'messages must contain { role, content } objects' }, { status: 400 });
+  }
+  if (forceOllama !== undefined && typeof forceOllama !== 'boolean') {
+    return NextResponse.json({ error: 'forceOllama must be a boolean' }, { status: 400 });
   }
 
   const trimmedMessages = trimHistory(messages);

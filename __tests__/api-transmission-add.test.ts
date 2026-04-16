@@ -24,6 +24,14 @@ function postReq(body: unknown): NextRequest {
   }) as unknown as NextRequest;
 }
 
+function rawPostReq(body: string, headers: Record<string, string> = {}): NextRequest {
+  return new Request('http://localhost/api/transmission/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body,
+  }) as unknown as NextRequest;
+}
+
 const SHA1_HEX = '0123456789abcdef0123456789abcdef01234567'; // 40 hex chars
 const V2_BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; // 32 upper base32 chars
 
@@ -69,6 +77,17 @@ describe('POST /api/transmission/add — magnet validation', () => {
     const res = await POST(postReq({ magnet: `magnet:?dn=foo&tr=http://x` }));
     expect(res.status).toBe(400);
   });
+
+  it('rejects malformed JSON bodies', async () => {
+    const res = await POST(rawPostReq('{'));
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects oversized JSON bodies', async () => {
+    const huge = `"${'x'.repeat(70_000)}"`;
+    const res = await POST(rawPostReq(huge, { 'Content-Length': String(huge.length) }));
+    expect(res.status).toBe(413);
+  });
 });
 
 describe('POST /api/transmission/add — registry + errors', () => {
@@ -78,9 +97,37 @@ describe('POST /api/transmission/add — registry + errors', () => {
       magnet: `magnet:?xt=urn:btih:${SHA1_HEX}`,
       mediaType: 'tv',
       season: 3,
+      title: 'Severance',
       year: 2024,
     }));
-    expect(registerAppTorrentMock).toHaveBeenCalledWith(99, 'tv', 3, 2024);
+    expect(registerAppTorrentMock).toHaveBeenCalledWith(99, 'tv', 3, 'Severance', 2024);
+  });
+
+  it('rejects invalid media metadata before touching Transmission', async () => {
+    const res = await POST(postReq({
+      magnet: `magnet:?xt=urn:btih:${SHA1_HEX}`,
+      mediaType: 'movie',
+      season: 1,
+    }));
+    expect(res.status).toBe(400);
+    expect(addTorrentMock).not.toHaveBeenCalled();
+  });
+
+  it('requires a season for TV downloads', async () => {
+    const res = await POST(postReq({
+      magnet: `magnet:?xt=urn:btih:${SHA1_HEX}`,
+      mediaType: 'tv',
+      title: 'Severance',
+    }));
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects overlong titles', async () => {
+    const res = await POST(postReq({
+      magnet: `magnet:?xt=urn:btih:${SHA1_HEX}`,
+      title: 'x'.repeat(501),
+    }));
+    expect(res.status).toBe(400);
   });
 
   it('returns 502 with the library error message when addTorrent fails', async () => {

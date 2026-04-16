@@ -2,15 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import { pauseTorrent, resumeTorrent, removeTorrent } from '@/lib/transmission';
 import { isAppTorrent, unregisterAppTorrent } from '@/lib/appTorrents';
 import { getLogger } from '@/lib/logger';
+import { isPlainObject, readJsonBody, RequestBodyError } from '@/lib/requestBody';
 
 const log = getLogger('transmission');
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  let body: unknown;
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  }
+
+  if (!isPlainObject(body)) {
+    return NextResponse.json({ error: 'JSON object body required' }, { status: 400 });
+  }
+
   const { id, action } = body as { id: number; action: 'pause' | 'resume' | 'remove' };
 
-  if (!id || !action) {
+  if (!Number.isInteger(id) || id < 1 || typeof action !== 'string') {
     return NextResponse.json({ error: 'id and action required' }, { status: 400 });
+  }
+  if (action !== 'pause' && action !== 'resume' && action !== 'remove') {
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   }
 
   // Only allow controlling torrents that were added through this app
@@ -25,7 +42,6 @@ export async function POST(req: NextRequest) {
       await removeTorrent(id, true); // delete partial files from disk on cancel
       unregisterAppTorrent(id); // clean up the persistent registry
     }
-    else return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

@@ -10,7 +10,7 @@
  * - Extension allowlist (media + subtitles, junk skipped)
  * - Symlink skip
  * - Path-traversal defence
- * - Unlink-failure rollback (copied file is removed)
+ * - Unlink-failure safety (destination copy is kept)
  * - Transmission + registry cleanup after a successful move
  * - Plex refresh fire-and-forget
  */
@@ -278,10 +278,10 @@ describe('concurrent-move prevention', () => {
   });
 });
 
-// ─── Rollback on unlink failure ─────────────────────────────────────────
+// ─── Unlink failure safety ──────────────────────────────────────────────
 
-describe('rollback on unlink failure', () => {
-  it('removes the destination copy when source unlink fails (no duplication)', async () => {
+describe('unlink failure safety', () => {
+  it('keeps the destination copy when source unlink fails', async () => {
     getTorrentStatusMock.mockResolvedValue(
       torrentStatus({ files: [{ name: 'movie.mkv', length: 1, bytesCompleted: 1 }] })
     );
@@ -290,12 +290,10 @@ describe('rollback on unlink failure', () => {
       return undefined;
     });
 
-    await expect(moveTorrentFiles(1, 'movie')).rejects.toThrow(/failed to remove source/);
+    await expect(moveTorrentFiles(1, 'movie')).rejects.toThrow(/destination kept/);
 
-    // Rollback: dest should have been unlinked. unlink was called at least twice
-    // (once for source → threw, once for dest → rollback).
     const calls = fsPromisesMock.unlink.mock.calls.map((c) => c[0]);
-    expect(calls.some((p) => p.includes('/library/movies/'))).toBe(true);
+    expect(calls).toEqual(['/downloads/movie.mkv']);
   });
 });
 
@@ -324,6 +322,12 @@ describe('post-move cleanup', () => {
       '/downloads/Movie Name',
       { recursive: true, force: true }
     );
+  });
+
+  it('refuses to remove the entire download root when torrent name resolves to "."', async () => {
+    getTorrentStatusMock.mockResolvedValue(torrentStatus({ name: '.' }));
+    await moveTorrentFiles(1, 'movie');
+    expect(fsPromisesMock.rm).not.toHaveBeenCalled();
   });
 });
 
