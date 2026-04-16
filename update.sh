@@ -38,6 +38,44 @@ error()   { echo -e "  ${RED}✗${RESET}  $*" >&2; }
 heading() { echo -e "\n${BOLD}$*${RESET}"; }
 ask()     { echo -en "  ${BOLD}?${RESET}  $* "; }
 
+tracked_changes() {
+  git status --porcelain=v1 --untracked-files=no
+}
+
+has_tracked_changes() {
+  [ -n "$(tracked_changes)" ]
+}
+
+prompt_to_stash_changes() {
+  local REASON="$1"
+
+  if [ "$AUTO" -eq 1 ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M')] Skipped — ${REASON}. Run manually to resolve."
+    exit 1
+  fi
+
+  warn "$REASON"
+  tracked_changes
+  echo ""
+  ask "Stash them and continue? [Y/n]"
+  read -r REPLY
+  if [[ "$REPLY" =~ ^[Nn]$ ]]; then
+    echo "  Cancelled." && echo ""
+    exit 0
+  fi
+
+  git stash push -m "update.sh auto-stash $(date '+%Y-%m-%d %H:%M')"
+  info "Changes stashed (restore later with: git stash pop)"
+}
+
+pull_failed_due_to_local_changes() {
+  local OUTPUT="$1"
+
+  grep -Eq \
+    'would be overwritten by merge|would be overwritten by checkout|cannot pull with rebase: You have unstaged changes|Please commit your changes or stash them before you merge|Please commit or stash them\.' \
+    <<<"$OUTPUT"
+}
+
 # ── locate the install dir ────────────────────────────────────────────────────
 if [ -f "$(pwd)/ecosystem.config.js" ]; then
   INSTALL_DIR="$(pwd)"
@@ -72,22 +110,8 @@ if [ "$AUTO" -eq 0 ]; then
 fi
 
 # ── dirty worktree check ────────────────────────────────────────────────────
-if ! git diff --quiet HEAD 2>/dev/null; then
-  if [ "$AUTO" -eq 1 ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M')] Skipped — local modifications detected. Run manually to resolve."
-    exit 1
-  fi
-  warn "You have local modifications:"
-  git diff --stat
-  echo ""
-  ask "Stash them and continue? [Y/n]"
-  read -r REPLY
-  if [[ "$REPLY" =~ ^[Nn]$ ]]; then
-    echo "  Cancelled." && echo ""
-    exit 0
-  fi
-  git stash push -m "update.sh auto-stash $(date '+%Y-%m-%d %H:%M')"
-  info "Changes stashed (restore later with: git stash pop)"
+if has_tracked_changes; then
+  prompt_to_stash_changes "You have local tracked modifications"
 fi
 
 # ── check for updates ─────────────────────────────────────────────────────────
@@ -140,7 +164,20 @@ rollback() {
 }
 
 # ── pull ──────────────────────────────────────────────────────────────────────
-if ! git pull --quiet; then
+if has_tracked_changes; then
+  prompt_to_stash_changes "Tracked files changed since the update started"
+fi
+
+PULL_OUTPUT=""
+if ! PULL_OUTPUT=$(git pull --quiet 2>&1); then
+  if pull_failed_due_to_local_changes "$PULL_OUTPUT"; then
+    warn "git pull stopped because local files would be overwritten."
+    echo "$PULL_OUTPUT" >&2
+    warn "Your local changes were left untouched. Commit or stash them, then run npm run update again."
+    exit 1
+  fi
+
+  [ -n "$PULL_OUTPUT" ] && echo "$PULL_OUTPUT" >&2
   error "git pull failed — possible merge conflict."
   rollback
   exit 1
