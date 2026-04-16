@@ -272,7 +272,7 @@ The app is designed for trusted local-network use only. It includes:
 
 - **Local-network restriction** — middleware blocks all requests from non-LAN IPs; only RFC-1918 addresses and `.local` mDNS hostnames are allowed
 - **Rate limiting** — 30 requests/minute per IP on the chat endpoint
-- **OAuth CSRF protection** — OpenRouter OAuth flow uses a random state token in an httpOnly cookie, verified with timing-safe comparison; redirects use a fixed origin, never the client-controlled Host header
+- **OAuth CSRF protection** — OpenRouter OAuth flow uses a random state token in an httpOnly cookie; both URL state and cookie state are always required and verified with timing-safe comparison; redirects use a fixed origin, never the client-controlled Host header
 - **Request validation** — POST routes enforce a 64 KB body limit and validate all input fields; malformed JSON returns 400 instead of a stack trace
 - **Magnet URL validation** — only well-formed `magnet:?xt=urn:btih:` links are accepted
 - **SSRF protection** — Plex, Transmission, and Ollama URLs must be localhost or RFC-1918 addresses; internal redirects use a fixed origin

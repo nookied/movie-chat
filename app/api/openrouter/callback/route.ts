@@ -19,17 +19,16 @@ function setupRedirect(path: string) {
  * cookie and appends it to the callback URL. We verify the two match here.
  */
 export async function GET(req: NextRequest) {
-  // Verify CSRF state — the auth initiation route sets a cookie and URL param
+  // Verify CSRF state — the auth initiation route sets a cookie and URL param.
+  // Both must be present and match; reject if either is missing.
   const urlState = req.nextUrl.searchParams.get('state');
   const cookieState = req.cookies.get('openrouter_oauth_state')?.value;
-  if (urlState || cookieState) {
-    if (
-      !urlState || !cookieState ||
-      urlState.length !== cookieState.length ||
-      !crypto.timingSafeEqual(Buffer.from(urlState), Buffer.from(cookieState))
-    ) {
-      return setupRedirect('/setup?error=state_mismatch');
-    }
+  if (
+    !urlState || !cookieState ||
+    urlState.length !== cookieState.length ||
+    !crypto.timingSafeEqual(Buffer.from(urlState), Buffer.from(cookieState))
+  ) {
+    return setupRedirect('/setup?error=state_mismatch');
   }
 
   const code = req.nextUrl.searchParams.get('code');

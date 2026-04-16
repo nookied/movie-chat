@@ -8,6 +8,20 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 
 ---
 
+## [Unreleased]
+
+### Security
+- **OAuth CSRF state always required** (`app/api/openrouter/callback/route.ts`): Removed backwards-compat bypass that allowed requests without any state to skip CSRF validation. Both URL state and cookie state are now mandatory — requests missing either are rejected with `state_mismatch`
+
+### Fixed
+- **Test route status code inconsistency** (`app/api/ollama/test/route.ts`, `app/api/openrouter/test/route.ts`): Error responses now return proper HTTP status codes (400 for config errors, 502 for upstream/connection errors) instead of always returning 200, consistent with all other test routes
+- **TypeScript strict check** (`__tests__/shell-scripts.test.ts`): Fixed `ProcessEnv` type mismatch causing `tsc --noEmit` to fail on the shell-script test env objects
+
+### Tests
+- 30 test files / 557 tests passing (was 556 — added CSRF rejection test for stateless OAuth callback)
+
+---
+
 ## [2.2.0] — 2026-04-16
 
 ### Security
@@ -39,7 +53,7 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **Recommendation card composition** (`components/RecommendationCard.tsx`, `hooks/useRecommendationCardState.ts`, `components/recommendation/`): Card is now ~120-line layout/wiring; fetch logic and UI sections are fully separated
 
 ### Tests
-- 30 test files / 556 tests passing — added shell-script contract coverage for `install.sh` and `update.sh` (fresh install, successful update, dirty-worktree auto-update skip, rollback on build failure); previous suites remain green
+- 30 test files / 556 tests at release — added shell-script contract coverage for `install.sh` and `update.sh` (fresh install, successful update, dirty-worktree auto-update skip, rollback on build failure); previous suites remain green
 
 ---
 

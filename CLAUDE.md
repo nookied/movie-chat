@@ -21,19 +21,20 @@
 | `app/api/diagnostics/bundle/route.ts` | GET endpoint — token-gated zip-less JSON bundle (logs + redacted config + version) |
 | `components/ChatInterface.tsx` | Chat composition root — wires history, streaming, downloads, and message rendering together |
 | `hooks/useChatSendMessage.ts` | Streaming chat request orchestration — retry/backoff, Ollama fallback, silent recommendation-tag retry |
-| `components/RecommendationCard.tsx` | Thin recommendation renderer — movie/TV sections sit on top of `useRecommendationCardState()` |
-| `hooks/useRecommendationCardState.ts` | Recommendation card data hook — Plex/reviews/torrent fetches, TV season selection, post-move Plex re-check |
+| `components/RecommendationCard.tsx` | Recommendation renderer — movie/TV sections, disambiguation chooser, sits on top of `useRecommendationCardState()` |
+| `components/recommendation/MovieMatchChooser.tsx` | Disambiguation UI — shown when a bare title has multiple TMDB matches (e.g. remakes) |
+| `hooks/useRecommendationCardState.ts` | Recommendation card data hook — Plex/reviews/torrent fetches, TV season selection, movie disambiguation, strictYear locking, post-move Plex re-check |
 | `components/DownloadTracker.tsx` | Polls `/api/transmission/status` every 5s; read-only, no client-side move logic |
 | `lib/transmission.ts` | Transmission RPC with session-ID handshake (always 409 first) |
 | `lib/moveFiles.ts` | Core file-move logic — shared between HTTP route and autoMove poller |
 | `lib/autoMove.ts` | Server-side background poller — moves one torrent at a time with 15s gap |
 | `lib/appTorrents.ts` | In-memory + on-disk registry of app torrent IDs + mediaType/season/title metadata |
 | `lib/config.ts` | `cfg()` helper — 30s in-memory cache avoids per-request sync disk reads |
-| `lib/yts.ts` | YTS torrent search + magnet link builder (movies); `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries |
+| `lib/yts.ts` | YTS torrent search + magnet link builder (movies); supports `strictYear` option; `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries |
 | `lib/eztv.ts` | Knaben/EZTV torrent search + quality scoring (TV) |
-| `lib/tmdb.ts` | TMDB metadata — posters, overviews, year, season count |
+| `lib/tmdb.ts` | TMDB metadata — posters, overviews, year, season count; `resolveMovieLookup` handles disambiguation for bare titles with multiple exact matches |
 | `lib/omdb.ts` | OMDB ratings — IMDb score, Rotten Tomatoes |
-| `lib/plex.ts` | Plex library check — movies and per-season TV; `titleMatches` also normalises `&` → `and` |
+| `lib/plex.ts` | Plex library check — movies and per-season TV; `searchLibraryWithOptions` supports `strictYear` mode; `titleMatches` normalises `&` → `and` |
 | `install.sh` | Remote installer — clone/update checkout, install deps, build, optional pm2 + cron setup |
 | `setup.sh` | Local one-shot setup — prerequisite check, install deps, build, optional pm2 + cron setup |
 | `update.sh` | Safe updater — dirty-worktree guard, rollback, lock file, optional auto-update cron target |
@@ -47,7 +48,7 @@
 | `app/api/setup/status/route.ts` | Config completeness check (at least one LLM configured) |
 | `app/api/setup/detect/route.ts` | Auto-detect Ollama/Plex/Transmission on network |
 | `app/api/openrouter/auth/route.ts` | OAuth initiation — CSRF state cookie + redirect to OpenRouter |
-| `app/api/openrouter/callback/route.ts` | OAuth PKCE callback — CSRF state verification, fixed-origin redirects, key exchange |
+| `app/api/openrouter/callback/route.ts` | OAuth PKCE callback — CSRF state always required, timing-safe comparison, fixed-origin redirects, key exchange |
 | `components/ShareButton.tsx` | QR code modal for sharing app URL with household |
 | `components/ui/` | Shared UI: StatusIcon, Section, Field, Toggle |
 
@@ -113,6 +114,8 @@ The setup wizard (`app/setup/page.tsx`) serves dual purpose: post-install guided
 - AutoMove poller: serialised moves, 15s gap between each to avoid I/O spikes
 - Post-move Plex re-check: 2 min → 10 min → 60 min backoff; stops early once Plex confirms; all timeouts cancelled on unmount
 - Card year display comes from TMDB (`ReviewData.year`), not the LLM — `RecommendationCard` shows `reviews?.year ?? year`
+- **Movie disambiguation**: When a bare title (no year) matches multiple TMDB results, `/api/reviews` returns `ambiguityCandidates` and the card shows a `MovieMatchChooser` instead of proceeding. Once the user picks, the resolved title+year propagate with `strictYear: true` through Plex checks, torrent searches, and downloads so nothing can drift across remakes
+- **strictYear flow**: `Recommendation.strictYear` gates year-exact matching in Plex (`searchLibraryWithOptions`) and YTS (`searchTorrents` with `strictYear` option). Without it, year is treated as a hint (fuzzy match). Set automatically by disambiguation or when the LLM's tag includes a year
 
 ## Debugging guidelines
 
@@ -140,7 +143,7 @@ Map out the architecture before attempting fixes: what services are involved, wh
 
 ## Testing
 
-`npm test` (Vitest, Node env). 30 test files, 556 tests under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, ThinkFilter streaming, and shell-script contract tests for `install.sh` / `update.sh`. Conventions:
+`npm test` (Vitest, Node env). 30 test files, 557 tests under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, ThinkFilter streaming, and shell-script contract tests for `install.sh` / `update.sh`. Conventions:
 
 - Mock `fs` with `vi.mock('fs', () => ({ default: fsMock, ...fsMock }))` so both ESM and CJS imports see the mock.
 - `vi.resetModules()` in `beforeEach` so module-level state (rate-limit map, logger caches, etc.) is fresh per test.

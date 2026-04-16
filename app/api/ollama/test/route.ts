@@ -12,7 +12,7 @@ export async function GET() {
     });
 
     if (!res.ok) {
-      return NextResponse.json({ ok: false, error: `Ollama returned ${res.status}` });
+      return NextResponse.json({ ok: false, error: `Ollama returned ${res.status}` }, { status: 502 });
     }
 
     const data = await res.json();
@@ -21,7 +21,7 @@ export async function GET() {
     // Always return the models list so the settings dropdown can populate,
     // even when no model is configured yet.
     if (!ollamaModel) {
-      return NextResponse.json({ ok: false, error: 'No model configured', models });
+      return NextResponse.json({ ok: false, error: 'No model configured', models }, { status: 400 });
     }
 
     // Warn if the configured model isn't pulled yet
@@ -34,7 +34,7 @@ export async function GET() {
         ok: false,
         error: `Model "${ollamaModel}" not found — run: ollama pull ${ollamaModel}`,
         models,
-      });
+      }, { status: 400 });
     }
 
     return NextResponse.json({ ok: true, models });
@@ -44,6 +44,6 @@ export async function GET() {
     return NextResponse.json({
       ok: false,
       error: isDown ? 'Ollama is not running' : msg,
-    });
+    }, { status: 502 });
   }
 }

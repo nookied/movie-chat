@@ -5,7 +5,7 @@ export async function GET() {
   const apiKey = cfg('openRouterApiKey', 'OPENROUTER_API_KEY');
 
   if (!apiKey) {
-    return NextResponse.json({ ok: false, error: 'No API key configured' }, { status: 200 });
+    return NextResponse.json({ ok: false, error: 'No API key configured' }, { status: 400 });
   }
 
   try {
@@ -23,7 +23,7 @@ export async function GET() {
       const body = await res.json().catch(() => ({}));
       return NextResponse.json(
         { ok: false, error: (body as { error?: { message?: string } })?.error?.message ?? `OpenRouter returned ${res.status}` },
-        { status: 200 }
+        { status: 502 }
       );
     }
 
@@ -38,6 +38,6 @@ export async function GET() {
     return NextResponse.json({ ok: true, models });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Connection failed';
-    return NextResponse.json({ ok: false, error: msg }, { status: 200 });
+    return NextResponse.json({ ok: false, error: msg }, { status: 502 });
   }
 }

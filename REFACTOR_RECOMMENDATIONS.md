@@ -26,11 +26,11 @@ Phases 1 and 2 are complete. The next high-value work is Phase 3 (chat route mod
 
 | Area | Current shape | Why it matters |
 |---|---|---|
-| `components/RecommendationCard.tsx` | **Refactored** — now ~120 lines, thin layout. Data logic in `useRecommendationCardState`. | Phases 1 complete |
-| `components/ChatInterface.tsx` | **Refactored** — now ~120 lines, composition root. Logic in focused hooks. | Phase 2 complete |
+| `components/RecommendationCard.tsx` | **Refactored** — ~190 lines, layout + disambiguation chooser wiring. Data logic in `useRecommendationCardState`. | Phase 1 complete |
+| `components/ChatInterface.tsx` | **Refactored** — ~150 lines, composition root. Logic in focused hooks. | Phase 2 complete |
 | `app/settings/page.tsx` | ~496 lines, multiple service-test responsibilities, config load/save, diagnostics download | Still pending (Phase 4) |
 | `app/setup/page.tsx` | ~400 lines, step flow + service tests + config writes | Still pending (Phase 4) |
-| `app/api/chat/route.ts` | ~323 lines, direct-title shortcut + rate limiting + prompt selection + provider retries + SSE parsing + think-filter + logging | Still pending (Phase 3) — highest remaining leverage |
+| `app/api/chat/route.ts` | ~344 lines, direct-title shortcut + rate limiting + prompt selection + provider retries + SSE parsing + think-filter + logging | Still pending (Phase 3) — highest remaining leverage |
 
 ### Secondary signals
 
@@ -64,9 +64,9 @@ Phases 1 and 2 are complete. The next high-value work is Phase 3 (chat route mod
 
 ### What was done
 
-- `RecommendationCard.tsx` is now ~120 lines of layout/wiring
-- All fetch logic lives in `hooks/useRecommendationCardState.ts`
-- Presentational pieces extracted to `components/recommendation/`: `LibraryStatusBadge`, `MovieDownloadSection`, `TvDownloadSection`, `ScoreBadge`
+- `RecommendationCard.tsx` is now ~190 lines of layout/wiring (grew from ~120 with disambiguation chooser integration in v2.2.0)
+- All fetch logic lives in `hooks/useRecommendationCardState.ts` (~517 lines — grew with disambiguation + strictYear flow)
+- Presentational pieces extracted to `components/recommendation/`: `LibraryStatusBadge`, `MovieDownloadSection`, `MovieMatchChooser`, `TvDownloadSection`, `ScoreBadge`
 - No `react-hooks/exhaustive-deps` suppressions remain in the recommendation flow
 - Post-move Plex recheck (2 min → 10 min → 60 min backoff) and TV season selection are in the hook with full AbortController cleanup
 
@@ -80,7 +80,7 @@ Phases 1 and 2 are complete. The next high-value work is Phase 3 (chat route mod
 
 ### What was done
 
-- `ChatInterface.tsx` is now ~120 lines — pure composition root
+- `ChatInterface.tsx` is now ~150 lines — pure composition root (grew slightly with disambiguation callback wiring)
 - Hooks extracted: `useChatHistory`, `useChatSendMessage`, `useAppDownloads`, `usePendingTorrents`, `useDownloadTrigger`
 - `lib/chat/systemMessages.ts` centralises all `[System]` message strings
 - Components extracted: `components/chat/ChatMessageList`, `components/chat/ChatComposer`
@@ -252,10 +252,10 @@ Those are separate decisions and would reduce the safety of this pass.
 
 The refactor should be considered successful if:
 
-- `RecommendationCard.tsx` and `ChatInterface.tsx` each lose at least half their current orchestration weight
-- Recommendation flow effects no longer need lint suppressions
-- Chat provider and stream behavior are testable without exercising the full route
-- Setup/settings service checks are shared instead of duplicated
+- ~~`RecommendationCard.tsx` and `ChatInterface.tsx` each lose at least half their current orchestration weight~~ — **DONE**: both are now thin composition/layout shells
+- ~~Recommendation flow effects no longer need lint suppressions~~ — **DONE**: zero `exhaustive-deps` suppressions in the recommendation flow
+- Chat provider and stream behavior are testable without exercising the full route (Phase 3)
+- Setup/settings service checks are shared instead of duplicated (Phase 4)
 - Future feature work can target movie flow, TV flow, provider logic, or config UX independently
 
 ## Optional Follow-Up After This Pass

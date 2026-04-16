@@ -1,8 +1,8 @@
 # Handoff
 
-## Current pass (full audit — security, stability, QA expansion)
+## Latest pass (2026-04-16 — code review, bug fixes, documentation audit)
 
-This pass covered two rounds: (1) a security hardening + component refactor pass, and (2) a comprehensive codebase audit with bug fixes, test expansion, and documentation overhaul.
+This session did a full codebase review after several merges and refactors, fixed three issues found, updated all documentation to match current code, and ran a simplify/quality pass on the fixes.
 
 ## Key changes
 
@@ -31,19 +31,27 @@ This pass covered two rounds: (1) a security hardening + component refactor pass
 - Rollback on pull/install/build failure: `git reset --hard` + rebuild + pm2 restart
 - Post-restart health check: polls `/api/setup/status` up to 5 times
 
+### Movie disambiguation & strictYear (from v2.2.0)
+
+- Bare movie titles with multiple TMDB matches show a `MovieMatchChooser` instead of picking arbitrarily
+- Once the user picks, `strictYear: true` propagates through the entire flow (reviews → Plex check → torrent search → download) so metadata, availability, and downloads all lock to the same movie
+- New types: `MovieDisambiguationCandidate`, `ReviewLookupResponse.ambiguityCandidates/resolvedRecommendation`, `Recommendation.strictYear`
+- New lib: `resolveMovieLookup` (tmdb.ts), `searchLibraryWithOptions` (plex.ts), `searchTorrents` strictYear option (yts.ts)
+
 ### Refactor (from first pass)
 
 - `lib/chat/systemMessages.ts` — all `[System]` message strings centralised
 - `lib/mediaKeys.ts` — title normalisation, key generation, capped-set helpers
 - `lib/requestBody.ts`, `lib/requestIp.ts`, `lib/randomId.ts` — shared utilities
-- `components/ChatInterface.tsx` — ~120-line composition root over focused hooks
-- `components/RecommendationCard.tsx` — ~120-line layout; all data fetching in `useRecommendationCardState`
+- `components/ChatInterface.tsx` — ~150-line composition root over focused hooks
+- `components/RecommendationCard.tsx` — ~190-line layout (grew with disambiguation); all data fetching in `useRecommendationCardState` (~517 lines)
 - `hooks/` — `useChatHistory`, `useChatSendMessage`, `useAppDownloads`, `usePendingTorrents`, `useDownloadTrigger`, `useRecommendationCardState` with AbortController cleanup
 
 ## Validation
 
 ```
-npx vitest run        # 30 files / 556 tests passing
+npx vitest run        # 30 files / 557 tests passing
+npx tsc --noEmit      # clean (zero errors)
 npm run build         # clean production build
 ```
 
@@ -65,7 +73,13 @@ Prompt changes require a server restart. Config changes are hot-reloaded (30s ca
 - **RE-3/4** `lib/yts.ts`, `lib/eztv.ts` — No server-side caching on torrent search results. Add a short TTL cache keyed by `(title, season)`.
 - `forceOllama` in `/api/chat` body not validated as boolean.
 
-### Resolved this session
+### Resolved (latest audit pass, 2026-04-16)
+
+- OAuth CSRF state bypass — `if (urlState || cookieState)` guard removed; both state values are now always required
+- OpenRouter/Ollama test routes returning HTTP 200 for errors — now return 400/502 consistent with all other test routes
+- TypeScript strict check failure in `__tests__/shell-scripts.test.ts` — `ProcessEnv` type mismatch fixed
+
+### Resolved (previous sessions)
 
 - OAuth CSRF protection (was unprotected)
 - OAuth redirect URL hijack via Host header (was reflecting client header)

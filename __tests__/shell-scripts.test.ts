@@ -61,13 +61,13 @@ function runScript(
   }: {
     args?: string[];
     cwd: string;
-    env: NodeJS.ProcessEnv;
+    env: Record<string, string>;
     input?: string;
   }
 ) {
   return spawnSync('bash', [path.join(ROOT, scriptName), ...args], {
     cwd,
-    env,
+    env: env as NodeJS.ProcessEnv,
     encoding: 'utf8',
     input,
   });
