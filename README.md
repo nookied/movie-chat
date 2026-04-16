@@ -69,7 +69,7 @@ cd movie-chat
 npm run setup
 ```
 
-`npm run setup` checks prerequisites, installs dependencies, builds the app, and offers to configure [pm2](https://pm2.keymetrics.io) for auto-start on reboot.
+`npm run setup` checks prerequisites, installs dependencies, builds the app, and offers to configure [pm2](https://pm2.keymetrics.io) for auto-start on reboot plus optional nightly auto-updates.
 
 ---
 
@@ -312,6 +312,9 @@ This is handled automatically — the app uses a shared server-side registry. Re
 **The free OpenRouter model doesn't follow the format**
 Switch to a specific model in Settings (e.g. `mistralai/mistral-small-3.1-24b-instruct:free`) or enable Ollama exclusively for more consistent behaviour.
 
+**Updater says local files would be overwritten**
+`npm run update` lists tracked file changes and offers to stash them before pulling. If you prefer to resolve it yourself, commit, stash, or restore those files, then run the update again. Nightly auto-updates skip in this situation and log the reason to `~/.movie-chat-update.log`.
+
 ---
 
 ## Updating
@@ -328,11 +331,11 @@ Run this from inside the app folder:
 npm run update
 ```
 
-It checks if a newer version is available, shows what changed, and — if you confirm — pulls the update, rebuilds, and restarts the app automatically. If something goes wrong during the update (pull, install, or build failure), it **rolls back** to the previous version and restarts the app. A lock file prevents concurrent runs.
+It checks if a newer version is available, shows what changed, and — if you confirm — pulls the update, rebuilds, and restarts the app automatically. On manual runs, if tracked files have local edits, the script shows them and offers to stash them before continuing. If something goes wrong during the update (pull, install, or build failure), it **rolls back** to the previous version and restarts the app. A lock file prevents concurrent runs.
 
 ### Manual install — automatic updates
 
-During setup (`npm run setup` or the one-liner installer) you're offered the option to enable **nightly auto-updates**. This adds a cron job that silently checks for updates every night at 3 AM and applies them if found.
+During setup (`npm run setup` or the one-liner installer) you're offered the option to enable **nightly auto-updates**. This adds a cron job that silently checks for updates every night at 3 AM and applies them if found. If the checkout has local tracked changes, the nightly run skips and writes the reason to the log instead of forcing a merge.
 
 To enable it later manually, run this once:
 

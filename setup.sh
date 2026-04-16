@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Movie Chat — one-shot setup script
 # Run: bash setup.sh
-set -e
+set -euo pipefail
 
 # ── colours ──────────────────────────────────────────────────────────────────
 BOLD='\033[1m'
@@ -26,7 +26,7 @@ heading "1 / 5  Checking prerequisites"
 
 if ! command -v node &>/dev/null; then
   error "Node.js is not installed."
-  echo "       Install it from https://nodejs.org (v18 or later required)."
+  echo "       Install it from https://nodejs.org (v18.18 or later required)."
   exit 1
 fi
 
@@ -95,7 +95,8 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
 
   # register pm2 with the OS so it starts on reboot
   # pm2 startup prints a sudo command we can capture and run directly
-  STARTUP_CMD=$(pm2 startup 2>&1 | grep "^sudo.*pm2")
+  STARTUP_OUTPUT=$(pm2 startup 2>&1 || true)
+  STARTUP_CMD=$(printf '%s\n' "$STARTUP_OUTPUT" | grep -m 1 "^sudo.*pm2" || true)
   if [ -n "$STARTUP_CMD" ]; then
     echo "       Registering pm2 with system startup"
     echo "       Running: $STARTUP_CMD"
@@ -103,6 +104,7 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
     eval "$STARTUP_CMD"
     info "pm2 registered — will start automatically on reboot"
   else
+    [ -n "$STARTUP_OUTPUT" ] && echo "$STARTUP_OUTPUT"
     warn "Could not auto-register pm2 startup."
     warn "Run 'pm2 startup' manually and follow the instructions to survive reboots."
   fi

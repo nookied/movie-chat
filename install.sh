@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Movie Chat — remote installer
 # Usage: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/nookied/movie-chat/main/install.sh)"
-set -e
+set -euo pipefail
 
 REPO_URL="https://github.com/nookied/movie-chat.git"
 DEFAULT_DIR="$HOME/movie-chat"
@@ -19,6 +19,19 @@ error()   { echo -e "  ${RED}✗${RESET}  $*" >&2; }
 heading() { echo -e "\n${BOLD}$*${RESET}"; }
 ask()     { echo -en "  ${BOLD}?${RESET}  $* "; }
 
+is_movie_chat_repo() {
+  local DIR="$1"
+
+  [ -f "$DIR/ecosystem.config.js" ] || return 1
+  [ -f "$DIR/package.json" ] || return 1
+  grep -Eq '"name"[[:space:]]*:[[:space:]]*"movie-chat"' "$DIR/package.json"
+}
+
+tracked_changes_in_dir() {
+  local DIR="$1"
+  git -C "$DIR" status --porcelain=v1 --untracked-files=no
+}
+
 # ── header ───────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}  Movie Chat — installer${RESET}"
@@ -35,7 +48,7 @@ if ! command -v git &>/dev/null; then
 fi
 
 if ! command -v node &>/dev/null; then
-  error "Node.js is not installed. Install it from https://nodejs.org (v18+) and try again."
+  error "Node.js is not installed. Install it from https://nodejs.org (v18.18+) and try again."
   MISSING=1
 else
   NODE_VER=$(node -e "process.stdout.write(process.version.slice(1))")
@@ -67,8 +80,37 @@ INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_DIR}"
 INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
-  warn "Directory already contains a git repo — pulling latest changes instead of cloning"
-  git -C "$INSTALL_DIR" pull --quiet
+  if ! is_movie_chat_repo "$INSTALL_DIR"; then
+    error "Directory $INSTALL_DIR already contains a git repo, but it does not look like Movie Chat."
+    echo "       Choose a different location or update that repository manually."
+    exit 1
+  fi
+
+  if [ -n "$(tracked_changes_in_dir "$INSTALL_DIR")" ]; then
+    error "Directory $INSTALL_DIR has local tracked changes."
+    tracked_changes_in_dir "$INSTALL_DIR"
+    echo "       Commit or stash them, then re-run the installer or choose a clean install location."
+    exit 1
+  fi
+
+  warn "Directory already contains Movie Chat — refreshing it instead of cloning"
+
+  FETCH_OUTPUT=""
+  if ! FETCH_OUTPUT=$(git -C "$INSTALL_DIR" fetch --quiet 2>&1); then
+    [ -n "$FETCH_OUTPUT" ] && echo "$FETCH_OUTPUT" >&2
+    error "Failed to fetch the latest version into $INSTALL_DIR."
+    echo "       Check your network connection or remote configuration and try again."
+    exit 1
+  fi
+
+  PULL_OUTPUT=""
+  if ! PULL_OUTPUT=$(git -C "$INSTALL_DIR" pull --quiet 2>&1); then
+    [ -n "$PULL_OUTPUT" ] && echo "$PULL_OUTPUT" >&2
+    error "Failed to update the existing Movie Chat checkout in $INSTALL_DIR."
+    echo "       Resolve the git issue manually or choose a clean install location."
+    exit 1
+  fi
+
   info "Updated to latest version"
 elif [ -d "$INSTALL_DIR" ] && [ "$(ls -A "$INSTALL_DIR")" ]; then
   error "Directory $INSTALL_DIR already exists and is not empty."
@@ -125,7 +167,8 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
   info "pm2 process list saved"
 
   # register pm2 with the OS so it starts on reboot
-  STARTUP_CMD=$(pm2 startup 2>&1 | grep "^sudo.*pm2")
+  STARTUP_OUTPUT=$(pm2 startup 2>&1 || true)
+  STARTUP_CMD=$(printf '%s\n' "$STARTUP_OUTPUT" | grep -m 1 "^sudo.*pm2" || true)
   if [ -n "$STARTUP_CMD" ]; then
     echo "       Registering pm2 with system startup"
     echo "       Running: $STARTUP_CMD"
@@ -133,6 +176,7 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
     eval "$STARTUP_CMD"
     info "pm2 registered — will start automatically on reboot"
   else
+    [ -n "$STARTUP_OUTPUT" ] && echo "$STARTUP_OUTPUT"
     warn "Could not auto-register pm2 startup."
     warn "Run 'pm2 startup' manually and follow the instructions to survive reboots."
   fi

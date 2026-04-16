@@ -26,7 +26,8 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **File move data loss** (`lib/moveFiles.ts`): On `unlink` failure the rollback no longer deletes the already-copied destination — the copy is kept and the error is logged
 
 ### Changed
-- **Update script hardened** (`update.sh`): Added PID-based lock file to prevent concurrent cron runs, `set -euo pipefail` for strict error handling, dirty-worktree detection with stash option, rollback on pull/install/build failure, and post-restart health check polling `/api/setup/status`
+- **Update script hardened** (`update.sh`): Added PID-based lock file to prevent concurrent cron runs, `set -euo pipefail` for strict error handling, reliable tracked-file detection with stash option, safe handling when `git pull` is blocked by local edits, rollback on pull/install/build failure, and post-restart health check polling `/api/setup/status`
+- **Install/setup scripts hardened** (`install.sh`, `setup.sh`): Existing checkout reuse now validates the repo and refuses dirty tracked changes instead of failing mid-install; pm2 startup capture no longer aborts when pm2 prints an unexpected format
 
 ### Refactored
 - **Shared request utilities** (`lib/requestBody.ts`, `lib/requestIp.ts`, `lib/randomId.ts`): Extracted into standalone modules used by all routes
