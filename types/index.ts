@@ -11,6 +11,7 @@ export interface Recommendation {
   title: string;
   year?: number;
   type: 'movie' | 'tv';
+  strictYear?: boolean;
 }
 
 export interface PlexStatus {
@@ -33,6 +34,19 @@ export interface ReviewData {
   tmdbId?: number;
   numberOfSeasons?: number;
   year?: number;
+}
+
+export interface MovieDisambiguationCandidate {
+  title: string;
+  year?: number;
+  tmdbId: number;
+  overview?: string;
+  poster?: string;
+}
+
+export interface ReviewLookupResponse extends ReviewData {
+  resolvedRecommendation?: Recommendation;
+  ambiguityCandidates?: MovieDisambiguationCandidate[];
 }
 
 export interface TorrentOption {

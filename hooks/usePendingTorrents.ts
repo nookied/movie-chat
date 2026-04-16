@@ -11,6 +11,9 @@ export interface PendingTorrentEntry {
   mediaType: 'movie' | 'tv';
   season?: number;
   torrent: TorrentOption;
+  title: string;
+  year?: number;
+  strictYear?: boolean;
 }
 
 export function usePendingTorrents(addInfoMessage: (content: string) => void) {
@@ -21,9 +24,17 @@ export function usePendingTorrents(addInfoMessage: (content: string) => void) {
     year: number | undefined,
     torrents: TorrentOption[],
     mediaType: 'movie' | 'tv',
-    season?: number
+    season?: number,
+    strictYear?: boolean
   ) => {
-    pendingTorrents.current.set(torrentKey(title, year), { torrent: torrents[0], mediaType, season });
+    pendingTorrents.current.set(torrentKey(title, year), {
+      torrent: torrents[0],
+      mediaType,
+      season,
+      title,
+      year,
+      strictYear,
+    });
     if (pendingTorrents.current.size > MAX_PENDING_TORRENTS) {
       const oldest = pendingTorrents.current.keys().next().value;
       if (oldest !== undefined) pendingTorrents.current.delete(oldest);

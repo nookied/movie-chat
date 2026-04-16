@@ -16,12 +16,14 @@ interface Props {
   onNoSuitableQuality: (title: string, year?: number) => void;
   onNotFound: (title: string) => void;
   onPlexFound: (title: string, year?: number) => void;
+  onResolveRecommendation: (messageId: string, recommendationIndex: number, recommendation: Recommendation) => void;
   onTorrentsReady: (
     title: string,
     year: number | undefined,
     torrents: TorrentOption[],
     mediaType: 'movie' | 'tv',
-    season?: number
+    season?: number,
+    strictYear?: boolean
   ) => void;
 }
 
@@ -35,6 +37,7 @@ export default function ChatMessageList({
   onNoSuitableQuality,
   onNotFound,
   onPlexFound,
+  onResolveRecommendation,
   onTorrentsReady,
 }: Props) {
   return (
@@ -51,11 +54,13 @@ export default function ChatMessageList({
             message={message}
             thinking={isStreaming && message.role === 'assistant' && message.content === ''}
           />
-          {message.role === 'assistant' && message.recommendations?.map((recommendation) => (
+          {message.role === 'assistant' && message.recommendations?.map((recommendation, index) => (
             <RecommendationCard
               key={recommendationKey(recommendation)}
               recommendation={recommendation}
               onPlexFound={onPlexFound}
+              onResolveRecommendation={(nextRecommendation) =>
+                onResolveRecommendation(message.id, index, nextRecommendation)}
               onTorrentsReady={onTorrentsReady}
               onNoSuitableQuality={onNoSuitableQuality}
               onNotFound={onNotFound}

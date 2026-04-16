@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { searchLibrary, searchTvLibrary } from '@/lib/plex';
+import { searchLibrary, searchLibraryWithOptions, searchTvLibrary } from '@/lib/plex';
 
 // Mock config so cfg() always returns a token (or empty string for no-token tests)
 vi.mock('@/lib/config', () => ({
@@ -204,6 +204,21 @@ describe('searchLibrary() — year matching', () => {
     const result = await searchLibrary('Beauty and the Beast', 1991);
     expect(result.found).toBe(true);
     expect(result.plexUrl).toContain('1');
+  });
+
+  it('does not match a far-away multiple-candidate result', async () => {
+    mockPlex([
+      makeItem({ title: 'Dragonfly', year: 1977, ratingKey: '1', addedAt: 100 }),
+      makeItem({ title: 'Dragonfly', year: 2025, ratingKey: '2', addedAt: 200 }),
+    ]);
+    const result = await searchLibrary('Dragonfly', 2002);
+    expect(result.found).toBe(false);
+  });
+
+  it('strictYear mode refuses fallback matches beyond the exact-year pass', async () => {
+    mockPlex([makeItem({ title: 'Dragonfly', year: 2025 })]);
+    const result = await searchLibraryWithOptions('Dragonfly', 2002, { strictYear: true });
+    expect(result.found).toBe(false);
   });
 });
 

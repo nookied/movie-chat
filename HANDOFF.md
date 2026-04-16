@@ -43,7 +43,7 @@ This pass covered two rounds: (1) a security hardening + component refactor pass
 ## Validation
 
 ```
-npx vitest run        # 29 files / 544 tests passing
+npx vitest run        # 30 files / 556 tests passing
 npm run build         # clean production build
 ```
 

@@ -8,9 +8,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
 
 const searchLibraryMock = vi.fn();
+const searchLibraryWithOptionsMock = vi.fn();
 const searchTvLibraryMock = vi.fn();
 vi.mock('@/lib/plex', () => ({
   searchLibrary: searchLibraryMock,
+  searchLibraryWithOptions: searchLibraryWithOptionsMock,
   searchTvLibrary: searchTvLibraryMock,
 }));
 
@@ -29,6 +31,7 @@ let GET: typeof import('@/app/api/plex/check/route').GET;
 beforeEach(async () => {
   vi.resetModules();
   searchLibraryMock.mockReset();
+  searchLibraryWithOptionsMock.mockReset();
   searchTvLibraryMock.mockReset();
   const mod = await import('@/app/api/plex/check/route');
   GET = mod.GET;
@@ -44,7 +47,15 @@ describe('GET /api/plex/check', () => {
     searchLibraryMock.mockResolvedValue({ found: true });
     await GET(getReq('http://localhost/api/plex/check?title=Arrival&year=2016'));
     expect(searchLibraryMock).toHaveBeenCalledWith('Arrival', 2016);
+    expect(searchLibraryWithOptionsMock).not.toHaveBeenCalled();
     expect(searchTvLibraryMock).not.toHaveBeenCalled();
+  });
+
+  it('dispatches to strict search when strictYear=true', async () => {
+    searchLibraryWithOptionsMock.mockResolvedValue({ found: true });
+    await GET(getReq('http://localhost/api/plex/check?title=Dragonfly&year=2002&strictYear=true'));
+    expect(searchLibraryWithOptionsMock).toHaveBeenCalledWith('Dragonfly', 2002, { strictYear: true });
+    expect(searchLibraryMock).not.toHaveBeenCalled();
   });
 
   it('dispatches to searchTvLibrary when type=tv', async () => {

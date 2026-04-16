@@ -102,6 +102,14 @@ export async function searchTvLibrary(title: string): Promise<PlexStatus> {
 }
 
 export async function searchLibrary(title: string, year?: number): Promise<PlexStatus> {
+  return searchLibraryWithOptions(title, year);
+}
+
+export async function searchLibraryWithOptions(
+  title: string,
+  year?: number,
+  options: { strictYear?: boolean } = {}
+): Promise<PlexStatus> {
   const plexBaseUrl = cfg('plexBaseUrl', 'PLEX_BASE_URL', 'http://localhost:32400');
   const plexToken   = cfg('plexToken',   'PLEX_TOKEN');
 
@@ -130,21 +138,37 @@ export async function searchLibrary(title: string, year?: number): Promise<PlexS
     (item) => titleMatches(item, title) && (year === undefined || Math.abs(Number(item.year ?? 0) - year) <= 1)
   );
 
+  if (match) {
+    return {
+      found: true,
+      plexUrl: `${plexBaseUrl}/web/index.html#!/server/${match.librarySectionID}/details/${match.ratingKey}`,
+      addedAt: match.addedAt
+        ? new Date(Number(match.addedAt) * 1000).toLocaleDateString()
+        : undefined,
+    };
+  }
+
+  if (options.strictYear && year !== undefined) {
+    return { found: false };
+  }
+
   // Step 2: fallback — if only one item in the library has this title, use it when
   // the year is unknown OR the gap is small (≤5 years — handles LLM year guesses being
   // slightly off). A large gap means a different version/remake; don't cross-match.
-  if (!match) {
-    const candidates = items.filter((item) => titleMatches(item, title));
-    if (candidates.length === 1) {
-      const candidateYear = Number(candidates[0].year ?? 0);
-      if (year === undefined || candidateYear === 0 || Math.abs(candidateYear - year) <= 5) {
-        match = candidates[0];
-      }
-    } else if (candidates.length > 1 && year !== undefined) {
-      // Multiple — pick whichever year is closest
-      match = candidates.sort(
-        (a, b) => Math.abs(Number(a.year ?? 0) - year) - Math.abs(Number(b.year ?? 0) - year)
-      )[0];
+  const candidates = items.filter((item) => titleMatches(item, title));
+  if (candidates.length === 1) {
+    const candidateYear = Number(candidates[0].year ?? 0);
+    if (year === undefined || candidateYear === 0 || Math.abs(candidateYear - year) <= 5) {
+      match = candidates[0];
+    }
+  } else if (candidates.length > 1 && year !== undefined) {
+    const sortedCandidates = [...candidates].sort(
+      (a, b) => Math.abs(Number(a.year ?? 0) - year) - Math.abs(Number(b.year ?? 0) - year)
+    );
+    const bestMatch = sortedCandidates[0];
+    const bestMatchYear = Number(bestMatch?.year ?? 0);
+    if (bestMatch && bestMatchYear !== 0 && Math.abs(bestMatchYear - year) <= 5) {
+      match = bestMatch;
     }
   }
 

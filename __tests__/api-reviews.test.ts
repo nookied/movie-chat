@@ -9,9 +9,11 @@ import type { NextRequest } from 'next/server';
 
 const getMovieDetailsMock = vi.fn();
 const getTvDetailsMock = vi.fn();
+const resolveMovieLookupMock = vi.fn();
 vi.mock('@/lib/tmdb', () => ({
   getMovieDetails: getMovieDetailsMock,
   getTvDetails: getTvDetailsMock,
+  resolveMovieLookup: resolveMovieLookupMock,
 }));
 
 const getOmdbRatingsMock = vi.fn();
@@ -29,7 +31,7 @@ let GET: typeof import('@/app/api/reviews/route').GET;
 
 beforeEach(async () => {
   vi.resetModules();
-  [getMovieDetailsMock, getTvDetailsMock, getOmdbRatingsMock].forEach((m) => m.mockReset());
+  [getMovieDetailsMock, getTvDetailsMock, getOmdbRatingsMock, resolveMovieLookupMock].forEach((m) => m.mockReset());
   const mod = await import('@/app/api/reviews/route');
   GET = mod.GET;
 });
@@ -51,17 +53,22 @@ describe('GET /api/reviews', () => {
   });
 
   it('returns TMDB data even when OMDB fails (allSettled)', async () => {
-    getMovieDetailsMock.mockResolvedValue({ tmdbScore: 7.0 });
+    resolveMovieLookupMock.mockResolvedValue({
+      kind: 'resolved',
+      recommendation: { title: 'X', year: 2002, type: 'movie' },
+      details: { tmdbScore: 7.0 },
+    });
     getOmdbRatingsMock.mockRejectedValue(new Error('OMDB rate limit'));
     const res = await GET(getReq('http://localhost/api/reviews?title=X'));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.tmdbScore).toBe(7.0);
     expect(body.imdbScore).toBeUndefined();
+    expect(body.resolvedRecommendation).toEqual({ title: 'X', year: 2002, type: 'movie', strictYear: true });
   });
 
   it('returns OMDB data even when TMDB fails', async () => {
-    getMovieDetailsMock.mockRejectedValue(new Error('TMDB 500'));
+    resolveMovieLookupMock.mockRejectedValue(new Error('TMDB 500'));
     getOmdbRatingsMock.mockResolvedValue({ rtScore: '88%' });
     const res = await GET(getReq('http://localhost/api/reviews?title=X'));
     expect(res.status).toBe(200);
@@ -69,11 +76,30 @@ describe('GET /api/reviews', () => {
   });
 
   it('returns empty object when both providers fail', async () => {
-    getMovieDetailsMock.mockRejectedValue(new Error('TMDB down'));
+    resolveMovieLookupMock.mockRejectedValue(new Error('TMDB down'));
     getOmdbRatingsMock.mockRejectedValue(new Error('OMDB down'));
     const res = await GET(getReq('http://localhost/api/reviews?title=X'));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({});
+  });
+
+  it('returns ambiguity candidates for a bare movie title with multiple exact matches', async () => {
+    resolveMovieLookupMock.mockResolvedValue({
+      kind: 'ambiguous',
+      candidates: [
+        { title: 'Dragonfly', year: 2002, tmdbId: 1 },
+        { title: 'Dragonfly', year: 2025, tmdbId: 2 },
+      ],
+    });
+    const res = await GET(getReq('http://localhost/api/reviews?title=Dragonfly'));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ambiguityCandidates: [
+        { title: 'Dragonfly', year: 2002, tmdbId: 1 },
+        { title: 'Dragonfly', year: 2025, tmdbId: 2 },
+      ],
+    });
+    expect(getOmdbRatingsMock).not.toHaveBeenCalled();
   });
 
   it('dispatches to getTvDetails when type=tv', async () => {

@@ -24,10 +24,12 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **Stale closure in DownloadTracker** (`components/DownloadTracker.tsx`): `fetchStatus` callback now includes all referenced props in its dependency array, fixing stale `torrentName`/`year`/callback captures
 - **Inline function identity** (`components/DownloadsPanel.tsx`): Extracted `DownloadTrackerWrapper` with `useCallback`-memoized `onComplete` to prevent poll timer resets on every parent render
 - **File move data loss** (`lib/moveFiles.ts`): On `unlink` failure the rollback no longer deletes the already-copied destination — the copy is kept and the error is logged
+- **Ambiguous movie titles** (`lib/tmdb.ts`, `hooks/useRecommendationCardState.ts`, `components/recommendation/MovieMatchChooser.tsx`, `lib/yts.ts`, `lib/plex.ts`): Bare movie lookups like `Dragonfly` now pause on a chooser when TMDB finds multiple exact-title matches, then lock the rest of the movie flow to the selected canonical title/year so metadata, Plex checks, and torrent downloads cannot drift across remakes or same-name releases
 
 ### Changed
 - **Update script hardened** (`update.sh`): Added PID-based lock file to prevent concurrent cron runs, `set -euo pipefail` for strict error handling, reliable tracked-file detection with stash option, safe handling when `git pull` is blocked by local edits, rollback on pull/install/build failure, and post-restart health check polling `/api/setup/status`
 - **Install/setup scripts hardened** (`install.sh`, `setup.sh`): Existing checkout reuse now validates the repo and refuses dirty tracked changes instead of failing mid-install; pm2 startup capture no longer aborts when pm2 prints an unexpected format
+- **Maintainer docs** (`README.md`, `AGENTS.md`): Documentation now explicitly calls out `install.sh` / `setup.sh` / `update.sh` as operational scripts, documents regular test coverage for `install.sh` / `update.sh`, and notes that update-related work should always review `update.sh`
 
 ### Refactored
 - **Shared request utilities** (`lib/requestBody.ts`, `lib/requestIp.ts`, `lib/randomId.ts`): Extracted into standalone modules used by all routes
@@ -37,7 +39,7 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **Recommendation card composition** (`components/RecommendationCard.tsx`, `hooks/useRecommendationCardState.ts`, `components/recommendation/`): Card is now ~120-line layout/wiring; fetch logic and UI sections are fully separated
 
 ### Tests
-- 29 test files / 544 tests passing — new suites: middleware IP validation (33 tests), OAuth CSRF flows (12 tests), system prompt routing (7 tests); expanded: chat-tags (+16), ThinkFilter streaming (+5), moveFiles path traversal (+7)
+- 30 test files / 556 tests passing — added shell-script contract coverage for `install.sh` and `update.sh` (fresh install, successful update, dirty-worktree auto-update skip, rollback on build failure); previous suites remain green
 
 ---
 

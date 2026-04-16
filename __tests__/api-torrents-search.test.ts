@@ -39,7 +39,13 @@ describe('GET /api/torrents/search', () => {
   it('movie search: dispatches to YTS with year', async () => {
     searchTorrentsMock.mockResolvedValue({ torrents: [], noSuitableQuality: false });
     await GET(getReq('http://localhost/api/torrents/search?title=Dune&year=2021'));
-    expect(searchTorrentsMock).toHaveBeenCalledWith('Dune', 2021);
+    expect(searchTorrentsMock).toHaveBeenCalledWith('Dune', 2021, { strictYear: false });
+  });
+
+  it('movie search: forwards strictYear for canonical movie matches', async () => {
+    searchTorrentsMock.mockResolvedValue({ torrents: [], noSuitableQuality: false });
+    await GET(getReq('http://localhost/api/torrents/search?title=Dragonfly&year=2002&strictYear=true'));
+    expect(searchTorrentsMock).toHaveBeenCalledWith('Dragonfly', 2002, { strictYear: true });
   });
 
   it('TV search: dispatches to EZTV with season', async () => {

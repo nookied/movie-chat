@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TvTorrentResult, TvTorrentOption } from '@/lib/eztv';
-import { PlexStatus, Recommendation, ReviewData, TorrentOption } from '@/types';
+import {
+  MovieDisambiguationCandidate,
+  PlexStatus,
+  Recommendation,
+  ReviewLookupResponse,
+  ReviewData,
+  TorrentOption,
+} from '@/types';
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
@@ -31,15 +38,24 @@ interface Options {
   onNoSuitableQuality: (title: string, year?: number) => void;
   onNotFound?: (title: string) => void;
   onPlexFound: (title: string, year?: number) => void;
+  onResolveRecommendation?: (recommendation: Recommendation) => void;
   onTorrentsReady: (
     title: string,
     year: number | undefined,
     torrents: TorrentOption[],
     mediaType: 'movie' | 'tv',
-    season?: number
+    season?: number,
+    strictYear?: boolean
   ) => void;
   onDownload: (title: string, year?: number) => Promise<boolean>;
   recommendation: Recommendation;
+}
+
+function sameRecommendation(a: Recommendation, b: Recommendation): boolean {
+  return a.title === b.title
+    && a.year === b.year
+    && a.type === b.type
+    && a.strictYear === b.strictYear;
 }
 
 export function useRecommendationCardState({
@@ -48,16 +64,19 @@ export function useRecommendationCardState({
   onNoSuitableQuality,
   onNotFound,
   onPlexFound,
+  onResolveRecommendation,
   onTorrentsReady,
   recommendation,
 }: Options) {
-  const { title, year, type } = recommendation;
+  const [resolvedRecommendation, setResolvedRecommendation] = useState(recommendation);
+  const { title, year, type, strictYear } = resolvedRecommendation;
 
   const [plexState, setPlexState] = useState<CheckState>('loading');
   const [reviewState, setReviewState] = useState<CheckState>('loading');
   const [torrentState, setTorrentState] = useState<CheckState>('idle');
   const [plex, setPlex] = useState<PlexStatus | null>(null);
   const [reviews, setReviews] = useState<ReviewData | null>(null);
+  const [ambiguityCandidates, setAmbiguityCandidates] = useState<MovieDisambiguationCandidate[] | null>(null);
   const [torrentSummary, setTorrentSummary] = useState('');
   const [noSuitableQuality, setNoSuitableQuality] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -75,6 +94,12 @@ export function useRecommendationCardState({
   const plexRef = useRef<PlexStatus | null>(null);
   const seasonRequestControllerRef = useRef<AbortController | null>(null);
   const seasonRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    setResolvedRecommendation((current) => (
+      sameRecommendation(current, recommendation) ? current : recommendation
+    ));
+  }, [recommendation]);
 
   useEffect(() => {
     plexRef.current = plex;
@@ -119,7 +144,7 @@ export function useRecommendationCardState({
         });
         setTvTorrentOptions(data.options ?? null);
       }
-      onTorrentsReady(title, year, [toSyntheticTorrent(title, data)], 'tv', season);
+      onTorrentsReady(title, year, [toSyntheticTorrent(title, data)], 'tv', season, strictYear);
     } catch (error) {
       if (isAbortError(error)) return;
       if (updateUi && requestId === seasonRequestIdRef.current) {
@@ -130,7 +155,7 @@ export function useRecommendationCardState({
         seasonRequestControllerRef.current = null;
       }
     }
-  }, [onTorrentsReady, title, year]);
+  }, [onTorrentsReady, strictYear, title, year]);
 
   const handleSeasonSelect = useCallback((season: number) => {
     setSelectedSeason(season);
@@ -152,14 +177,42 @@ export function useRecommendationCardState({
       size: `${(option.sizeBytes / 1e9).toFixed(1)} GB`,
       seeders: option.seeders,
     });
-    onTorrentsReady(title, year, [toSyntheticTorrent(title, option)], 'tv', selectedSeason);
-  }, [onTorrentsReady, selectedSeason, title, tvTorrentOptions, year]);
+    onTorrentsReady(title, year, [toSyntheticTorrent(title, option)], 'tv', selectedSeason, strictYear);
+  }, [onTorrentsReady, selectedSeason, strictYear, title, tvTorrentOptions, year]);
 
   const fetchDefaultSeason = useCallback(async (season: number) => {
     try {
       await runTvTorrentSearch(season, false);
     } catch { /* silently ignore — user can still click a season button manually */ }
   }, [runTvTorrentSearch]);
+
+  const applyResolvedRecommendation = useCallback((nextRecommendation: Recommendation) => {
+    setAmbiguityCandidates(null);
+    setResolvedRecommendation((current) => (
+      sameRecommendation(current, nextRecommendation) ? current : nextRecommendation
+    ));
+    onResolveRecommendation?.(nextRecommendation);
+  }, [onResolveRecommendation]);
+
+  const handleMovieMatchSelect = useCallback((candidate: MovieDisambiguationCandidate) => {
+    applyResolvedRecommendation({
+      title: candidate.title,
+      year: candidate.year,
+      type: 'movie',
+      strictYear: candidate.year !== undefined,
+    });
+  }, [applyResolvedRecommendation]);
+
+  useEffect(() => {
+    plexCallbackSent.current = false;
+    torrentCallbackSent.current = false;
+    autoFetchedSeason.current = false;
+    setSelectedSeason(null);
+    setTvTorrentState('idle');
+    setTvDownloading(false);
+    setTvTorrentOptions(null);
+    setSelectedOptionIdx(0);
+  }, [title, type, year]);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,22 +221,55 @@ export function useRecommendationCardState({
     const params = new URLSearchParams({ title });
     if (year !== undefined) params.set('year', String(year));
     const typeParam = type === 'tv' ? 'tv' : 'movie';
+    const strictYearParam = strictYear ? '&strictYear=true' : '';
 
-    fetch(`/api/reviews?${params}&type=${typeParam}`, { signal: reviewController.signal })
-      .then((response) => response.json())
-      .then((data: ReviewData) => {
-        if (cancelled) return;
+    setPlex(null);
+    setReviews(null);
+    setAmbiguityCandidates(null);
+    setPlexState('loading');
+    setReviewState('loading');
+    setTorrentState('idle');
+    setTorrentSummary('');
+    setNoSuitableQuality(false);
+    setDownloading(false);
+    setTorrentMeta(null);
+
+    async function fetchReviewsForCurrentTitle(): Promise<boolean> {
+      try {
+        const response = await fetch(`/api/reviews?${params}&type=${typeParam}`, { signal: reviewController.signal });
+        const data: ReviewLookupResponse = await response.json();
+        if (cancelled) return false;
+
+        if (type === 'movie' && year === undefined && data.ambiguityCandidates && data.ambiguityCandidates.length > 1) {
+          setAmbiguityCandidates(data.ambiguityCandidates);
+          setReviewState('done');
+          setPlexState('skipped');
+          setTorrentState('skipped');
+          return false;
+        }
+
+        if (type === 'movie' && data.resolvedRecommendation && !sameRecommendation(data.resolvedRecommendation, resolvedRecommendation)) {
+          applyResolvedRecommendation(data.resolvedRecommendation);
+          setReviewState('done');
+          setPlexState('skipped');
+          setTorrentState('skipped');
+          return false;
+        }
+
         setReviews(data);
         setReviewState('done');
 
         if (!data.poster && !data.overview && data.tmdbScore === undefined && !data.imdbScore) {
           onNotFound?.(title);
         }
-      })
-      .catch((error) => {
-        if (isAbortError(error)) return;
-        if (!cancelled) setReviewState('error');
-      });
+
+        return true;
+      } catch (error) {
+        if (isAbortError(error) || cancelled) return false;
+        setReviewState('error');
+        return true;
+      }
+    }
 
     async function checkSequentially() {
       let plexFound = false;
@@ -191,7 +277,7 @@ export function useRecommendationCardState({
       try {
         const plexUrl = type === 'tv'
           ? `/api/plex/check?${params}&type=tv`
-          : `/api/plex/check?${params}`;
+          : `/api/plex/check?${params}${strictYearParam}`;
         const response = await fetch(plexUrl, { signal: availabilityController.signal });
         const data: PlexStatus = await response.json();
         if (cancelled) return;
@@ -217,7 +303,10 @@ export function useRecommendationCardState({
       setTorrentState('loading');
 
       try {
-        const response = await fetch(`/api/torrents/search?${params}`, { signal: availabilityController.signal });
+        const response = await fetch(
+          `/api/torrents/search?${params}${strictYearParam}`,
+          { signal: availabilityController.signal }
+        );
         const data: { torrents: TorrentOption[]; noSuitableQuality: boolean } = await response.json();
         if (cancelled) return;
 
@@ -239,7 +328,7 @@ export function useRecommendationCardState({
 
           if (!torrentCallbackSent.current) {
             torrentCallbackSent.current = true;
-            onTorrentsReady(title, year, data.torrents, 'movie');
+            onTorrentsReady(title, year, data.torrents, 'movie', undefined, strictYear);
           }
         }
       } catch (error) {
@@ -248,14 +337,29 @@ export function useRecommendationCardState({
       }
     }
 
-    void checkSequentially();
+    void (async () => {
+      const shouldContinue = await fetchReviewsForCurrentTitle();
+      if (!shouldContinue || cancelled) return;
+      await checkSequentially();
+    })();
 
     return () => {
       cancelled = true;
       reviewController.abort();
       availabilityController.abort();
     };
-  }, [onNoSuitableQuality, onNotFound, onPlexFound, onTorrentsReady, title, type, year]);
+  }, [
+    applyResolvedRecommendation,
+    onNoSuitableQuality,
+    onNotFound,
+    onPlexFound,
+    onTorrentsReady,
+    resolvedRecommendation,
+    strictYear,
+    title,
+    type,
+    year,
+  ]);
 
   const numberOfSeasons = reviews?.numberOfSeasons;
   const seasonsInLibrary = new Set(plex?.seasons ?? []);
@@ -298,7 +402,8 @@ export function useRecommendationCardState({
         try {
           const params = new URLSearchParams({ title });
           if (year !== undefined) params.set('year', String(year));
-          const url = `/api/plex/check?${params}${type === 'tv' ? '&type=tv' : ''}`;
+          const strictYearParam = strictYear && type === 'movie' ? '&strictYear=true' : '';
+          const url = `/api/plex/check?${params}${type === 'tv' ? '&type=tv' : strictYearParam}`;
           const response = await fetch(url, { signal: controller.signal });
 
           if (!response.ok || cancelled) {
@@ -338,7 +443,7 @@ export function useRecommendationCardState({
       timeoutIds.forEach(clearTimeout);
       controllers.forEach((controller) => controller.abort());
     };
-  }, [forceInLibrary, onPlexFound, title, type, year]);
+  }, [forceInLibrary, onPlexFound, strictYear, title, type, year]);
 
   useEffect(() => {
     if (type !== 'tv') return;
@@ -382,7 +487,9 @@ export function useRecommendationCardState({
   }, [onDownload, title, year]);
 
   return {
+    ambiguityCandidates,
     downloading,
+    handleMovieMatchSelect,
     handleOptionSelect,
     handleSeasonSelect,
     noSuitableQuality,
@@ -390,6 +497,7 @@ export function useRecommendationCardState({
     plex,
     plexState,
     reviewState,
+    resolvedRecommendation,
     reviews,
     seasonsInLibrary,
     selectedOptionIdx,

@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
   const year = searchParams.get('year');
   const type = searchParams.get('type') ?? 'movie';
   const season = searchParams.get('season');
+  const strictYear = searchParams.get('strictYear') === 'true';
 
   if (!title) {
     return NextResponse.json({ error: 'title is required' }, { status: 400 });
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(result);
     }
 
-    const result = await searchTorrents(title, year ? Number(year) : undefined);
+    const result = await searchTorrents(title, year ? Number(year) : undefined, { strictYear });
     return NextResponse.json(result);
   } catch (err) {
     log.error('search failed', { title, type, season, error: err instanceof Error ? err.message : String(err) });

@@ -91,6 +91,13 @@ describe('searchTorrents() — title matching', () => {
     expect(result.torrents).toHaveLength(1);
   });
 
+  it('does not fall back across years when strictYear=true', async () => {
+    mockYts([makeMovie('Dragonfly', 2025, [makeTorrent('1080p', 'web', 'x265', 100)])]);
+    const result = await searchTorrents('Dragonfly', 2002, { strictYear: true });
+    expect(result.torrents).toHaveLength(0);
+    expect(result.noSuitableQuality).toBe(false);
+  });
+
   it('returns empty when movie list is empty', async () => {
     mockYts([]);
     const result = await searchTorrents('Nonexistent Movie', 2020);

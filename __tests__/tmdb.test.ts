@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getMovieDetails, getTvDetails } from '@/lib/tmdb';
+import { getMovieDetails, getTvDetails, resolveMovieLookup } from '@/lib/tmdb';
 
 // Mock lib/config so TMDB_API_KEY is always "test-key"
 vi.mock('@/lib/config', () => ({ cfg: () => 'test-key' }));
@@ -114,6 +114,53 @@ describe('getMovieDetails()', () => {
     expect(result.tmdbScore).toBe(95);
     expect(result.overview).toBeDefined();
     expect(result.director).toBeUndefined(); // no credits in partial data
+  });
+});
+
+describe('resolveMovieLookup()', () => {
+  it('returns ambiguity candidates when multiple exact titles exist', async () => {
+    mockFetch({
+      ok: true,
+      body: {
+        results: [
+          { ...MOVIE_SEARCH_HIT, id: 1, title: 'Dragonfly', release_date: '2002-02-22' },
+          { ...MOVIE_SEARCH_HIT, id: 2, title: 'Dragonfly', release_date: '2025-03-14' },
+          { ...MOVIE_SEARCH_HIT, id: 3, title: 'Dragonfly Boy', release_date: '2024-01-01' },
+        ],
+      },
+    });
+
+    const result = await resolveMovieLookup('Dragonfly');
+    expect(result).toEqual({
+      kind: 'ambiguous',
+      candidates: [
+        { title: 'Dragonfly', year: 2002, tmdbId: 1, overview: MOVIE_SEARCH_HIT.overview, poster: 'https://image.tmdb.org/t/p/w500/poster.jpg' },
+        { title: 'Dragonfly', year: 2025, tmdbId: 2, overview: MOVIE_SEARCH_HIT.overview, poster: 'https://image.tmdb.org/t/p/w500/poster.jpg' },
+      ],
+    });
+  });
+
+  it('resolves a single exact match and returns canonical recommendation data', async () => {
+    mockFetch(
+      { ok: true, body: { results: [{ ...MOVIE_SEARCH_HIT, title: 'Send Help', release_date: '2026-01-01' }] } },
+      { ok: true, body: { ...MOVIE_DETAIL, id: 999, title: 'Send Help' } },
+    );
+
+    const result = await resolveMovieLookup('Send Help');
+    expect(result).toEqual({
+      kind: 'resolved',
+      recommendation: { title: 'Send Help', year: 2026, type: 'movie' },
+      details: {
+        tmdbScore: 95,
+        overview: MOVIE_DETAIL.overview,
+        poster: 'https://image.tmdb.org/t/p/w500/poster.jpg',
+        genres: ['Drama'],
+        runtime: 47,
+        director: 'Vince Gilligan',
+        tmdbId: 999,
+        year: 2026,
+      },
+    });
   });
 });
 

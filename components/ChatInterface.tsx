@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChatMessage } from '@/types';
+import { ChatMessage, Recommendation } from '@/types';
 import DownloadsPanel from './DownloadsPanel';
 import ChatComposer from './chat/ChatComposer';
 import ChatMessageList from './chat/ChatMessageList';
@@ -88,6 +88,36 @@ export default function ChatInterface() {
     addInfoMessage(notFoundSystemMessage(title));
   }, [addInfoMessage]);
 
+  const handleRecommendationResolved = useCallback((
+    messageId: string,
+    recommendationIndex: number,
+    nextRecommendation: Recommendation
+  ) => {
+    setMessages((prev) => prev.map((message) => {
+      if (message.id !== messageId || !message.recommendations) return message;
+
+      const currentRecommendation = message.recommendations[recommendationIndex];
+      if (
+        !currentRecommendation
+        || (
+          currentRecommendation.title === nextRecommendation.title
+          && currentRecommendation.year === nextRecommendation.year
+          && currentRecommendation.type === nextRecommendation.type
+          && currentRecommendation.strictYear === nextRecommendation.strictYear
+        )
+      ) {
+        return message;
+      }
+
+      return {
+        ...message,
+        recommendations: message.recommendations.map((recommendation, index) => (
+          index === recommendationIndex ? nextRecommendation : recommendation
+        )),
+      };
+    }));
+  }, [setMessages]);
+
   return (
     <>
       <ChatMessageList
@@ -100,6 +130,7 @@ export default function ChatInterface() {
         onNoSuitableQuality={handleNoSuitableQuality}
         onNotFound={handleNotFound}
         onPlexFound={handlePlexFound}
+        onResolveRecommendation={handleRecommendationResolved}
         onTorrentsReady={handleTorrentsReady}
       />
 

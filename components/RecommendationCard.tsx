@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { Recommendation, TorrentOption } from '@/types';
 import LibraryStatusBadge from '@/components/recommendation/LibraryStatusBadge';
 import MovieDownloadSection from '@/components/recommendation/MovieDownloadSection';
+import MovieMatchChooser from '@/components/recommendation/MovieMatchChooser';
 import ScoreBadge from '@/components/recommendation/ScoreBadge';
 import TvDownloadSection from '@/components/recommendation/TvDownloadSection';
 import { useRecommendationCardState } from '@/hooks/useRecommendationCardState';
@@ -11,12 +12,14 @@ import { useRecommendationCardState } from '@/hooks/useRecommendationCardState';
 interface Props {
   recommendation: Recommendation;
   onPlexFound: (title: string, year?: number) => void;
+  onResolveRecommendation?: (recommendation: Recommendation) => void;
   onTorrentsReady: (
     title: string,
     year: number | undefined,
     torrents: TorrentOption[],
     mediaType: 'movie' | 'tv',
-    season?: number
+    season?: number,
+    strictYear?: boolean
   ) => void;
   onNoSuitableQuality: (title: string, year?: number) => void;
   onDownload: (title: string, year?: number) => Promise<boolean>;
@@ -28,6 +31,7 @@ interface Props {
 export default function RecommendationCard({
   recommendation,
   onPlexFound,
+  onResolveRecommendation,
   onTorrentsReady,
   onNoSuitableQuality,
   onDownload,
@@ -36,13 +40,16 @@ export default function RecommendationCard({
   forceInLibrary = false,
 }: Props) {
   const {
+    ambiguityCandidates,
     downloading,
+    handleMovieMatchSelect,
     handleOptionSelect,
     handleSeasonSelect,
     noSuitableQuality,
     numberOfSeasons,
     plexState,
     reviewState,
+    resolvedRecommendation,
     reviews,
     seasonsInLibrary,
     selectedOptionIdx,
@@ -64,11 +71,12 @@ export default function RecommendationCard({
     onNoSuitableQuality,
     onNotFound,
     onPlexFound,
+    onResolveRecommendation,
     onTorrentsReady,
     recommendation,
   });
 
-  const { title, year } = recommendation;
+  const { title, year } = resolvedRecommendation;
 
   return (
     <div className="mt-2 rounded-xl border border-plex-border bg-plex-card overflow-hidden max-w-[600px]">
@@ -140,16 +148,24 @@ export default function RecommendationCard({
           </div>
 
           {type === 'movie' ? (
-            <MovieDownloadSection
-              downloading={downloading}
-              forceInLibrary={forceInLibrary}
-              isDownloading={isDownloading}
-              noSuitableQuality={noSuitableQuality}
-              onDownload={startMovieDownload}
-              torrentMeta={torrentMeta}
-              torrentState={torrentState}
-              torrentSummary={torrentSummary}
-            />
+            ambiguityCandidates && ambiguityCandidates.length > 1 ? (
+              <MovieMatchChooser
+                candidates={ambiguityCandidates}
+                onSelect={handleMovieMatchSelect}
+                title={title}
+              />
+            ) : (
+              <MovieDownloadSection
+                downloading={downloading}
+                forceInLibrary={forceInLibrary}
+                isDownloading={isDownloading}
+                noSuitableQuality={noSuitableQuality}
+                onDownload={startMovieDownload}
+                torrentMeta={torrentMeta}
+                torrentState={torrentState}
+                torrentSummary={torrentSummary}
+              />
+            )
           ) : numberOfSeasons ? (
             <TvDownloadSection
               isDownloading={isDownloading}

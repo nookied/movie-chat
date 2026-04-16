@@ -1,4 +1,4 @@
-import { ReviewData } from '@/types';
+import { MovieDisambiguationCandidate, Recommendation, ReviewData } from '@/types';
 import { cfg } from '@/lib/config';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
@@ -49,11 +49,29 @@ interface TmdbTvDetails {
   genres: Array<{ id: number; name: string }>;
 }
 
-export async function getMovieDetails(title: string, year?: number): Promise<Partial<ReviewData>> {
-  const tmdbApiKey = cfg('tmdbApiKey', 'TMDB_API_KEY');
-  if (!tmdbApiKey) return {};
+type MovieLookupResult =
+  | {
+      kind: 'resolved';
+      recommendation: Recommendation;
+      details: Partial<ReviewData>;
+    }
+  | {
+      kind: 'ambiguous';
+      candidates: MovieDisambiguationCandidate[];
+    };
 
-  // Step 1: Search for the movie
+function extractReleaseYear(date?: string): number | undefined {
+  return date ? Number(date.split('-')[0]) : undefined;
+}
+
+function normalizeMovieTitle(title: string): string {
+  return title.toLowerCase().replace(/\s*&\s*/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+async function searchMovieResults(title: string, year?: number): Promise<TmdbSearchResult[]> {
+  const tmdbApiKey = cfg('tmdbApiKey', 'TMDB_API_KEY');
+  if (!tmdbApiKey) return [];
+
   const searchUrl = new URL(`${TMDB_BASE}/search/movie`);
   searchUrl.searchParams.set('api_key', tmdbApiKey);
   searchUrl.searchParams.set('query', title);
@@ -63,12 +81,10 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
     signal: AbortSignal.timeout(8000),
     next: { revalidate: METADATA_CACHE_SECONDS },
   });
-  if (!searchRes.ok) return {};
+  if (!searchRes.ok) return [];
 
   let results: TmdbSearchResult[] = (await searchRes.json()).results ?? [];
 
-  // If the year-qualified search found nothing, retry without the year constraint.
-  // The LLM sometimes guesses the wrong year for recent releases.
   if (results.length === 0 && year) {
     const fallbackUrl = new URL(`${TMDB_BASE}/search/movie`);
     fallbackUrl.searchParams.set('api_key', tmdbApiKey);
@@ -77,12 +93,15 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
     if (fbRes.ok) results = (await fbRes.json()).results ?? [];
   }
 
-  if (results.length === 0) return {};
+  return results;
+}
 
-  const movie = results[0];
-  const releaseYear = movie.release_date ? Number(movie.release_date.split('-')[0]) : undefined;
+async function getMovieDetailsFromSearchResult(movie: TmdbSearchResult): Promise<Partial<ReviewData>> {
+  const tmdbApiKey = cfg('tmdbApiKey', 'TMDB_API_KEY');
+  if (!tmdbApiKey) return {};
 
-  // Step 2: Fetch full details including credits
+  const releaseYear = extractReleaseYear(movie.release_date);
+
   const detailUrl = new URL(`${TMDB_BASE}/movie/${movie.id}`);
   detailUrl.searchParams.set('api_key', tmdbApiKey);
   detailUrl.searchParams.set('append_to_response', 'credits');
@@ -92,7 +111,6 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
     next: { revalidate: METADATA_CACHE_SECONDS },
   });
   if (!detailRes.ok) {
-    // Return partial data from search if detail fetch fails
     return {
       tmdbScore: Math.round(movie.vote_average * 10),
       overview: movie.overview,
@@ -114,6 +132,50 @@ export async function getMovieDetails(title: string, year?: number): Promise<Par
     director,
     tmdbId: details.id,
     year: releaseYear,
+  };
+}
+
+function toMovieCandidate(movie: TmdbSearchResult): MovieDisambiguationCandidate {
+  return {
+    title: movie.title,
+    year: extractReleaseYear(movie.release_date),
+    tmdbId: movie.id,
+    overview: movie.overview || undefined,
+    poster: movie.poster_path ? `${TMDB_IMAGE_BASE}${movie.poster_path}` : undefined,
+  };
+}
+
+export async function getMovieDetails(title: string, year?: number): Promise<Partial<ReviewData>> {
+  const results = await searchMovieResults(title, year);
+  if (results.length === 0) return {};
+  return getMovieDetailsFromSearchResult(results[0]);
+}
+
+export async function resolveMovieLookup(title: string): Promise<MovieLookupResult | null> {
+  const results = await searchMovieResults(title);
+  if (results.length === 0) return null;
+
+  const normalizedTitle = normalizeMovieTitle(title);
+  const exactMatches = results.filter((movie) => normalizeMovieTitle(movie.title) === normalizedTitle);
+
+  if (exactMatches.length > 1) {
+    return {
+      kind: 'ambiguous',
+      candidates: exactMatches.slice(0, 5).map(toMovieCandidate),
+    };
+  }
+
+  const movie = exactMatches[0] ?? results[0];
+  const resolvedYear = extractReleaseYear(movie.release_date);
+
+  return {
+    kind: 'resolved',
+    recommendation: {
+      title: movie.title,
+      year: resolvedYear,
+      type: 'movie',
+    },
+    details: await getMovieDetailsFromSearchResult(movie),
   };
 }
 
@@ -148,7 +210,7 @@ export async function getTvDetails(title: string, year?: number): Promise<Partia
   if (results.length === 0) return {};
 
   const show = results[0];
-  const releaseYear = show.first_air_date ? Number(show.first_air_date.split('-')[0]) : undefined;
+  const releaseYear = extractReleaseYear(show.first_air_date);
 
   // Step 2: Fetch full TV details
   const detailUrl = new URL(`${TMDB_BASE}/tv/${show.id}`);

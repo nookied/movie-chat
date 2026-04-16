@@ -175,7 +175,7 @@ The assistant recommends one title at a time. Each recommendation shows as a car
 - Whether it's **already in your Plex library**
 - A **Download button** if a copy is available
 
-You can also name a specific title directly — including very recent releases the AI may not know about, or titles that sound like everyday phrases (e.g. "How to Make a Killing", "Get Out", "Don't Look Up") — and it will look it up and show a card for it. Titles in quotes (for example `"Send Help"`) and declarations like `the film is titled "Send Help"` go straight to lookup without waiting on the model.
+You can also name a specific title directly — including very recent releases the AI may not know about, or titles that sound like everyday phrases (e.g. "How to Make a Killing", "Get Out", "Don't Look Up") — and it will look it up and show a card for it. If a bare movie title has multiple exact matches (for example remakes or same-name releases), the app shows a quick chooser first so the card, Plex check, and download all stay locked to the same movie. Titles in quotes (for example `"Send Help"`) and declarations like `the film is titled "Send Help"` go straight to lookup without waiting on the model.
 
 ### TV show downloads
 
@@ -232,7 +232,7 @@ Browser
         ├── RecommendationCard
         │     ├── useRecommendationCardState
         │     ├── /api/plex/check      → is it in the library?
-        │     ├── /api/reviews         → TMDB metadata + OMDB ratings
+        │     ├── /api/reviews         → TMDB metadata, OMDB ratings, movie disambiguation
         │     ├── /api/torrents/search → YTS (movies) / Knaben (TV) availability
         │     └── Download button      → triggers shared download hook
         └── DownloadTracker
@@ -262,6 +262,7 @@ Server (background)
 - `HANDOFF.md` — current deployment and validation notes
 - `REFACTOR_RECOMMENDATIONS.md` — phased high-value refactor roadmap
 - `AGENTS.md` / `CLAUDE.md` — architecture and implementation guidance for AI-assisted development
+- `install.sh` / `setup.sh` / `update.sh` — operational shell scripts; `install.sh` and `update.sh` are covered by `npm test`, and update-related work should always review `update.sh`
 
 ---
 
@@ -332,6 +333,8 @@ npm run update
 ```
 
 It checks if a newer version is available, shows what changed, and — if you confirm — pulls the update, rebuilds, and restarts the app automatically. On manual runs, if tracked files have local edits, the script shows them and offers to stash them before continuing. If something goes wrong during the update (pull, install, or build failure), it **rolls back** to the previous version and restarts the app. A lock file prevents concurrent runs.
+
+> Maintainer note: if a change touches install/update/deployment behavior, always inspect `update.sh` and keep the shell-script tests green.
 
 ### Manual install — automatic updates
 
@@ -420,7 +423,7 @@ npm run dev            # development server with hot reload (port 3001)
 npm run build          # production build (includes standalone output)
 npm run start          # production server (requires a build first)
 npm run lint           # ESLint
-npm test               # run the test suite (544 tests)
+npm test               # run the full suite, including install.sh/update.sh contract tests
 npm run electron:dev   # launch Electron app in dev mode (requires build first)
 npm run electron:build # build macOS .dmg in dist-electron/
 npm run release        # build + publish to GitHub Releases (needs GH_TOKEN)

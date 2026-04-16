@@ -34,6 +34,9 @@
 | `lib/tmdb.ts` | TMDB metadata — posters, overviews, year, season count |
 | `lib/omdb.ts` | OMDB ratings — IMDb score, Rotten Tomatoes |
 | `lib/plex.ts` | Plex library check — movies and per-season TV; `titleMatches` also normalises `&` → `and` |
+| `install.sh` | Remote installer — clone/update checkout, install deps, build, optional pm2 + cron setup |
+| `setup.sh` | Local one-shot setup — prerequisite check, install deps, build, optional pm2 + cron setup |
+| `update.sh` | Safe updater — dirty-worktree guard, rollback, lock file, optional auto-update cron target |
 | `instrumentation.ts` | Next.js startup hook — starts autoMove poller |
 | `types/index.ts` | All shared TypeScript types |
 | `electron/main.js` | Electron main process — auto-setup → server → window lifecycle |
@@ -137,12 +140,13 @@ Map out the architecture before attempting fixes: what services are involved, wh
 
 ## Testing
 
-`npm test` (Vitest, Node env). 29 test files, 544 tests under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, and ThinkFilter streaming. Conventions:
+`npm test` (Vitest, Node env). 30 test files, 556 tests under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, ThinkFilter streaming, and shell-script contract tests for `install.sh` / `update.sh`. Conventions:
 
 - Mock `fs` with `vi.mock('fs', () => ({ default: fsMock, ...fsMock }))` so both ESM and CJS imports see the mock.
 - `vi.resetModules()` in `beforeEach` so module-level state (rate-limit map, logger caches, etc.) is fresh per test.
 - Stream-based tests (`__tests__/chat-route.test.ts`) build a `ReadableStream` of SSE chunks and pass it through the real route handler.
 - `lib/autoMove.ts` exposes `__testHooks = { tick }` so tests can drive a single poll pass without fake-timer juggling.
+- If a change touches install, setup, deployment, pm2, cron, or rollback behavior, always inspect `update.sh` and keep the shell-script tests green.
 
 CI runs `npm test` on push and PRs (`.github/workflows/test.yml`, `TZ=UTC` for deterministic date tests).
 

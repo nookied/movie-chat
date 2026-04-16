@@ -36,6 +36,10 @@ interface YtsMovie {
   torrents?: YtsTorrent[];
 }
 
+interface SearchTorrentOptions {
+  strictYear?: boolean;
+}
+
 // Strip punctuation and collapse whitespace so "Avatar: Fire and Ash" matches
 // "Avatar Fire and Ash" and vice-versa.
 // Replace & with "and" before stripping so "Rosencrantz & Guildenstern Are Dead"
@@ -45,7 +49,12 @@ function normalizeTitle(t: string): string {
 }
 
 // Query YTS and return matching torrents, or null if no exact-title match found.
-async function queryYts(searchTitle: string, matchTitle: string, year?: number): Promise<TorrentSearchResult | null> {
+async function queryYts(
+  searchTitle: string,
+  matchTitle: string,
+  year?: number,
+  options: SearchTorrentOptions = {}
+): Promise<TorrentSearchResult | null> {
   const url = new URL(YTS_API);
   // Including the year in the query helps YTS rank the correct film first when
   // there are many results with similar titles (e.g. "Liar Liar" vs "Liar Liar 1997").
@@ -62,7 +71,9 @@ async function queryYts(searchTitle: string, matchTitle: string, year?: number):
   const exactWithYear = movies.find(
     (m) => normalizeTitle(m.title) === norm && (year === undefined || Math.abs(m.year - year) <= 1)
   );
-  const exactAnyYear = movies.find((m) => normalizeTitle(m.title) === norm);
+  const exactAnyYear = year !== undefined && options.strictYear
+    ? undefined
+    : movies.find((m) => normalizeTitle(m.title) === norm);
   const match = exactWithYear ?? exactAnyYear;
 
   if (!match?.torrents || match.torrents.length === 0) return null;
@@ -99,16 +110,17 @@ async function queryYts(searchTitle: string, matchTitle: string, year?: number):
 
 export async function searchTorrents(
   title: string,
-  year?: number
+  year?: number,
+  options: SearchTorrentOptions = {}
 ): Promise<TorrentSearchResult> {
-  const primary = await queryYts(title, title, year);
+  const primary = await queryYts(title, title, year, options);
   if (primary) return primary;
 
   // Fallback 1: retry with punctuation stripped from the query term
   // e.g. "Avatar: Fire and Ash" → search "avatar fire and ash"
   const normalized = normalizeTitle(title);
   if (normalized !== title.toLowerCase()) {
-    const fallbackStripped = await queryYts(normalized, title, year);
+    const fallbackStripped = await queryYts(normalized, title, year, options);
     if (fallbackStripped) return fallbackStripped;
   }
 
@@ -120,7 +132,7 @@ export async function searchTorrents(
   const cutIdx = colonIdx !== -1 ? colonIdx : dashIdx;
   if (cutIdx !== -1) {
     const baseTitle = title.slice(0, cutIdx);
-    const fallback = await queryYts(baseTitle, baseTitle, year);
+    const fallback = await queryYts(baseTitle, baseTitle, year, options);
     if (fallback) return fallback;
   }
 
