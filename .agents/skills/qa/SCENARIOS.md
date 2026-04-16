@@ -1,7 +1,7 @@
 # movie-chat — QA Test Scenarios
 
 Comprehensive test coverage map for the movie-chat application.
-Updated: 2026-03-08
+Updated: 2026-04-16
 
 ---
 
@@ -9,11 +9,37 @@ Updated: 2026-03-08
 
 | File | Suite | Count | Status |
 |------|-------|-------|--------|
-| `__tests__/eztv.test.ts` | TV torrent search logic | 79 | ✅ Implemented |
-| `__tests__/tmdb.test.ts` | TMDB metadata fetcher | 18 | ✅ Implemented |
-| `__tests__/yts.test.ts` | YTS movie torrent search | 28 | ✅ Implemented |
-| `__tests__/appTorrents.test.ts` | Torrent registry CRUD + pruning | 22 | ✅ Implemented |
-| `__tests__/plex.test.ts` | Plex library search | 24 | ✅ Implemented |
+| `__tests__/eztv.test.ts` | TV torrent search + scoring | 58 | Implemented |
+| `__tests__/api-config.test.ts` | Config API CRUD + redaction | 52 | Implemented |
+| `__tests__/setup.test.ts` | Setup wizard, probes, middleware | 37 | Implemented |
+| `__tests__/middleware.test.ts` | IP extraction, RFC-1918, LAN guard | 33 | Implemented |
+| `__tests__/plex.test.ts` | Plex library search + TV seasons | 29 | Implemented |
+| `__tests__/logger.test.ts` | JSONL logger rotation + caps | 27 | Implemented |
+| `__tests__/moveFiles.test.ts` | File move + path traversal | 26 | Implemented |
+| `__tests__/yts.test.ts` | YTS movie torrent search | 26 | Implemented |
+| `__tests__/chat-route.test.ts` | Chat route + ThinkFilter streaming | 25 | Implemented |
+| `__tests__/appTorrents.test.ts` | Torrent registry CRUD + pruning | 24 | Implemented |
+| `__tests__/diagnostics-bundle.test.ts` | Diagnostics bundle + redaction | 21 | Implemented |
+| `__tests__/chat-tags.test.ts` | Tag parsing, stripping, edge cases | 20 | Implemented |
+| `__tests__/api-transmission-add.test.ts` | Transmission add + validation | 13 | Implemented |
+| `__tests__/chat-helpers.test.ts` | Chat helper utilities | 12 | Implemented |
+| `__tests__/api-files-move.test.ts` | File move API route | 12 | Implemented |
+| `__tests__/openrouter-callback.test.ts` | OAuth exchange + CSRF state | 12 | Implemented |
+| `__tests__/api-transmission-control.test.ts` | Transmission pause/resume/cancel | 10 | Implemented |
+| `__tests__/tmdb.test.ts` | TMDB metadata fetcher | 10 | Implemented |
+| `__tests__/chat-client-helpers.test.ts` | Client-side chat helpers | 10 | Implemented |
+| `__tests__/direct-title-lookup.test.ts` | Direct title parser | 9 | Implemented |
+| `__tests__/media-keys.test.ts` | Media key normalisation | 9 | Implemented |
+| `__tests__/api-torrents-search.test.ts` | Torrent search API route | 7 | Implemented |
+| `__tests__/api-reviews.test.ts` | Reviews API route | 7 | Implemented |
+| `__tests__/chatPrompts.test.ts` | System prompt routing + Gemma detection | 7 | Implemented |
+| `__tests__/config.test.ts` | Config read/write/cache | 16 | Implemented |
+| `__tests__/request-ip.test.ts` | IP extraction from headers | 6 | Implemented |
+| `__tests__/autoMove.test.ts` | Auto-move poller logic | 16 | Implemented |
+| `__tests__/api-plex-check.test.ts` | Plex check API route | 5 | Implemented |
+| `__tests__/api-transmission-status.test.ts` | Transmission status API route | 5 | Implemented |
+
+**Total: 29 files / 544 tests**
 
 ---
 
@@ -21,31 +47,41 @@ Updated: 2026-03-08
 
 ### 1. Chat / LLM Streaming
 
-**Covered by:** Manual testing (streaming SSE cannot be unit-tested without a real LLM)
+**Covered by:** `chat-route.test.ts` (route-level), `chat-tags.test.ts`, `chat-helpers.test.ts`, `chatPrompts.test.ts`, `direct-title-lookup.test.ts`, `chat-client-helpers.test.ts` + manual testing for full E2E streaming
 
-| # | Scenario | Expected |
-|---|----------|----------|
-| C1 | Send a vague request ("something thrilling") | LLM replies with at least one `<recommendation>` tag embedded |
-| C2 | Name a specific known film ("I want to watch Inception") | Card appears with Plex/reviews data loaded |
-| C3 | Name a very recent / unknown film ("Mufasa: The Lion King") | Tag is still emitted; TMDB may return no data; onNotFound fires a [System] message |
-| C4 | Send a message while streaming is in progress | Send button is disabled; no duplicate request |
-| C5 | Rate limit: send 31 requests within 60 s | 31st request returns 429 |
-| C6 | OpenRouter unreachable / bad key | Falls back to Ollama; banner or error message appears |
-| C7 | Ollama also unreachable | Error message shown in chat |
-| C8 | Chat history > 200 messages | Oldest messages trimmed; conversation continues |
-| C9 | Refresh page | Chat history reloaded from localStorage |
-| C10 | "New Chat" button | localStorage cleared; welcome message shown |
+| # | Scenario | Expected | Automated? |
+|---|----------|----------|-----------|
+| C1 | Send a vague request ("something thrilling") | LLM replies with `<recommendation>` tag | Manual |
+| C2 | Name a specific known film ("I want to watch Inception") | Card appears with Plex/reviews data | Manual |
+| C3 | Name a very recent / unknown film | Tag emitted; TMDB may return no data; `[System]` message fires | Manual |
+| C4 | Send a message while streaming | Send button disabled; no duplicate request | Manual |
+| C5 | Rate limit: 31 requests within 60 s | 31st request returns 429 | `chat-route.test.ts` |
+| C6 | OpenRouter unreachable / bad key | Falls back to Ollama | `chat-route.test.ts` |
+| C7 | Ollama also unreachable | Error message shown in chat | Manual |
+| C8 | Chat history > 200 messages | Oldest messages trimmed | Manual |
+| C9 | Refresh page | History reloaded from localStorage | Manual |
+| C10 | "New Chat" button | localStorage cleared; welcome message shown | Manual |
+| C11 | Quoted title `"Send Help"` | Direct title lookup skips LLM, emits tag immediately | `direct-title-lookup.test.ts` |
+| C12 | Title declaration `the film is titled "X"` | Direct title lookup handles it | `direct-title-lookup.test.ts` |
+| C13 | ThinkFilter: `<think>` blocks in Qwen3 output | Think blocks stripped from stream | `chat-route.test.ts` |
+| C14 | ThinkFilter: split across chunk boundaries | Correctly buffered and filtered | `chat-route.test.ts` |
+| C15 | Gemma model detection | `isGemmaModel` matches case-insensitively | `chatPrompts.test.ts` |
+| C16 | System prompt routing | Gemma gets tighter prompt, others get default | `chatPrompts.test.ts` |
 
-**Tag extraction edge cases (helper functions — not exported; test via integration):**
+**Tag extraction edge cases:**
 
-| # | Scenario | Expected |
-|---|----------|----------|
-| T1 | Canonical tag `<recommendation>{"title":"X","year":2020,"type":"movie"}</recommendation>` | Parsed correctly |
-| T2 | Self-closing malformed `<recommendation{"title":"X","year":2020,"type":"movie"}>` | Parsed correctly |
-| T3 | Duplicate tag for same title+year | Deduplicated; only one card |
-| T4 | Tag without year field | `year: undefined`; card shows year from TMDB |
-| T5 | Tag with `type:"tv"` | TV card rendered with season picker |
-| T6 | Download tag `<download>{"title":"X","year":2020}</download>` | Triggers `extractDownloadActions`; auto-download attempted |
+| # | Scenario | Expected | Automated? |
+|---|----------|----------|-----------|
+| T1 | Canonical tag `<recommendation>{"title":"X","year":2020,"type":"movie"}</recommendation>` | Parsed correctly | `chat-tags.test.ts` |
+| T2 | Tag without year field | `year: undefined`; year from TMDB | `chat-tags.test.ts` |
+| T3 | Duplicate tag for same title+year | Deduplicated | `chat-tags.test.ts` |
+| T4 | Tag with `type:"tv"` | TV card rendered | `chat-tags.test.ts` |
+| T5 | Download tag | Triggers `extractDownloadActions` | `chat-tags.test.ts` |
+| T6 | Malformed JSON in tag | Gracefully skipped | `chat-tags.test.ts` |
+| T7 | Non-string year / non-numeric year | Handled gracefully | `chat-tags.test.ts` |
+| T8 | Embedded tags in multiline text | All tags extracted | `chat-tags.test.ts` |
+| T9 | Orphaned closing/opening tags | Stripped cleanly | `chat-tags.test.ts` |
+| T10 | Partial streaming tags (incomplete close) | Not prematurely stripped | `chat-tags.test.ts` |
 
 ---
 
@@ -53,20 +89,20 @@ Updated: 2026-03-08
 
 | # | Scenario | Expected |
 |---|----------|----------|
-| M1 | Film in Plex library | "On Plex ✓" badge; no download button; torrent search skipped |
+| M1 | Film in Plex library | "On Plex" badge; no download button; torrent search skipped |
 | M2 | Film not in Plex | Download button shown with size + seeders |
 | M3 | Film exists on YTS but only 720p | "No 1080p version available" notice |
 | M4 | Film not on YTS at all | No download button; torrents section hidden |
 | M5 | Click Download | Progress bar appears; DownloadsPanel pops up |
-| M6 | After download completes and auto-moves | Card flips to "On Plex ✓" immediately (optimistic) via `forceInLibrary` |
-| M6a | 2 min after move | Silent Plex re-check fires; if Plex has indexed it, badge is now backed by real Plex data |
-| M6b | Plex hasn't indexed after 2 min | Retry at 10 min; badge stays "On Plex ✓" via `forceInLibrary` |
+| M6 | After download completes and auto-moves | Card flips to "On Plex" immediately via `forceInLibrary` |
+| M6a | 2 min after move | Silent Plex re-check; badge backed by real data |
+| M6b | Plex hasn't indexed after 2 min | Retry at 10 min; badge stays via `forceInLibrary` |
 | M6c | Plex hasn't indexed after 10 min | Final retry at 60 min |
 | M6d | Card unmounted before retry fires | Timeout cancelled — no dangling fetch |
-| M7 | Two films with same name, different years (e.g. Beauty and the Beast 1991 & 2017) | Each card shows its own download/Plex status independently |
-| M8 | TMDB finds film; OMDB is unreachable | Card shows TMDB score only; no RT/IMDb scores |
-| M9 | Both TMDB and OMDB are unreachable | Card shows title/year only; no scores/poster |
-| M10 | Film has no poster on TMDB | Placeholder shown; card still renders |
+| M7 | Two films same name, different years | Each card has independent download/Plex status |
+| M8 | TMDB works; OMDB unreachable | TMDB score only; no RT/IMDb |
+| M9 | Both TMDB and OMDB unreachable | Title/year only; no scores/poster |
+| M10 | Film has no poster on TMDB | Placeholder shown |
 
 ---
 
@@ -74,15 +110,15 @@ Updated: 2026-03-08
 
 | # | Scenario | Expected |
 |---|----------|----------|
-| TV1 | TV show fully in Plex (all seasons) | "On Plex ✓" badge; no download button |
-| TV1a | After season download completes | Retry check at 2/10/60 min; `plex.seasons` updates; badge reflects new season in library |
-| TV2 | TV show partially in Plex (e.g. S1 missing) | "Missing: S1" badge; season picker shows available seasons |
-| TV3 | TV show not in Plex | Season picker shown with all TMDB seasons |
-| TV4 | Select season from picker | Knaben search fires for that season; torrent options shown |
+| TV1 | TV show fully in Plex (all seasons) | "On Plex" badge; no download button |
+| TV1a | After season download completes | Retry at 2/10/60 min; `plex.seasons` updates |
+| TV2 | TV show partially in Plex | "Missing: SN" badge; season picker shows available |
+| TV3 | TV show not in Plex | Season picker with all TMDB seasons |
+| TV4 | Select season from picker | Knaben search fires; torrent options shown |
 | TV5 | Select "All" seasons | Searches for complete series pack |
-| TV6 | Multiple torrent options returned | Quality dropdown shown; user can select alternative |
-| TV7 | No season packs found (episodes only) | "No season pack available" notice |
-| TV8 | TV show with specials (season 0) in Plex | Season 0 not counted; correct season count shown |
+| TV6 | Multiple torrent options returned | Quality dropdown shown |
+| TV7 | No season packs found | "No season pack available" notice |
+| TV8 | TV show with specials (season 0) | Season 0 excluded; correct count |
 
 ---
 
@@ -90,137 +126,138 @@ Updated: 2026-03-08
 
 | # | Scenario | Expected |
 |---|----------|----------|
-| D1 | Torrent downloading (status 4) | Progress bar + speed + ETA visible |
-| D2 | Torrent paused (status 0, progress < 100%) | "Paused" label; Resume button shown |
-| D3 | Torrent seeding (status 6, progress 100%) | "Finalizing…" label; no speed/ETA |
-| D4 | Pause button clicked | Torrent pauses; Resume button replaces Pause |
-| D5 | Resume button clicked | Torrent resumes downloading |
-| D6 | Cancel button clicked | Confirms; torrent removed from Transmission; card dismissed |
-| D7 | Auto-move completes (torrent removed by server) | "Added to library" card shown; auto-dismissed after 3 s |
-| D8 | Transmission unreachable for 3 consecutive polls | Error state shown; polling stops |
-| D9 | External torrent (not added via app) visible in Transmission | Shown as "External" but no Pause/Cancel controls |
-| D10 | Downloads panel with 1 download | Panel shows torrent name in summary bar |
-| D11 | Downloads panel with 3 downloads | "3 downloads" label in summary bar |
-| D12 | All downloads complete | Panel collapses automatically |
+| D1 | Torrent downloading (status 4) | Progress bar + speed + ETA |
+| D2 | Torrent paused (status 0, progress < 100%) | "Paused" label; Resume button |
+| D3 | Torrent seeding (status 6, progress 100%) | "Finalizing..." label |
+| D4 | Pause button clicked | Torrent pauses |
+| D5 | Resume button clicked | Torrent resumes |
+| D6 | Cancel button clicked | Confirms; torrent removed; card dismissed |
+| D7 | Auto-move completes | "Added to library" card; auto-dismissed |
+| D8 | Transmission unreachable 3 polls | Error state; polling stops |
+| D9 | External torrent | Shown as "External"; no controls |
+| D10–D12 | Panel with 1/3/0 downloads | Summary bar updates; collapses when empty |
 
 ---
 
 ### 5. File Move (Server-side)
 
-| # | Scenario | Expected |
-|---|----------|----------|
-| F1 | Completed movie torrent | Files moved to `LIBRARY_DIR/<Clean Name>/`; non-video files skipped |
-| F2 | Completed TV season torrent | Files moved to `TV_LIBRARY_DIR/<Show>/Season N/` |
-| F3 | TV season=0 (all seasons) | Files moved to `TV_LIBRARY_DIR/<Show>/` (flat) |
-| F4 | Torrent not 100% complete | Move rejected with 400 error |
-| F5 | Move attempted while already in progress | "already in progress" error swallowed by autoMove |
-| F6 | File with disallowed extension (e.g. .nfo, .jpg) | Skipped; not copied |
-| F7 | File with allowed subtitle extension (.srt) | Copied alongside video |
-| F8 | Source file is a symlink to outside library | Move refused (path traversal defence) |
-| F9 | Destination folder already contains the file | File skipped (logged as "skipped") |
-| F10 | Plex refresh triggered after move | Fire-and-forget; move success not blocked by Plex failure |
+**Covered by:** `moveFiles.test.ts` (26 tests), `api-files-move.test.ts` (12 tests)
+
+| # | Scenario | Expected | Automated? |
+|---|----------|----------|-----------|
+| F1 | Completed movie torrent | Files to `LIBRARY_DIR/<Clean Name>/` | `moveFiles.test.ts` |
+| F2 | Completed TV season | Files to `TV_LIBRARY_DIR/<Show>/Season N/` | `moveFiles.test.ts` |
+| F3 | TV season=0 (all seasons) | Files to `TV_LIBRARY_DIR/<Show>/` (flat) | `moveFiles.test.ts` |
+| F4 | Torrent not 100% complete | Move rejected 400 | `api-files-move.test.ts` |
+| F5 | Disallowed extension (.nfo, .jpg) | Skipped | `moveFiles.test.ts` |
+| F6 | Allowed subtitle (.srt, .ass, .ssa, .sub) | Copied alongside video | `moveFiles.test.ts` |
+| F7 | Symlink to outside library | Refused (path traversal) | `moveFiles.test.ts` |
+| F8 | Backslash traversal (`..\\..\\`) | Sanitised | `moveFiles.test.ts` |
+| F9 | Dot names (`.`, `..`) | Replaced with `Unknown` | `moveFiles.test.ts` |
+| F10 | Plex refresh after move | Fire-and-forget | `moveFiles.test.ts` |
 
 ---
 
 ### 6. Auto-Move Poller
 
-| # | Scenario | Expected |
-|---|----------|----------|
-| A1 | Server starts | Poller starts after 60 s delay |
-| A2 | Completed app torrent detected | Moved automatically; no browser needed |
-| A3 | Multiple torrents complete simultaneously | Moved one at a time with 15 s gap |
-| A4 | Transmission unreachable | Tick skipped; retried next 60 s cycle |
-| A5 | 24 h elapsed since last cleanup | `pruneAppTorrents()` called; stale entries removed |
-| A6 | Torrent registered < 1 h ago, not in Transmission | Grace period protects it from pruning |
-| A7 | Legacy entry (no registeredAt), not in Transmission | Pruned on next daily cleanup |
-| A8 | External torrent (not app-registered) completes | Ignored by poller |
+**Covered by:** `autoMove.test.ts` (16 tests)
+
+| # | Scenario | Expected | Automated? |
+|---|----------|----------|-----------|
+| A1 | Server starts | Poller starts after 60 s delay | `autoMove.test.ts` |
+| A2 | Completed app torrent | Moved automatically | `autoMove.test.ts` |
+| A3 | Multiple torrents complete | Moved one at a time, 15 s gap | `autoMove.test.ts` |
+| A4 | Transmission unreachable | Tick skipped; retried next cycle | `autoMove.test.ts` |
+| A5 | 24 h since last cleanup | `pruneAppTorrents()` called | `autoMove.test.ts` |
+| A6–A8 | Grace period / legacy pruning | Tested | `appTorrents.test.ts` |
 
 ---
 
-### 7. Torrent Search — YTS (Movies)
+### 7. Security & Middleware
 
-**Covered by:** `__tests__/yts.test.ts`
+**Covered by:** `middleware.test.ts` (33 tests), `request-ip.test.ts` (6 tests), `openrouter-callback.test.ts` (12 tests)
+
+| # | Scenario | Expected | Automated? |
+|---|----------|----------|-----------|
+| SEC1 | External IP blocked | 403 | `middleware.test.ts` |
+| SEC2 | RFC-1918 IP allowed | Request proceeds | `middleware.test.ts` |
+| SEC3 | `.local` hostname allowed | Request proceeds | `middleware.test.ts` |
+| SEC4 | X-Forwarded-For last-hop extraction | Correct IP used | `request-ip.test.ts` |
+| SEC5 | ::ffff:-mapped IPv4 | Stripped correctly | `request-ip.test.ts` |
+| SEC6 | OAuth: URL state but no cookie | `state_mismatch` error | `openrouter-callback.test.ts` |
+| SEC7 | OAuth: cookie but no URL state | `state_mismatch` error | `openrouter-callback.test.ts` |
+| SEC8 | OAuth: state values don't match | `state_mismatch` error | `openrouter-callback.test.ts` |
+| SEC9 | OAuth: state values match | Key exchanged and saved | `openrouter-callback.test.ts` |
+| SEC10 | OAuth: no state at all (legacy) | Allowed (backwards compat) | `openrouter-callback.test.ts` |
+| SEC11 | OAuth: missing code param | `no_code` error | `openrouter-callback.test.ts` |
+| SEC12 | OAuth: exchange fails | `exchange_failed` error | `openrouter-callback.test.ts` |
+
+---
+
+### 8. Torrent Search — YTS (Movies)
+
+**Covered by:** `yts.test.ts` (26 tests)
 
 | # | Scenario | Expected |
 |---|----------|----------|
 | Y1 | Exact title match | Returns torrents |
-| Y2 | Partial title match prevented | Empty result |
-| Y3 | Year within ±1 | Matched |
-| Y4 | Year outside ±1 | Falls back to year-agnostic |
+| Y2 | Partial title match | Empty result |
+| Y3 | Year within +/-1 | Matched |
+| Y4 | Year outside +/-1 | Falls back to year-agnostic |
 | Y5 | Only 720p available | `noSuitableQuality: true` |
-| Y6 | 1080p available | Returned; 720p filtered out |
-| Y7 | Sort: x265 > x264 | x265 first in results |
-| Y8 | Sort: bluray > web | bluray first within same codec |
-| Y9 | Sort: seeders tiebreaker | Higher seeders first |
+| Y6 | 1080p available | Returned; 720p filtered |
+| Y7–Y9 | Sort: x265 > x264 > bluray > web > seeders | Correct ordering |
 | Y10 | Magnet includes all 8 trackers | `tr=` count = 8 |
 | Y11 | HTTP error | Empty result, no crash |
 
 ---
 
-### 8. Torrent Search — Knaben/EZTV (TV)
+### 9. Torrent Search — Knaben/EZTV (TV)
 
-**Covered by:** `__tests__/eztv.test.ts` (79 tests)
+**Covered by:** `eztv.test.ts` (58 tests)
 
-Key scenarios already tested: season pack detection, complete-series detection, quality scoring, seeder pool logic, deduplication, fetch error handling.
+Key scenarios: season pack detection, complete-series detection, quality scoring, seeder pool logic, deduplication, fetch error handling.
 
 ---
 
-### 9. Plex Library Search
+### 10. Plex Library Search
 
-**Covered by:** `__tests__/plex.test.ts`
+**Covered by:** `plex.test.ts` (29 tests)
 
 | # | Scenario | Expected |
 |---|----------|----------|
 | P1 | Exact movie match | `found: true` |
 | P2 | No Plex token | `found: false` immediately |
-| P3 | Title with subtitle (colon match) | Matched |
-| P4 | Year ±1 match | Matched |
-| P5 | Two films same name, different years | Correct year selected |
-| P6 | Single candidate, year gap ≤5 | Matched (Step 2 fallback) |
-| P7 | Single candidate, year gap > 5 | Not matched (prevents wrong-version cross-match) |
+| P3 | Title with subtitle (colon) | Matched |
+| P4 | Year +/-1 | Matched |
+| P5 | Two films same name, diff years | Correct year selected |
+| P6 | Single candidate, year gap <= 5 | Matched (Step 2 fallback) |
+| P7 | Single candidate, year gap > 5 | Not matched |
 | P8 | TV show match | `found: true` with `seasons` array |
-| P9 | Specials (season index 0) | Excluded from `seasons` array |
-| P10 | Seasons in wrong order from Plex | Returned sorted numerically |
+| P9 | Specials (season 0) | Excluded from `seasons` |
+| P10 | Seasons in wrong order | Returned sorted numerically |
 | P11 | Season fetch HTTP error | `found: true, seasons: []` |
 
 ---
 
-### 10. App Torrent Registry
+### 11. Config & Diagnostics
 
-**Covered by:** `__tests__/appTorrents.test.ts`
+**Covered by:** `config.test.ts` (16 tests), `api-config.test.ts` (52 tests), `diagnostics-bundle.test.ts` (21 tests)
 
-| # | Scenario | Expected |
-|---|----------|----------|
-| R1 | Register and look up | Found |
-| R2 | Unregister | No longer found |
-| R3 | Old number[] format | Loaded transparently |
-| R4 | Corrupted JSON | Empty registry, no crash |
-| R5 | pruneAppTorrents — active torrent | Protected, never pruned |
-| R6 | pruneAppTorrents — old entry (>1h) | Pruned |
-| R7 | pruneAppTorrents — recent entry (<1h) | Grace period respected |
-| R8 | pruneAppTorrents — legacy (no registeredAt) | Pruned if inactive |
-| R9 | Write is atomic (temp file + rename) | writeFileSync + renameSync both called |
-| R10 | registeredAt timestamp stored | Within ±100ms of real time |
+Key scenarios: readConfig/writeConfig/cfg caching, sensitive field masking, diagnostics token redaction, bundle token validation, log file inclusion.
 
 ---
 
-### 11. TMDB Metadata
-
-**Covered by:** `__tests__/tmdb.test.ts` (18 tests)
-
-Key scenarios: year fallback, partial data when detail fetch fails, season count excludes specials and unaired seasons.
-
----
-
-### 12. Settings Page
+### 12. Settings & Setup Pages
 
 | # | Scenario | Expected |
 |---|----------|----------|
 | S1 | Open `/settings` | All current config values pre-filled |
-| S2 | Click "Test" next to each service | Shows ✅ or ❌ connectivity status |
+| S2 | Click "Test" next to each service | Shows connectivity status |
 | S3 | Save valid config | Saved to `config.local.json`; success toast |
 | S4 | Service test: Plex unreachable | Shows error with URL hint |
 | S5 | Service test: OpenRouter bad key | 401 error shown |
+| S6 | OpenRouter OAuth connect button | Redirects through `/api/openrouter/auth` with CSRF state |
 
 ---
 
@@ -228,46 +265,29 @@ Key scenarios: year fallback, partial data when detail fetch fails, season count
 
 | # | Scenario | Expected |
 |---|----------|----------|
-| PWA1 | Add to Home Screen on iOS | App icon shown; launches in standalone mode |
-| PWA2 | Add to Home Screen on Android | App icon shown; launches in standalone mode |
-| PWA3 | Access over local network HTTP (not HTTPS) | `crypto.randomUUID` falls back gracefully; IDs still generated |
-| PWA4 | Safe area insets (iPhone notch) | Input bar and downloads panel respect `env(safe-area-inset-*)` |
+| PWA1 | Add to Home Screen (iOS/Android) | App icon; standalone mode |
+| PWA2 | HTTP on local IP | `crypto.randomUUID` fallback; IDs still generated |
+| PWA3 | Safe area insets (iPhone notch) | Input bar respects `env(safe-area-inset-*)` |
 
 ---
 
 ## Running the Tests
 
 ```bash
-# Run all tests once
-npm test
-
-# Run in watch mode (re-runs on file save)
-npm run test:watch
-
-# Run with coverage report
-npm run test:coverage
-
-# Run a specific test file
-npx vitest run __tests__/yts.test.ts
-npx vitest run __tests__/plex.test.ts
-npx vitest run __tests__/appTorrents.test.ts
+npm test                        # run all 544 tests once
+npm run test:watch              # watch mode
+npm run test:coverage           # with coverage report
+npx vitest run __tests__/yts.test.ts  # single file
 ```
 
 ---
 
 ## Coverage Gaps (Manual Testing Required)
 
-The following areas cannot be covered by unit tests without significant infrastructure:
-
 | Area | Reason | Testing approach |
 |------|---------|-----------------|
-| `/api/chat` streaming | Requires live LLM | Manual + integration |
-| `/api/transmission/*` | Requires live Transmission instance | Manual with real Transmission |
-| `/api/files/move` | Requires filesystem + Transmission | Manual with test torrents |
-| React components | 'use client' + browser APIs | Manual; consider Playwright E2E |
-| `extractRecommendations` helper | Private function in ChatInterface.tsx | Extract to `lib/chatHelpers.ts` to enable unit testing |
-| `cleanTorrentName` helper | Private function in ChatInterface.tsx | Extract to `lib/chatHelpers.ts` to enable unit testing |
-| Auto-move poller end-to-end | Requires time + Transmission + filesystem | Manual integration test |
-
-### Recommended next step
-Extract the pure helper functions from `ChatInterface.tsx` into `lib/chatHelpers.ts` and export them, so they can be covered by unit tests. Functions to move: `extractRecommendations`, `extractDownloadActions`, `cleanTorrentName`, `normTitle`, `torrentKey`.
+| Full E2E streaming | Requires live LLM | Manual + integration |
+| Transmission RPC | Requires live Transmission | Manual with real Transmission |
+| React component rendering | `use client` + browser APIs | Manual; consider Playwright E2E |
+| Auto-move E2E | Requires time + Transmission + filesystem | Manual integration test |
+| OAuth E2E | Requires live OpenRouter | Manual (unit tests cover CSRF + exchange logic) |

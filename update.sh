@@ -2,7 +2,7 @@
 # Movie Chat — updater
 # Manual:     bash update.sh  /  npm run update
 # Auto (cron): bash update.sh --auto
-set -e
+set -euo pipefail
 
 AUTO=0
 [[ "${1:-}" == "--auto" ]] && AUTO=1
@@ -50,11 +50,44 @@ fi
 
 cd "$INSTALL_DIR"
 
+# ── prevent concurrent runs (cron overlap) ──────────────────────────────────
+LOCKFILE="$INSTALL_DIR/.update.lock"
+if [ -f "$LOCKFILE" ]; then
+  OLD_PID=$(cat "$LOCKFILE" 2>/dev/null || echo "")
+  if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+    [ "$AUTO" -eq 1 ] && echo "[$(date '+%Y-%m-%d %H:%M')] Skipped — another update is already running (PID $OLD_PID)."
+    [ "$AUTO" -eq 0 ] && warn "Another update is already running (PID $OLD_PID). Aborting."
+    exit 0
+  fi
+  # Stale lock file — previous run crashed; clean up and continue
+fi
+echo $$ > "$LOCKFILE"
+trap 'rm -f "$LOCKFILE"' EXIT
+
 # ── header ───────────────────────────────────────────────────────────────────
 if [ "$AUTO" -eq 0 ]; then
   echo ""
   echo -e "${BOLD}  Movie Chat — update${RESET}"
   echo "  ─────────────────────────────────────────"
+fi
+
+# ── dirty worktree check ────────────────────────────────────────────────────
+if ! git diff --quiet HEAD 2>/dev/null; then
+  if [ "$AUTO" -eq 1 ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M')] Skipped — local modifications detected. Run manually to resolve."
+    exit 1
+  fi
+  warn "You have local modifications:"
+  git diff --stat
+  echo ""
+  ask "Stash them and continue? [Y/n]"
+  read -r REPLY
+  if [[ "$REPLY" =~ ^[Nn]$ ]]; then
+    echo "  Cancelled." && echo ""
+    exit 0
+  fi
+  git stash push -m "update.sh auto-stash $(date '+%Y-%m-%d %H:%M')"
+  info "Changes stashed (restore later with: git stash pop)"
 fi
 
 # ── check for updates ─────────────────────────────────────────────────────────
@@ -89,24 +122,68 @@ else
   echo "[$(date '+%Y-%m-%d %H:%M')] ${COMMITS_BEHIND} update(s) found — updating..."
 fi
 
+# ── save rollback point ──────────────────────────────────────────────────────
+ROLLBACK_SHA="$LOCAL"
+
+rollback() {
+  error "Update failed — rolling back to previous version..."
+  git reset --hard "$ROLLBACK_SHA" 2>/dev/null || true
+  # Attempt to restore a working build from the rolled-back code
+  npm install --silent 2>/dev/null || true
+  npm run build --silent 2>/dev/null || true
+  if command -v pm2 &>/dev/null && pm2 describe movie-chat &>/dev/null 2>&1; then
+    pm2 restart movie-chat --silent 2>/dev/null || true
+    warn "Rolled back and restarted previous version."
+  else
+    warn "Rolled back to $ROLLBACK_SHA. Start manually with: npm run build && npm run start"
+  fi
+}
+
 # ── pull ──────────────────────────────────────────────────────────────────────
-git pull --quiet
+if ! git pull --quiet; then
+  error "git pull failed — possible merge conflict."
+  rollback
+  exit 1
+fi
 info "Downloaded latest code"
 
-# ── npm install (always — restores any deps removed by previous prune/update) ──
+# ── npm install ──────────────────────────────────────────────────────────────
 [ "$AUTO" -eq 0 ] && echo "  Installing dependencies..."
-npm install --silent
+if ! npm install 2>&1 | tail -5; then
+  error "npm install failed."
+  rollback
+  exit 1
+fi
 info "Dependencies ready"
 
-# ── build (always required for production mode) ───────────────────────────────
+# ── build ────────────────────────────────────────────────────────────────────
 [ "$AUTO" -eq 0 ] && echo "  Building..."
-npm run build --silent
+if ! npm run build 2>&1 | tail -20; then
+  error "Build failed."
+  rollback
+  exit 1
+fi
 info "Build complete"
 
 # ── restart pm2 ───────────────────────────────────────────────────────────────
 if command -v pm2 &>/dev/null && pm2 describe movie-chat &>/dev/null 2>&1; then
   pm2 restart movie-chat --silent
-  info "App restarted"
+
+  # Health check — wait for the server to respond
+  HEALTH_OK=0
+  for i in 1 2 3 4 5; do
+    sleep 2
+    if curl -sf -o /dev/null "http://localhost:${PORT:-3000}/api/setup/status" 2>/dev/null; then
+      HEALTH_OK=1
+      break
+    fi
+  done
+
+  if [ "$HEALTH_OK" -eq 1 ]; then
+    info "App restarted and healthy"
+  else
+    warn "App restarted but health check failed — check logs: pm2 logs movie-chat"
+  fi
 else
   warn "pm2 not running — start with:  npm run build && npm run start"
 fi

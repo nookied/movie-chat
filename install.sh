@@ -40,8 +40,15 @@ if ! command -v node &>/dev/null; then
 else
   NODE_VER=$(node -e "process.stdout.write(process.version.slice(1))")
   NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
-  if [ "$NODE_MAJOR" -lt 18 ]; then
-    error "Node.js $NODE_VER found — v18 or later required. Download from https://nodejs.org"
+  NODE_MINOR=$(echo "$NODE_VER" | cut -d. -f2)
+  # Next.js 15 requires ^18.18.0 || ^19.8.0 || >=20.0.0
+  NODE_OK=0
+  if   [ "$NODE_MAJOR" -ge 20 ]; then NODE_OK=1
+  elif [ "$NODE_MAJOR" -eq 19 ] && [ "$NODE_MINOR" -ge 8  ]; then NODE_OK=1
+  elif [ "$NODE_MAJOR" -eq 18 ] && [ "$NODE_MINOR" -ge 18 ]; then NODE_OK=1
+  fi
+  if [ "$NODE_OK" -eq 0 ]; then
+    error "Node.js $NODE_VER found — v18.18 or later required (v20+ recommended). Download from https://nodejs.org"
     MISSING=1
   else
     info "Node.js $NODE_VER"
@@ -118,9 +125,10 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
   info "pm2 process list saved"
 
   # register pm2 with the OS so it starts on reboot
-  STARTUP_CMD=$(pm2 startup 2>&1 | grep "^sudo")
+  STARTUP_CMD=$(pm2 startup 2>&1 | grep "^sudo.*pm2")
   if [ -n "$STARTUP_CMD" ]; then
     echo "       Registering pm2 with system startup"
+    echo "       Running: $STARTUP_CMD"
     echo "       (you may be prompted for your password)..."
     eval "$STARTUP_CMD"
     info "pm2 registered — will start automatically on reboot"
@@ -148,7 +156,7 @@ echo ""
 
 if [[ "$REPLY_UPDATE" =~ ^[Yy]$ ]]; then
   CRON_CMD="0 3 * * * cd \"$INSTALL_DIR\" && bash update.sh --auto >> \"$HOME/.movie-chat-update.log\" 2>&1"
-  if crontab -l 2>/dev/null | grep -qF "movie-chat"; then
+  if crontab -l 2>/dev/null | grep -qF "update.sh --auto"; then
     warn "A Movie Chat cron job already exists — skipping"
   else
     (crontab -l 2>/dev/null; echo "$CRON_CMD") | crontab -

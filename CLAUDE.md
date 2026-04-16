@@ -43,7 +43,8 @@
 | `app/setup/page.tsx` | Post-install wizard — summary, Plex token, metadata keys |
 | `app/api/setup/status/route.ts` | Config completeness check (at least one LLM configured) |
 | `app/api/setup/detect/route.ts` | Auto-detect Ollama/Plex/Transmission on network |
-| `app/api/openrouter/callback/route.ts` | OAuth PKCE callback — exchanges code for API key |
+| `app/api/openrouter/auth/route.ts` | OAuth initiation — CSRF state cookie + redirect to OpenRouter |
+| `app/api/openrouter/callback/route.ts` | OAuth PKCE callback — CSRF state verification, fixed-origin redirects, key exchange |
 | `components/ShareButton.tsx` | QR code modal for sharing app URL with household |
 | `components/ui/` | Shared UI: StatusIcon, Section, Field, Toggle |
 
@@ -136,7 +137,7 @@ Map out the architecture before attempting fixes: what services are involved, wh
 
 ## Testing
 
-`npm test` (Vitest, Node env). 25 test files under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, and the logger/diagnostics surfaces. Conventions:
+`npm test` (Vitest, Node env). 29 test files, 544 tests under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, and ThinkFilter streaming. Conventions:
 
 - Mock `fs` with `vi.mock('fs', () => ({ default: fsMock, ...fsMock }))` so both ESM and CJS imports see the mock.
 - `vi.resetModules()` in `beforeEach` so module-level state (rate-limit map, logger caches, etc.) is fresh per test.

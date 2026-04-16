@@ -255,6 +255,58 @@ describe('OpenRouter success', () => {
     const text = await res.text();
     expect(text).toBe('answer');
   });
+
+  it('strips think blocks split across token boundaries', async () => {
+    cfgMock.mockImplementation(openRouterKeyOnly);
+    fetchSpy.mockResolvedValue(sseResponse([
+      'Hello <thi', 'nk>hidden</thi', 'nk>world',
+    ]));
+
+    const res = await POST(makeReq({ messages: [{ role: 'user', content: 'x' }] }, '6.6.6.7'));
+    const text = await res.text();
+    expect(text).toBe('Hello world');
+  });
+
+  it('strips multiple think blocks in a single stream', async () => {
+    cfgMock.mockImplementation(openRouterKeyOnly);
+    fetchSpy.mockResolvedValue(sseResponse([
+      '<think>first</think>A',
+      '<think>second</think>B',
+    ]));
+
+    const res = await POST(makeReq({ messages: [{ role: 'user', content: 'x' }] }, '6.6.6.8'));
+    const text = await res.text();
+    expect(text).toBe('AB');
+  });
+
+  it('handles empty think block', async () => {
+    cfgMock.mockImplementation(openRouterKeyOnly);
+    fetchSpy.mockResolvedValue(sseResponse(['before<think></think>after']));
+
+    const res = await POST(makeReq({ messages: [{ role: 'user', content: 'x' }] }, '6.6.6.9'));
+    const text = await res.text();
+    expect(text).toBe('beforeafter');
+  });
+
+  it('passes through < characters that are not think tags', async () => {
+    cfgMock.mockImplementation(openRouterKeyOnly);
+    fetchSpy.mockResolvedValue(sseResponse(['a < b and <b>bold</b>']));
+
+    const res = await POST(makeReq({ messages: [{ role: 'user', content: 'x' }] }, '6.6.7.0'));
+    const text = await res.text();
+    expect(text).toBe('a < b and <b>bold</b>');
+  });
+
+  it('handles think tag opening split one character at a time', async () => {
+    cfgMock.mockImplementation(openRouterKeyOnly);
+    fetchSpy.mockResolvedValue(sseResponse([
+      'ok<', 't', 'h', 'i', 'n', 'k', '>', 'hidden', '</think>', 'visible',
+    ]));
+
+    const res = await POST(makeReq({ messages: [{ role: 'user', content: 'x' }] }, '6.6.7.1'));
+    const text = await res.text();
+    expect(text).toBe('okvisible');
+  });
 });
 
 // ─── OpenRouter failure → Ollama fallback ───────────────────────────────

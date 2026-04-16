@@ -1,43 +1,50 @@
 # Handoff
 
-## Current pass (security hardening + route/component refactor)
+## Current pass (full audit — security, stability, QA expansion)
 
-This pass covered:
-
-- Security hardening across all POST routes and middleware
-- Input validation and atomic writes
-- Path traversal protection in file move
-- Shared request-body and IP-extraction utilities
-- Chat route modularisation (`lib/chat/`)
-- Final `ChatInterface` and `RecommendationCard` split into focused hooks and subcomponents
-- Media-key normalisation utilities extracted to `lib/mediaKeys.ts`
+This pass covered two rounds: (1) a security hardening + component refactor pass, and (2) a comprehensive codebase audit with bug fixes, test expansion, and documentation overhaul.
 
 ## Key changes
 
 ### Security fixes
-- `lib/requestBody.ts` — `readJsonBody()`: unified body parser with Content-Length pre-check (413), 64 KB cap, empty-body guard (400), and JSON parse error (400). Applied to all POST routes.
-- `lib/requestIp.ts` — `extractRequestIp()`: reads the **last** hop of `X-Forwarded-For` instead of the first, preventing client-spoofed header bypass of LAN guard and rate limiter.
-- `lib/config.ts` — `writeConfig()` now uses write-to-temp + `renameSync` (atomic) to prevent concurrent saves from corrupting `config.local.json`.
-- `lib/moveFiles.ts` — Added `assertWithinDir(torrentFolder, DOWNLOAD_DIR)` before `fs.rm` so a maliciously-named torrent (`status.name = '.'`) cannot wipe the entire download directory. Also: on `unlink` failure the rollback no longer deletes the destination copy.
-- `middleware.ts` — Internal setup-status URL now uses `INTERNAL_APP_ORIGIN` (fixed `http://127.0.0.1:<PORT>`) instead of reflecting `req.url`, eliminating an SSRF vector via the Host header.
-- `app/api/transmission/add/route.ts` — Added full input validation: magnet format, `mediaType` enum, `season` non-negative integer, cross-field TV/season check, `title` length limit (500 chars), `year` range (1888–3000).
 
-### Refactor
-- `lib/chat/systemMessages.ts` — All `[System]` message strings centralised here.
-- `lib/mediaKeys.ts` — Pure utility functions for title normalisation, torrent/download key generation, and capped-set helpers.
-- `lib/randomId.ts`, `lib/requestIp.ts`, `lib/requestBody.ts` — Small shared utilities extracted from inline usage.
-- `components/ChatInterface.tsx` — Now ~120 lines; pure composition root over focused hooks.
-- `components/RecommendationCard.tsx` — Now ~120 lines; layout and wiring only.
-- `components/chat/` — `ChatMessageList`, `ChatComposer` (presentational, no state).
-- `components/recommendation/` — `LibraryStatusBadge`, `MovieDownloadSection`, `TvDownloadSection`, `ScoreBadge` (presentational, no state).
-- `hooks/` — `useChatHistory`, `useChatSendMessage`, `useAppDownloads`, `usePendingTorrents`, `useDownloadTrigger`, `useRecommendationCardState` — all with AbortController cleanup and mount guards.
+- **OAuth CSRF + URL hijack** (`app/api/openrouter/auth/route.ts`, `app/api/openrouter/callback/route.ts`): New auth initiation route generates a random state token stored in an httpOnly cookie. The callback verifies the state with `crypto.timingSafeEqual`. All redirects use a fixed `APP_ORIGIN` (env `INTERNAL_APP_ORIGIN` or `http://127.0.0.1:<PORT>`) instead of reflecting the client Host header.
+- **Body size limit + JSON error handling** (`lib/requestBody.ts`): All POST routes reject requests over 64 KB (413) and return 400 on malformed JSON.
+- **IP spoofing hardened** (`lib/requestIp.ts`): LAN guard and rate limiter use the last hop of `X-Forwarded-For` instead of the first.
+- **Atomic config writes** (`lib/config.ts`): `writeConfig` uses write-to-temp + `renameSync` to prevent corruption.
+- **Path traversal guard** (`lib/moveFiles.ts`): `assertWithinDir` check before `fs.rm` prevents a maliciously-named torrent from wiping the download directory. Symlinks are rejected.
+- **Middleware SSRF fix** (`middleware.ts`): Internal setup-status URL uses a fixed origin instead of reflecting `req.url`.
+- **Input validation** (`app/api/transmission/add/route.ts`): `mediaType` enum, `season` non-negative integer, `title` length limit (500), `year` range (1888–3000).
+
+### Bug fixes
+
+- **Stream reader leak** (`app/api/chat/route.ts`): Added `reader.cancel()` in `finally` block so upstream LLM streams are closed when the client disconnects.
+- **Stale closure in DownloadTracker** (`components/DownloadTracker.tsx`): `fetchStatus` now lists all referenced props in its deps array.
+- **Inline function identity** (`components/DownloadsPanel.tsx`): Extracted `DownloadTrackerWrapper` with `useCallback`-memoized `onComplete` to stop poll timer resets.
+- **File move data loss** (`lib/moveFiles.ts`): On `unlink` failure the rollback no longer deletes the destination copy.
+
+### Update script hardened (`update.sh`)
+
+- PID-based lock file (`.update.lock`) prevents concurrent cron runs; stale locks auto-cleaned
+- `set -euo pipefail` for strict error handling
+- Dirty-worktree detection with optional stash
+- Rollback on pull/install/build failure: `git reset --hard` + rebuild + pm2 restart
+- Post-restart health check: polls `/api/setup/status` up to 5 times
+
+### Refactor (from first pass)
+
+- `lib/chat/systemMessages.ts` — all `[System]` message strings centralised
+- `lib/mediaKeys.ts` — title normalisation, key generation, capped-set helpers
+- `lib/requestBody.ts`, `lib/requestIp.ts`, `lib/randomId.ts` — shared utilities
+- `components/ChatInterface.tsx` — ~120-line composition root over focused hooks
+- `components/RecommendationCard.tsx` — ~120-line layout; all data fetching in `useRecommendationCardState`
+- `hooks/` — `useChatHistory`, `useChatSendMessage`, `useAppDownloads`, `usePendingTorrents`, `useDownloadTrigger`, `useRecommendationCardState` with AbortController cleanup
 
 ## Validation
 
 ```
-PATH="/opt/homebrew/bin:$PATH" npx tsc --noEmit   # zero errors
-PATH="/opt/homebrew/bin:$PATH" npx vitest run      # 26 files / 464 tests passing
-npm run build
+npx vitest run        # 29 files / 544 tests passing
+npm run build         # clean production build
 ```
 
 ## Deployment
@@ -48,25 +55,33 @@ npm run build && pm2 restart movie-chat
 
 Prompt changes require a server restart. Config changes are hot-reloaded (30s cache).
 
-## Remaining audit items (not yet fixed)
-
-These were identified in the security audit but not addressed in this pass:
+## Remaining audit items
 
 ### Still open
-- **SEC-1** `app/api/config/route.ts` — `diagnosticsToken` still returned in plaintext via `GET /api/config`. Any LAN device can retrieve it and download the full chat-log bundle. Intentionally deferred — the Settings page UI currently depends on it. Fix: serve the token only through a server-rendered Settings page, not the JSON config endpoint.
-- **CR-4** `app/api/chat/route.ts` `ThinkFilter` — If the LLM emits `<think>` without a closing tag, trailing buffered content is silently dropped when the stream ends. Add a `flush()` method.
+
+- **SEC-1** `app/api/config/route.ts` — `diagnosticsToken` returned in plaintext via `GET /api/config`. Any LAN device can retrieve it and download the full chat-log bundle. Deferred because the Settings page UI depends on it. Fix: serve the token only through a server-rendered page, not the JSON config endpoint.
+- **CR-4** `app/api/chat/route.ts` `ThinkFilter` — If the LLM emits `<think>` without a closing tag, trailing buffered content is silently dropped. Add a `flush()` method.
 - **RE-2** `app/api/diagnostics/bundle/route.ts` — Reads all log files into memory at once (~100 MB peak). Reduce `MAX_BUNDLE_BYTES` or stream the response.
-- **RE-3/4** `lib/yts.ts`, `lib/eztv.ts` — No server-side caching on torrent search results. YTS: up to 3 sequential 8s requests per card. Knaben: 2 parallel requests per season click. Add a short TTL cache keyed by `(title, season)`.
-- Add `app-torrents.json` to `.gitignore` — could be accidentally committed, leaking torrent metadata.
+- **RE-3/4** `lib/yts.ts`, `lib/eztv.ts` — No server-side caching on torrent search results. Add a short TTL cache keyed by `(title, season)`.
 - `forceOllama` in `/api/chat` body not validated as boolean.
+
+### Resolved this session
+
+- OAuth CSRF protection (was unprotected)
+- OAuth redirect URL hijack via Host header (was reflecting client header)
+- Stream reader leak on disconnect (now cancelled in `finally`)
+- Stale closures in DownloadTracker (deps corrected)
+- Inline function identity causing timer resets (extracted wrapper)
+- update.sh concurrent run risk (lock file added)
+- update.sh silent failure on pipe (pipefail already set; verified correct)
 
 ## Recommended next pass
 
-- Fix remaining audit items above (start with SEC-1 and CR-4)
-- Chat route modularisation (`app/api/chat/route.ts` is still a large single file)
-- Setup/settings workflow consolidation (see `REFACTOR_RECOMMENDATIONS.md`)
+1. Fix SEC-1 (diagnostics token exposure) and CR-4 (ThinkFilter flush)
+2. Chat route modularisation (`app/api/chat/route.ts` remains a single large file — see Phase 3 of `REFACTOR_RECOMMENDATIONS.md`)
+3. Setup/settings workflow consolidation (see Phase 4 of `REFACTOR_RECOMMENDATIONS.md`)
 
 ## Known quirks
 
 - `npm run lint` launches Next's ESLint setup prompt interactively — not usable in CI without first completing the ESLint migration.
-- `assertWithinDir` error message when `allowSameDir=false` fires says "outside allowed directory" — cosmetically inaccurate (the path equals the root rather than being outside it). No functional impact.
+- `assertWithinDir` error message when `allowSameDir=false` says "outside allowed directory" — cosmetically inaccurate (path equals the root). No functional impact.
