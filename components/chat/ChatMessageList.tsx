@@ -9,7 +9,7 @@ import RecommendationCard from '@/components/RecommendationCard';
 interface Props {
   bottomRef: RefObject<HTMLDivElement>;
   forceRecommendationInLibrary: (recommendation: Recommendation) => boolean;
-  isRecommendationDownloading: (recommendation: Recommendation) => boolean;
+  isRecommendationDownloading: (recommendation: Recommendation, season?: number) => boolean;
   isStreaming: boolean;
   messages: ChatMessage[];
   onDownload: (title: string, year?: number) => Promise<boolean>;
@@ -65,7 +65,7 @@ export default function ChatMessageList({
               onNoSuitableQuality={onNoSuitableQuality}
               onNotFound={onNotFound}
               onDownload={onDownload}
-              isDownloading={isRecommendationDownloading(recommendation)}
+              isDownloading={(season) => isRecommendationDownloading(recommendation, season)}
               forceInLibrary={forceRecommendationInLibrary(recommendation)}
             />
           ))}

@@ -142,12 +142,15 @@ export function useAppDownloads() {
     saveAppTorrentIds(appIds);
   }, []);
 
-  const isRecommendationDownloading = useCallback((recommendation: Recommendation) => (
+  const isRecommendationDownloading = useCallback((recommendation: Recommendation, season?: number) => (
     activeDownloads.some((download) => {
       if (
         normalizeComparableTitle(trackedDownloadBaseTitle(download.torrentName))
         !== normalizeComparableTitle(recommendation.title)
       ) {
+        return false;
+      }
+      if (season !== undefined && download.season !== undefined && download.season !== season) {
         return false;
       }
       if (download.year !== undefined && recommendation.year !== undefined) {
