@@ -6,11 +6,12 @@ interface Props {
   input: string;
   inputRef: RefObject<HTMLTextAreaElement>;
   isStreaming: boolean;
+  onFocus?: () => void;
   onSend: () => void;
   setInput: Dispatch<SetStateAction<string>>;
 }
 
-export default function ChatComposer({ input, inputRef, isStreaming, onSend, setInput }: Props) {
+export default function ChatComposer({ input, inputRef, isStreaming, onFocus, onSend, setInput }: Props) {
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
@@ -39,6 +40,7 @@ export default function ChatComposer({ input, inputRef, isStreaming, onSend, set
           value={input}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
+          onFocus={onFocus}
           placeholder="What are you in the mood for?"
           rows={1}
           disabled={isStreaming}

@@ -68,6 +68,19 @@ export default function ChatInterface() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // On mobile, the visual viewport shrinks when the keyboard opens, causing the
+  // scroll container to resize and the content to jump. Scroll to bottom instantly
+  // on any visual viewport resize (keyboard open/close, orientation change).
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      bottomRef.current?.scrollIntoView({ behavior: 'instant' });
+    };
+    vv.addEventListener('resize', onResize);
+    return () => vv.removeEventListener('resize', onResize);
+  }, []);
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || isStreaming) return;
@@ -144,6 +157,7 @@ export default function ChatInterface() {
         input={input}
         inputRef={inputRef}
         isStreaming={isStreaming}
+        onFocus={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
         onSend={handleSend}
         setInput={setInput}
       />
