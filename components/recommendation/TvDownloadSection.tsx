@@ -133,6 +133,10 @@ export default function TvDownloadSection({
                       </option>
                     ))}
                   </select>
+                ) : tvTorrentOptions?.length === 1 ? (
+                  <span className="text-xs text-gray-600">
+                    {(tvTorrentOptions[0].sizeBytes / 1e9).toFixed(1)} GB · {tvTorrentOptions[0].seeders} seeders
+                  </span>
                 ) : torrentMeta ? (
                   <span className="text-xs text-gray-600">
                     {torrentMeta.size}

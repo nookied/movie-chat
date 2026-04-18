@@ -148,8 +148,7 @@ function pickBest(candidates: KnabenHit[]): TvTorrentResult {
     quality:   parseQualityLabel(best.title),
     sizeBytes: best.bytes,
     seeders:   best.seeders,
-    // Only include options when there is genuine choice (>1 candidate).
-    options:   topOptions.length > 1 ? topOptions : undefined,
+    options:   topOptions,
   };
 }
 
