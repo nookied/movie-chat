@@ -251,9 +251,9 @@ describe('pickBest()', () => {
   });
 
   // options field
-  it('options is undefined when only one candidate', () => {
+  it('options has one entry when only one candidate', () => {
     const result = pickBest([hit('Show.S01.1080p', 10_000_000_000, 50)]);
-    expect(result.options).toBeUndefined();
+    expect(result.options).toHaveLength(1);
   });
 
   it('options is present and length ≤ 4 when multiple candidates exist', () => {
