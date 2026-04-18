@@ -12,6 +12,10 @@ function inferType(kind?: string): 'movie' | 'tv' {
   return /show|series|tv/i.test(kind) ? 'tv' : 'movie';
 }
 
+function inferTypeFromContext(text: string): 'movie' | 'tv' {
+  return /\b(?:tv|show|series|episode)\b/i.test(text) ? 'tv' : 'movie';
+}
+
 function stripOuterQuotes(text: string): string {
   let value = text.trim();
   const pairs: Array<[string, string]> = [['"', '"'], ["'", "'"], ['“', '”'], ['‘', '’']];
@@ -99,7 +103,7 @@ export function extractDirectTitleLookup(text: string): Recommendation | null {
     const afterQuote = trimmed.slice(match.index! + match[0].length);
     const trailingYear = afterQuote.match(/^\s+\(?((?:18|19|20)\d{2})\)?(?:[.!])?\s*$/);
     const year = trailingYear?.[1] ? Number(trailingYear[1]) : undefined;
-    return buildRecommendation(title, 'movie', year);
+    return buildRecommendation(title, inferTypeFromContext(trimmed), year);
   }
 
   const explicitPatterns = [
@@ -121,7 +125,7 @@ export function extractDirectTitleLookup(text: string): Recommendation | null {
   if (quotedCommand?.groups?.title) {
     return buildRecommendation(
       quotedCommand.groups.title,
-      'movie',
+      inferTypeFromContext(trimmed),
       quotedCommand.groups.year ? Number(quotedCommand.groups.year) : undefined
     );
   }

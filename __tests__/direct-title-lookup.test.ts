@@ -51,6 +51,39 @@ describe('extractDirectTitleLookup', () => {
     });
   });
 
+  it('infers tv from "tv show" suffix after quoted title', () => {
+    expect(extractDirectTitleLookup('"Mad Men" tv show')).toEqual({
+      title: 'Mad Men',
+      type: 'tv',
+      year: undefined,
+    });
+  });
+
+  it('infers tv from "tv show" prefix before quoted title', () => {
+    const result = extractDirectTitleLookup('A tv show "mad men"');
+    expect(result).toEqual({
+      title: 'Mad Men',
+      type: 'tv',
+      year: undefined,
+    });
+  });
+
+  it('infers tv from "series" keyword around quoted title', () => {
+    expect(extractDirectTitleLookup('"The Bear" series')).toEqual({
+      title: 'The Bear',
+      type: 'tv',
+      year: undefined,
+    });
+  });
+
+  it('keeps movie type when no tv hint is present in quoted segment', () => {
+    expect(extractDirectTitleLookup('"Alien" 1979')).toEqual({
+      title: 'Alien',
+      type: 'movie',
+      year: 1979,
+    });
+  });
+
   it('ignores generic recommendation requests', () => {
     expect(extractDirectTitleLookup('find me something funny')).toBeNull();
     expect(extractDirectTitleLookup('what should i watch tonight?')).toBeNull();

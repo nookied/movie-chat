@@ -16,6 +16,8 @@ const SEED_MESSAGES = [
   { role: 'assistant' as const, content: 'Arrival is phenomenal — smart sci-fi that stays with you.\n<recommendation>{"title":"Arrival","year":2016,"type":"movie"}</recommendation>' },
   { role: 'user' as const, content: 'can you find "Send Help"' },
   { role: 'assistant' as const, content: 'On it!\n<recommendation>{"title":"Send Help","type":"movie"}</recommendation>' },
+  { role: 'user' as const, content: '"Mad Men" tv show' },
+  { role: 'assistant' as const, content: 'On it!\n<recommendation>{"title":"Mad Men","type":"tv"}</recommendation>' },
 ];
 
 // Simple in-memory rate limiter: max 30 requests per minute per IP.

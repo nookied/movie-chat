@@ -40,6 +40,10 @@ On it!
 On it!
 <recommendation>{"title":"Send Help","type":"movie"}</recommendation>
 
+"Mad Men" tv show →
+On it!
+<recommendation>{"title":"Mad Men","type":"tv"}</recommendation>
+
 Phrase-like titles (questions, kill/die/murder/dead, declarative sentences) are still titles:
 
 "how to make a killing" →
@@ -98,6 +102,10 @@ You: On it!
 User: 'the film is titled "Send Help"'
 You: On it!
 <recommendation>{"title":"Send Help","type":"movie"}</recommendation>
+
+User: "Mad Men" tv show
+You: On it!
+<recommendation>{"title":"Mad Men","type":"tv"}</recommendation>
 
 User: "how to make a killing"
 You: On it!
