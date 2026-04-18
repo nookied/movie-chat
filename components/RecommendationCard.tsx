@@ -24,7 +24,7 @@ interface Props {
   onNoSuitableQuality: (title: string, year?: number) => void;
   onDownload: (title: string, year?: number) => Promise<boolean>;
   onNotFound?: (title: string) => void;
-  isDownloading?: boolean;
+  isDownloading?: (season?: number) => boolean;
   forceInLibrary?: boolean;
 }
 
@@ -36,7 +36,7 @@ export default function RecommendationCard({
   onNoSuitableQuality,
   onDownload,
   onNotFound,
-  isDownloading = false,
+  isDownloading = () => false,
   forceInLibrary = false,
 }: Props) {
   const {
@@ -158,7 +158,7 @@ export default function RecommendationCard({
               <MovieDownloadSection
                 downloading={downloading}
                 forceInLibrary={forceInLibrary}
-                isDownloading={isDownloading}
+                isDownloading={isDownloading()}
                 noSuitableQuality={noSuitableQuality}
                 onDownload={startMovieDownload}
                 torrentMeta={torrentMeta}
@@ -168,7 +168,7 @@ export default function RecommendationCard({
             )
           ) : numberOfSeasons ? (
             <TvDownloadSection
-              isDownloading={isDownloading}
+              isDownloading={isDownloading(selectedSeason ?? undefined)}
               numberOfSeasons={numberOfSeasons}
               onDownload={startTvDownload}
               onOptionSelect={handleOptionSelect}
