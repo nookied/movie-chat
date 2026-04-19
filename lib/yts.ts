@@ -225,8 +225,11 @@ export async function fetchPopularMovies(options: YtsPopularOptions = {}): Promi
   const minimumYear = typeof options.minimumYear === 'number' && options.minimumYear > 0
     ? options.minimumYear
     : undefined;
+  const maximumYear = typeof options.maximumYear === 'number' && options.maximumYear > 0
+    ? options.maximumYear
+    : undefined;
 
-  if (!minimumYear) {
+  if (!minimumYear && !maximumYear) {
     const { movies, rawTotalCount } = await fetchPopularPage({
       genre: options.genre,
       limit,
@@ -270,7 +273,9 @@ export async function fetchPopularMovies(options: YtsPopularOptions = {}): Promi
     rawSeen += movies.length;
 
     const filtered = movies.filter((movie) => (
-      typeof movie.year === 'number' && movie.year >= minimumYear
+      typeof movie.year === 'number'
+      && (!minimumYear || movie.year >= minimumYear)
+      && (!maximumYear || movie.year <= maximumYear)
     ));
     filteredSeen += filtered.length;
     collected.push(...filtered);

@@ -1,14 +1,28 @@
 # Handoff
 
-## Latest pass (2026-04-19 — popular card hover strip fix)
+## Latest pass (2026-04-19 — year range filter + hover strip fix)
 
 ### What changed
 
-**Bug fix** — `components/PopularMovieCard.tsx`: added `overflow-hidden` to the inner `div.relative.aspect-[2/3]` poster container. The image uses `group-hover:scale-105`; without overflow clipping on that div, the scaled image leaked below the poster area and produced a visible transparent/image strip between the poster and the title bar on hover. The outer `Link` element already had `overflow-hidden` but that only clipped at the card boundary, not at the poster boundary.
+**Feature** — Most Downloaded year filter replaced with 7 closed 5-year ranges:
+- Top bucket: nearest multiple-of-5 at or below the current year → "2025 and later" (`min` only)
+- 5 closed mid-buckets: 2020–2024, 2015–2019, 2010–2014, 2005–2009, 2000–2004
+- Bottom: "Before 2000" (`max` only)
+- Plus "Any year" (no filter) — 8 total items in the dropdown
+
+`maximumYear` support was threaded through the full stack:
+- `types/index.ts` → `YtsPopularOptions.maximumYear?: number`
+- `lib/yts.ts` → `fetchPopularMovies` parses it; both `minimumYear` and `maximumYear` gate the over-fetch path; filter checks both bounds
+- `app/api/yts/popular/route.ts` → parses and validates `maximum_year` query param (same guard as `minimum_year`)
+- `components/PopularMoviesPanel.tsx` → state changed from `minYear: number` to `yearValue: string` (encodes both bounds); sends both params to the API; tab reset clears `yearValue`
+
+**Bug fix** — `components/PopularMovieCard.tsx`: added `overflow-hidden` to the inner `div.relative.aspect-[2/3]` poster container. The `group-hover:scale-105` zoom leaked outside that div, producing a visible strip between the poster and the title bar on hover.
 
 ### Validation
 
-Code-review verified: one-line addition, no tests affected, no other files changed.
+```
+npm test    # 35 files / 632 tests — pass (no new tests needed; filter logic is UI-only wiring)
+```
 
 ---
 

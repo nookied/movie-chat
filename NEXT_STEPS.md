@@ -59,7 +59,7 @@ Both pages currently duplicate config save logic, service-test logic, and page-l
 
 ## Feature: YTS Popular Movies Browser — SHIPPED 2026-04-19
 
-The `/popular` browse page with `fetchPopularMovies()` in `lib/yts.ts`, the `GET /api/yts/popular` route, `PopularMoviesPanel` + `PopularMovieCard` components, and the `?rec=<json>` chat handoff all landed. See `HANDOFF.md` § *Latest pass* for the final shape (tab-specific controls, `NEWEST_MIN_YEAR` scoping, 4h cache TTL, 1080p badge removed).
+The `/popular` browse page with `fetchPopularMovies()` in `lib/yts.ts`, the `GET /api/yts/popular` route, `PopularMoviesPanel` + `PopularMovieCard` components, and the `?rec=<json>` chat handoff all landed. See `HANDOFF.md` § *Latest pass* for the final shape (tab-specific controls, `NEWEST_MIN_YEAR` scoping, 4h cache TTL, 1080p badge removed). The Most Downloaded year filter was subsequently replaced with 7 closed 5-year ranges plus "Any year" — `maximumYear` support was threaded through `types/index.ts`, `lib/yts.ts`, `app/api/yts/popular/route.ts`, and `components/PopularMoviesPanel.tsx`. A hover-strip bug in `components/PopularMovieCard.tsx` (zoom leaking outside the poster container) was fixed with `overflow-hidden`.
 
 ### Possible follow-ups (small, opt-in)
 

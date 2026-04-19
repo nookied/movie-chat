@@ -20,7 +20,7 @@ Updated: 2026-04-19 (post bug-hunt + simplify pass)
 | `__tests__/chat-route.test.ts` | Chat route + ThinkFilter streaming | 25 | Implemented |
 | `__tests__/appTorrents.test.ts` | Torrent registry CRUD + pruning | 24 | Implemented |
 | `__tests__/diagnostics-bundle.test.ts` | Diagnostics bundle + redaction | 21 | Implemented |
-| `__tests__/api-yts-popular.test.ts` | `/api/yts/popular` — defaults, `sort_by` whitelist, numeric clamping, `minimum_year` validation, genre whitelist via `YTS_GENRE_SET`, 502 on upstream failure | 20 | Implemented |
+| `__tests__/api-yts-popular.test.ts` | `/api/yts/popular` — defaults, `sort_by` whitelist, numeric clamping, `minimum_year` and `maximum_year` validation, genre whitelist via `YTS_GENRE_SET`, 502 on upstream failure | 20 | Implemented |
 | `__tests__/chat-tags.test.ts` | Tag parsing, stripping, edge cases (incl. `strictYear` round-trip, lazy strip regex) | 20 | Implemented |
 | `__tests__/yts-popular.test.ts` | `fetchPopularMovies` — params, mapping, multi-page filtered pagination, exact end-of-scan `totalCount` | 18 | Implemented |
 | `__tests__/recUrlParam.test.ts` | `?rec=<json>` parse/validate helper for the popular → chat handoff; `strictYear` preserved only when year is valid | 17 | Implemented |
@@ -283,10 +283,10 @@ Key scenarios: readConfig/writeConfig/cfg caching, sensitive field masking, diag
 
 | # | Scenario | Expected | Automated? |
 |---|----------|----------|-----------|
-| P1 | Open `/popular` — default tab | Most Downloaded active, 20 cards, genre + minimum-year dropdowns visible | Manual |
+| P1 | Open `/popular` — default tab | Most Downloaded active, 20 cards, genre + year-range dropdowns visible ("Any year" default) | Manual |
 | P2 | Click flame icon in header from `/` | Navigates to `/popular` without losing configured cookie | Manual |
 | P3 | Select genre → results update | Debounced 300ms; grid re-renders; pagination resets to page 1 | Manual |
-| P4 | Select minimum-year (e.g. 2023+) | Server scans raw YTS pages in 50-item chunks until it can fill the requested filtered page; `totalCount` is exact at end-of-scan or a bounded estimate otherwise | `yts-popular.test.ts` |
+| P4 | Select a year range (e.g. 2020–2024) | Both `minimum_year` and `maximum_year` sent to API; server scans raw YTS pages in 50-item chunks until it can fill the requested filtered page; `totalCount` is exact at end-of-scan or a bounded estimate otherwise | `yts-popular.test.ts` |
 | P5 | Pagination Next/Prev | Updates `page` query param; disables at boundaries; skeleton during load | Manual |
 | P6 | Switch to Newest tab | Genre + year dropdowns disappear; single sort-order dropdown appears defaulted to "Sort by year" | Manual |
 | P7 | Newest + Sort by year | Returns 2026/2027 releases at the top | Manual |
@@ -296,7 +296,7 @@ Key scenarios: readConfig/writeConfig/cfg caching, sensitive field masking, diag
 | P11 | YTS upstream failure | `/api/yts/popular` returns 502; panel shows error + "Try again" button | `api-yts-popular.test.ts` |
 | P12 | `sort_by=bogus` in URL | Route falls back to `download_count` | `api-yts-popular.test.ts` |
 | P13 | `limit=999` in URL | Route clamps to 50 (YTS max) | `api-yts-popular.test.ts` |
-| P14 | `minimum_year=1700` in URL | Route ignores (below 1900 floor) | `api-yts-popular.test.ts` |
+| P14 | `minimum_year=1700` or `maximum_year=1700` in URL | Route ignores (below 1900 floor) | `api-yts-popular.test.ts` |
 | P15 | Card hover | Poster scales slightly; 6-line synopsis overlay fades in | Manual |
 | P16 | Broken poster URL | `onError` flips to placeholder SVG | Manual |
 | P17 | IMDb rating = 0 | Rating badge is not rendered | Manual |

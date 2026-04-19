@@ -204,7 +204,7 @@ A download tracker card appears showing progress. When it finishes, the file is 
 
 Click the **flame icon** in the top-right header (next to "Movie Chat") to open `/popular`. Two tabs:
 
-- **Most Downloaded** — filter by genre and minimum release year.
+- **Most Downloaded** — filter by genre and a year range (8 options: "Any year" + 7 closed ranges such as "2025 and later", 2020–2024, down to "Before 2000").
 - **Newest** — the last 3 years of releases, sorted by release year (default) or by popularity.
 
 Click any poster → you land back in chat with that exact title/year pre-loaded on a recommendation card, ready to check Plex and download.

@@ -56,11 +56,15 @@ export async function GET(req: NextRequest) {
   const yearNum = yearStr !== null ? Number(yearStr) : NaN;
   const minimumYear = Number.isFinite(yearNum) && yearNum > 1900 ? Math.floor(yearNum) : undefined;
 
+  const maxYearStr = searchParams.get('maximum_year');
+  const maxYearNum = maxYearStr !== null ? Number(maxYearStr) : NaN;
+  const maximumYear = Number.isFinite(maxYearNum) && maxYearNum > 1900 ? Math.floor(maxYearNum) : undefined;
+
   const rawGenre = searchParams.get('genre');
   const genre = rawGenre && YTS_GENRE_SET.has(rawGenre) ? rawGenre : undefined;
 
   try {
-    const result = await fetchPopularMovies({ sortBy, limit, page, minimumRating, minimumYear, genre });
+    const result = await fetchPopularMovies({ sortBy, limit, page, minimumRating, minimumYear, maximumYear, genre });
     return NextResponse.json(result);
   } catch (err) {
     log.error('popular movies fetch failed', {
@@ -69,6 +73,7 @@ export async function GET(req: NextRequest) {
       page,
       minimumRating,
       minimumYear,
+      maximumYear,
       genre,
       error: err instanceof Error ? err.message : String(err),
     });

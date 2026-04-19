@@ -13,15 +13,24 @@ const SORT_OPTIONS: Array<{ value: 'download_count' | 'year'; label: string }> =
   { value: 'year', label: 'Newest' },
 ];
 
-const YEAR_OPTIONS: Array<{ value: number; label: string }> = (() => {
+// 7 year-range options: open top (2025+), 5 closed 5-year buckets, open bottom (before 2000).
+// topStart is the nearest multiple-of-5 at or below the current year, so the top bucket
+// always starts on a round year regardless of when the page loads.
+const YEAR_OPTIONS: Array<{ value: string; label: string; min?: number; max?: number }> = (() => {
   const cy = new Date().getFullYear();
-  return [
-    { value: 0, label: 'Any year' },
-    { value: cy - 3, label: `${cy - 3}+` },
-    { value: cy - 5, label: `${cy - 5}+` },
-    { value: cy - 10, label: `${cy - 10}+` },
-    { value: 2000, label: '2000+' },
+  const top = Math.floor(cy / 5) * 5;
+  const opts: Array<{ value: string; label: string; min?: number; max?: number }> = [
+    { value: '', label: 'Any year' },
+    { value: `${top}-`, label: `${top} and later`, min: top },
   ];
+  for (let i = 0; i < 5; i++) {
+    const end = top - 5 * i - 1;
+    const start = end - 4;
+    opts.push({ value: `${start}-${end}`, label: `${start}–${end}`, min: start, max: end });
+  }
+  const bottomMax = top - 26; // e.g. 1999 when top=2025
+  opts.push({ value: `-${bottomMax}`, label: `Before ${bottomMax + 1}`, max: bottomMax });
+  return opts;
 })();
 
 // Newest tab's secondary sort. 'year' is the tab's implicit default (most recent
@@ -47,7 +56,7 @@ export default function PopularMoviesPanel() {
   const [activeTab, setActiveTab] = useState<'download_count' | 'year'>('download_count');
   const [newestSort, setNewestSort] = useState<YtsPopularSortBy>('year');
   const [genre, setGenre] = useState<string>('');
-  const [minYear, setMinYear] = useState<number>(0);
+  const [yearValue, setYearValue] = useState<string>('');
   const [page, setPage] = useState(1);
 
   const sortBy: YtsPopularSortBy = activeTab === 'download_count' ? 'download_count' : newestSort;
@@ -56,7 +65,7 @@ export default function PopularMoviesPanel() {
     if (next === activeTab) return;
     setActiveTab(next);
     setGenre('');
-    setMinYear(0);
+    setYearValue('');
     setNewestSort('year');
     setPage(1);
   };
@@ -66,8 +75,8 @@ export default function PopularMoviesPanel() {
     setPage(1);
   };
 
-  const handleMinYearChange = (next: number) => {
-    setMinYear(next);
+  const handleYearValueChange = (next: string) => {
+    setYearValue(next);
     setPage(1);
   };
 
@@ -102,7 +111,9 @@ export default function PopularMoviesPanel() {
       params.set('limit', String(PAGE_SIZE));
       if (activeTab === 'download_count') {
         if (genre) params.set('genre', genre);
-        if (minYear > 0) params.set('minimum_year', String(minYear));
+        const yearOpt = YEAR_OPTIONS.find((o) => o.value === yearValue);
+        if (yearOpt?.min) params.set('minimum_year', String(yearOpt.min));
+        if (yearOpt?.max) params.set('maximum_year', String(yearOpt.max));
       } else {
         params.set('minimum_year', String(newestMinYear()));
       }
@@ -131,7 +142,7 @@ export default function PopularMoviesPanel() {
         }
       }
     },
-    [sortBy, genre, minYear, page, activeTab],
+    [sortBy, genre, yearValue, page, activeTab],
   );
 
   useEffect(() => {
@@ -203,10 +214,10 @@ export default function PopularMoviesPanel() {
             </select>
 
             <select
-              value={minYear}
-              onChange={(e) => handleMinYearChange(Number(e.target.value))}
+              value={yearValue}
+              onChange={(e) => handleYearValueChange(e.target.value)}
               className={selectClass}
-              aria-label="Minimum release year"
+              aria-label="Release year range"
             >
               {YEAR_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>

@@ -95,6 +95,7 @@ export interface YtsPopularOptions {
   genre?: string;
   minimumRating?: number;
   minimumYear?: number;
+  maximumYear?: number;
   page?: number;
   limit?: number;
 }

@@ -32,10 +32,10 @@
 | `lib/autoMove.ts` | Server-side background poller — moves one torrent at a time with 15s gap |
 | `lib/appTorrents.ts` | In-memory + on-disk registry of app torrent IDs + mediaType/season/title metadata |
 | `lib/config.ts` | `cfg()` helper — 30s in-memory cache avoids per-request sync disk reads |
-| `lib/yts.ts` | YTS torrent search + magnet link builder (movies); supports `strictYear` option; `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries; also `fetchPopularMovies()` for the `/popular` browse page — when `minimumYear` is set it scans raw YTS pages in 50-item chunks, accumulates filtered matches until it can fill the requested filtered page, and returns an exact `totalCount` if it reaches the end (otherwise a bounded estimate) |
-| `app/api/yts/popular/route.ts` | GET — whitelists `sort_by`, clamps `limit`/`page`/`minimum_rating`, validates `minimum_year` > 1900, returns 502 on upstream failure |
-| `components/PopularMoviesPanel.tsx` | `/popular` client grid + controls. Tab-specific filter layout: Most Downloaded exposes genre + minimum-year dropdowns; Newest exposes a single sort dropdown (`year` default / `rating`) and is hard-scoped to the last 3 years via `NEWEST_MIN_YEAR` so rating-sort stays recent |
-| `components/PopularMovieCard.tsx` | Individual YTS browse card — poster, IMDb ★ overlay, hover synopsis, click → `/?rec=<json>` |
+| `lib/yts.ts` | YTS torrent search + magnet link builder (movies); supports `strictYear` option; `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries; also `fetchPopularMovies()` for the `/popular` browse page — when `minimumYear` or `maximumYear` is set it scans raw YTS pages in 50-item chunks, accumulates filtered matches until it can fill the requested filtered page, and returns an exact `totalCount` if it reaches the end (otherwise a bounded estimate) |
+| `app/api/yts/popular/route.ts` | GET — whitelists `sort_by`, clamps `limit`/`page`/`minimum_rating`, validates `minimum_year` and `maximum_year` (both > 1900), returns 502 on upstream failure |
+| `components/PopularMoviesPanel.tsx` | `/popular` client grid + controls. Tab-specific filter layout: Most Downloaded exposes genre + a year-range dropdown (8 items: "Any year" + 7 closed ranges — "2025 and later", 2020–2024, 2015–2019, 2010–2014, 2005–2009, 2000–2004, "Before 2000"); Newest exposes a single sort dropdown (`year` default / `rating`) and is hard-scoped to the last 3 years via `NEWEST_MIN_YEAR` so rating-sort stays recent |
+| `components/PopularMovieCard.tsx` | Individual YTS browse card — poster, IMDb ★ overlay, hover synopsis, click → `/?rec=<json>`; inner poster container has `overflow-hidden` to clip the `group-hover:scale-105` zoom |
 | `app/popular/page.tsx` | Server-component shell for the YTS browse page |
 | `lib/eztv.ts` | Knaben/EZTV torrent search + quality scoring (TV); `norm` maps `&` → ` and ` so titles like "Law & Order" match "Law.and.Order" releases |
 | `lib/tmdb.ts` | TMDB metadata — posters, overviews, year, season count; `resolveMovieLookup` handles disambiguation for bare titles with multiple exact matches |
@@ -187,5 +187,25 @@ CI runs `npm run lint`, `npm run test:coverage`, `npm run build`, and `npm run t
 - Static site at `docs/index.html`, hosted via GitHub Pages at [nookied.github.io/movie-chat](https://nookied.github.io/movie-chat)
 - Download button auto-resolves to latest `.dmg` via GitHub API
 - Screenshots in `docs/images/` — strip metadata before committing (`sips -d all` or `exiftool -all=`)
+
+## Documentation maintenance
+
+Every change — feature, fix, or refactor — must keep these files in sync before the session ends:
+
+| File | Update when |
+|---|---|
+| `CHANGELOG.md` | Any user-visible change. Add to `[Unreleased]` under the correct section (`Added` / `Changed` / `Fixed` / `Security`). **Never create a duplicate section heading** — merge into the existing one. |
+| `HANDOFF.md` | Every session. Add a "Latest pass" block at the top with what changed and a validation snapshot. |
+| `CLAUDE.md` + `AGENTS.md` | Key files table, architecture notes, or guidelines become stale. Both files must stay in sync with each other. |
+| `NEXT_STEPS.md` | A planned item ships (mark it done + date) or a new follow-up is identified. |
+| `README.md` | User-facing behaviour changes (new UI, new config fields, new flows). |
+| `.agents/skills/qa/SCENARIOS.md` | Test counts change, or a tested scenario is added/removed/renamed. |
+
+**Rules:**
+- Read the target file before editing — never assume its current content.
+- Merge into existing sections; never duplicate headings.
+- CHANGELOG entries go in `[Unreleased]` only — do not bump version numbers.
+- `CLAUDE.md` and `AGENTS.md` are kept identical in structure; a change to one requires the same change to the other.
+- `HANDOFF.md` is append-only at the top — do not edit previous passes.
 
 - **Never commit or push without explicit user instruction**
