@@ -402,8 +402,13 @@ export function useRecommendationCardState({
         try {
           const params = new URLSearchParams({ title });
           if (year !== undefined) params.set('year', String(year));
-          const strictYearParam = strictYear && type === 'movie' ? '&strictYear=true' : '';
-          const url = `/api/plex/check?${params}${type === 'tv' ? '&type=tv' : strictYearParam}`;
+          // Mirror the initial-check URL style (line ~224/280): type=tv for TV,
+          // strictYear on movies. Keeps behaviour consistent between first check
+          // and post-move re-check.
+          const strictYearParam = strictYear ? '&strictYear=true' : '';
+          const url = type === 'tv'
+            ? `/api/plex/check?${params}&type=tv`
+            : `/api/plex/check?${params}${strictYearParam}`;
           const response = await fetch(url, { signal: controller.signal });
 
           if (!response.ok || cancelled) {

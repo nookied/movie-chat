@@ -6,7 +6,10 @@ export function cleanTorrentName(raw: string): string {
 }
 
 export function recommendationKey(rec: Recommendation): string {
-  return `${rec.title.toLowerCase()}-${rec.year ?? 'unknown'}`;
+  // Include `type` so a movie and a TV show sharing the same title+year
+  // (e.g. "The Office" 2001 film vs the UK series) render as distinct cards
+  // instead of colliding on React's `key`.
+  return `${rec.type}-${rec.title.toLowerCase()}-${rec.year ?? 'unknown'}`;
 }
 
 export function torrentKey(title: string, year?: number): string {

@@ -1,6 +1,22 @@
 # Handoff
 
-## Latest pass (2026-04-16 — code review, bug fixes, documentation audit)
+## Latest pass (2026-04-19 — post-refactor bug hunt)
+
+This session reviewed the codebase looking for regressions introduced by the v2.1.0 / v2.2.0 refactors (chat split into hooks, recommendation card split into a hook + sub-components) and landed nine fixes in priority order.
+
+### Fixes landed (priority order)
+
+1. **CRITICAL — Recommendation card refetch storm** (`components/chat/ChatMessageList.tsx`). Inline `(next) => onResolveRecommendation(message.id, index, next)` and `(season) => isRecommendationDownloading(recommendation, season)` arrows were new objects on every `ChatInterface` render (each keystroke, each streaming token), cascading into `useRecommendationCardState`'s main effect deps and refiring Plex / reviews / torrent fetches. Extracted `ChatMessageItem` (per-message) and `RecommendationSlot` (per-recommendation) so the wrappers are memoised with stable deps. This was the likely root cause of several "flickering / slow / stuck-loading" reports.
+2. **HIGH — TV shows with `&` missed on Knaben** (`lib/eztv.ts`). `norm()` now converts `&` → ' and ' before stripping non-alphanumerics (matches `lib/yts.ts` and `lib/plex.ts`).
+3. **HIGH — Plex subtitle match failed on `&`** (`lib/plex.ts`). `titleMatches()` subtitle-variant `startsWith` check now normalises both sides and also covers `originalTitle`.
+4. **MEDIUM — `strictYear` dropped from LLM tags** (`lib/chatTags.ts`). `extractRecommendations` carries `strictYear: true` from the JSON payload; `recommendationTag` serialises it.
+5. **MEDIUM — Inconsistent strict-year param between initial and post-move Plex check** (`hooks/useRecommendationCardState.ts`). Post-move re-check now builds its URL the same way as the first check.
+6. **MEDIUM — Diagnostics bundle `cfg()` envVar** (`app/api/diagnostics/bundle/route.ts`). Uses `MOVIE_CHAT_DIAGNOSTICS_TOKEN` instead of `''`, so the token can be overridden by env in proxied deployments.
+7. **MEDIUM — Unicode titles in direct-title lookup** (`lib/directTitleLookup.ts`). `capitalizeWord` and `maybeTitleCase` use `\p{Ll}` instead of `[a-z]`, so "über" / "élite" title-case properly.
+8. **LOW — Movie/TV key collision** (`lib/mediaKeys.ts`). `recommendationKey` includes `type` so same-title same-year movie vs TV shows don't share a React key.
+9. **LOW — Self-closing-tag strip regex hardened** (`lib/chatTags.ts`). `stripChatActionTags` uses lazy `[\s\S]*?` instead of `[^>]*` for malformed payloads, so JSON containing `>` can't break the strip.
+
+## Previous pass (2026-04-16 — code review, bug fixes, documentation audit)
 
 This session did a full codebase review after several merges and refactors, fixed three issues found, updated all documentation to match current code, and ran a simplify/quality pass on the fixes.
 
@@ -50,7 +66,7 @@ This session did a full codebase review after several merges and refactors, fixe
 ## Validation
 
 ```
-npx vitest run        # 30 files / 557 tests passing
+npx vitest run        # 31 files / 569 tests passing
 npx tsc --noEmit      # clean (zero errors)
 npm run build         # clean production build
 ```
@@ -73,7 +89,19 @@ Prompt changes require a server restart. Config changes are hot-reloaded (30s ca
 - **RE-3/4** `lib/yts.ts`, `lib/eztv.ts` — No server-side caching on torrent search results. Add a short TTL cache keyed by `(title, season)`.
 - `forceOllama` in `/api/chat` body not validated as boolean.
 
-### Resolved (latest audit pass, 2026-04-16)
+### Resolved (latest bug-hunt pass, 2026-04-19)
+
+- Recommendation card refetch storm from inline-arrow identity churn (`ChatMessageList.tsx`)
+- `&` dropped in EZTV/Knaben title normalisation (`lib/eztv.ts`)
+- `&` dropped in Plex subtitle `startsWith` match (`lib/plex.ts`)
+- `strictYear` lost between LLM tag and UI (`lib/chatTags.ts`)
+- Redundant `type === 'movie'` gate on post-move re-check URL (`hooks/useRecommendationCardState.ts`)
+- Diagnostics bundle passing `''` as envVar to `cfg()` (`app/api/diagnostics/bundle/route.ts`)
+- ASCII-only title-case of Unicode titles (`lib/directTitleLookup.ts`)
+- Movie vs TV sharing a React key when title+year match (`lib/mediaKeys.ts`)
+- `[^>]*` greedy regex in `stripChatActionTags` (`lib/chatTags.ts`)
+
+### Resolved (audit pass, 2026-04-16)
 
 - OAuth CSRF state bypass — `if (urlState || cookieState)` guard removed; both state values are now always required
 - OpenRouter/Ollama test routes returning HTTP 200 for errors — now return 400/502 consistent with all other test routes
@@ -92,8 +120,8 @@ Prompt changes require a server restart. Config changes are hot-reloaded (30s ca
 ## Recommended next pass
 
 1. Fix SEC-1 (diagnostics token exposure) and CR-4 (ThinkFilter flush)
-2. Chat route modularisation (`app/api/chat/route.ts` remains a single large file — see Phase 3 of `REFACTOR_RECOMMENDATIONS.md`)
-3. Setup/settings workflow consolidation (see Phase 4 of `REFACTOR_RECOMMENDATIONS.md`)
+2. Chat route modularisation (`app/api/chat/route.ts` remains a single large file — see `NEXT_STEPS.md`)
+3. Setup/settings workflow consolidation (see `NEXT_STEPS.md`)
 
 ## Known quirks
 

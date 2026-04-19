@@ -45,6 +45,7 @@ export function extractRecommendations(text: string): Recommendation[] {
         title,
         year,
         type: parsed.type === 'tv' ? 'tv' : 'movie',
+        ...(parsed.strictYear === true ? { strictYear: true } : {}),
       });
     } catch { /* skip malformed */ }
   }
@@ -78,8 +79,10 @@ export function stripChatActionTags(content: string): string {
   return content
     .replace(/<recommendation>[\s\S]*?<\/recommendation>/g, '')
     .replace(/<download>[\s\S]*?<\/download>/g, '')
-    .replace(/<recommendation\s*\{[^>]*\}>/g, '')
-    .replace(/<download\s*\{[^>]*\}>/g, '')
+    // Lazy `[\s\S]*?` (not `[^>]*`) so payloads like {"title":"Foo -> Bar"}
+    // containing `>` inside the JSON don't break the match.
+    .replace(/<recommendation\s*\{[\s\S]*?\}>/g, '')
+    .replace(/<download\s*\{[\s\S]*?\}>/g, '')
     .replace(/<\/?recommendation>/g, '')
     .replace(/<\/?download>/g, '')
     .replace(/<(recommendation|download)[^>]*$/g, '')
@@ -91,6 +94,7 @@ export function recommendationTag(rec: Recommendation): string {
     title: rec.title,
     ...(rec.year !== undefined ? { year: rec.year } : {}),
     type: rec.type,
+    ...(rec.strictYear ? { strictYear: true } : {}),
   };
   return `<recommendation>${JSON.stringify(payload)}</recommendation>`;
 }

@@ -32,13 +32,15 @@ function stripOuterQuotes(text: string): string {
 function capitalizeWord(word: string): string {
   if (ROMAN_NUMERALS.test(word)) return word.toUpperCase();
 
+  // Use Unicode property escapes so titles like "über" and "élite" capitalise properly,
+  // instead of being skipped by the ASCII-only /[a-z]/ match.
   return word
-    .replace(/^([("'`[]*)([a-z])/, (_m, prefix: string, char: string) => `${prefix}${char.toUpperCase()}`)
-    .replace(/-([a-z])/g, (_m, char: string) => `-${char.toUpperCase()}`);
+    .replace(/^([("'`[]*)(\p{Ll})/u, (_m, prefix: string, char: string) => `${prefix}${char.toUpperCase()}`)
+    .replace(/-(\p{Ll})/gu, (_m, char: string) => `-${char.toUpperCase()}`);
 }
 
 function maybeTitleCase(title: string): string {
-  if (title !== title.toLowerCase() || !/[a-z]/.test(title)) return title;
+  if (title !== title.toLowerCase() || !/\p{Ll}/u.test(title)) return title;
 
   const words = title.split(' ');
   return words

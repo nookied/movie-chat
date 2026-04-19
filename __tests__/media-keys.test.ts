@@ -21,8 +21,14 @@ describe('cleanTorrentName', () => {
 
 describe('recommendationKey / torrentKey', () => {
   it('normalizes titles to lowercase and includes a stable unknown-year fallback', () => {
-    expect(recommendationKey({ title: 'Alien', type: 'movie' })).toBe('alien-unknown');
+    expect(recommendationKey({ title: 'Alien', type: 'movie' })).toBe('movie-alien-unknown');
     expect(torrentKey('Alien', 1979)).toBe('alien-1979');
+  });
+
+  it('produces distinct keys for a movie and a TV show with the same title+year', () => {
+    const movie = recommendationKey({ title: 'The Office', year: 2001, type: 'movie' });
+    const tv = recommendationKey({ title: 'The Office', year: 2001, type: 'tv' });
+    expect(movie).not.toBe(tv);
   });
 });
 

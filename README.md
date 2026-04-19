@@ -251,7 +251,7 @@ Server (background)
 - All config lives in `config.local.json` (gitignored) — no `.env` files needed
 - The LLM communicates intent via XML tags: `<recommendation>` triggers a card, `<download>` triggers a torrent
 - Movies use the YTS API (1080p only); TV seasons use Knaben (aggregates TPB, 1337x, EZTV; strict 1080p filter)
-- Chat history is persisted to `localStorage` (up to 200 messages)
+- Chat history is persisted to `localStorage` (auto-trimmed to the last 100 messages and a 7-day age window)
 - App-initiated torrent IDs are tracked server-side in `app-torrents.json` so downloads started on one device are visible from any device
 - OpenRouter's free tier sometimes returns an empty stream; the client automatically retries via Ollama before surfacing an error
 
@@ -260,7 +260,7 @@ Server (background)
 ## Maintainer docs
 
 - `HANDOFF.md` — current deployment and validation notes
-- `REFACTOR_RECOMMENDATIONS.md` — phased high-value refactor roadmap
+- `NEXT_STEPS.md` — consolidated planned refactors and the YTS popular-movies feature plan
 - `AGENTS.md` / `CLAUDE.md` — architecture and implementation guidance for AI-assisted development
 - `install.sh` / `setup.sh` / `update.sh` — operational shell scripts; `install.sh` and `update.sh` are covered by `npm test`, and update-related work should always review `update.sh`
 

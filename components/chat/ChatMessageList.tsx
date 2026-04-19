@@ -1,6 +1,6 @@
 'use client';
 
-import { RefObject } from 'react';
+import { RefObject, useCallback } from 'react';
 import { ChatMessage, Recommendation, TorrentOption } from '@/types';
 import { recommendationKey } from '@/lib/mediaKeys';
 import Message from '@/components/Message';
@@ -27,6 +27,129 @@ interface Props {
   ) => void;
 }
 
+// A per-message item. Wrapping the inline arrows in `useCallback` here keeps
+// their identity stable across parent re-renders, so `useRecommendationCardState`'s
+// main effect does not re-fire every time `ChatInterface` re-renders (which
+// happens on every input keystroke and every streaming token).
+interface ItemProps {
+  forceRecommendationInLibrary: (recommendation: Recommendation) => boolean;
+  isRecommendationDownloading: (recommendation: Recommendation, season?: number) => boolean;
+  isStreaming: boolean;
+  message: ChatMessage;
+  onDownload: (title: string, year?: number) => Promise<boolean>;
+  onNoSuitableQuality: (title: string, year?: number) => void;
+  onNotFound: (title: string) => void;
+  onPlexFound: (title: string, year?: number) => void;
+  onResolveRecommendation: (messageId: string, recommendationIndex: number, recommendation: Recommendation) => void;
+  onTorrentsReady: (
+    title: string,
+    year: number | undefined,
+    torrents: TorrentOption[],
+    mediaType: 'movie' | 'tv',
+    season?: number,
+    strictYear?: boolean
+  ) => void;
+}
+
+function ChatMessageItem({
+  forceRecommendationInLibrary,
+  isRecommendationDownloading,
+  isStreaming,
+  message,
+  onDownload,
+  onNoSuitableQuality,
+  onNotFound,
+  onPlexFound,
+  onResolveRecommendation,
+  onTorrentsReady,
+}: ItemProps) {
+  return (
+    <div>
+      <Message
+        message={message}
+        thinking={isStreaming && message.role === 'assistant' && message.content === ''}
+      />
+      {message.role === 'assistant' && message.recommendations?.map((recommendation, index) => (
+        <RecommendationSlot
+          key={recommendationKey(recommendation)}
+          forceInLibrary={forceRecommendationInLibrary(recommendation)}
+          index={index}
+          isRecommendationDownloading={isRecommendationDownloading}
+          messageId={message.id}
+          onDownload={onDownload}
+          onNoSuitableQuality={onNoSuitableQuality}
+          onNotFound={onNotFound}
+          onPlexFound={onPlexFound}
+          onResolveRecommendation={onResolveRecommendation}
+          onTorrentsReady={onTorrentsReady}
+          recommendation={recommendation}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface SlotProps {
+  forceInLibrary: boolean;
+  index: number;
+  isRecommendationDownloading: (recommendation: Recommendation, season?: number) => boolean;
+  messageId: string;
+  onDownload: (title: string, year?: number) => Promise<boolean>;
+  onNoSuitableQuality: (title: string, year?: number) => void;
+  onNotFound: (title: string) => void;
+  onPlexFound: (title: string, year?: number) => void;
+  onResolveRecommendation: (messageId: string, recommendationIndex: number, recommendation: Recommendation) => void;
+  onTorrentsReady: (
+    title: string,
+    year: number | undefined,
+    torrents: TorrentOption[],
+    mediaType: 'movie' | 'tv',
+    season?: number,
+    strictYear?: boolean
+  ) => void;
+  recommendation: Recommendation;
+}
+
+// Bridge between the list-level handler (which needs `messageId` + `index` to
+// locate the recommendation) and the card-level handler (which only receives
+// the resolved recommendation). Memoising here keeps the closure identity
+// stable per-slot across parent renders.
+function RecommendationSlot({
+  forceInLibrary,
+  index,
+  isRecommendationDownloading,
+  messageId,
+  onDownload,
+  onNoSuitableQuality,
+  onNotFound,
+  onPlexFound,
+  onResolveRecommendation,
+  onTorrentsReady,
+  recommendation,
+}: SlotProps) {
+  const handleResolve = useCallback((next: Recommendation) => {
+    onResolveRecommendation(messageId, index, next);
+  }, [index, messageId, onResolveRecommendation]);
+
+  const handleIsDownloading = useCallback((season?: number) => (
+    isRecommendationDownloading(recommendation, season)
+  ), [isRecommendationDownloading, recommendation]);
+
+  return (
+    <RecommendationCard
+      forceInLibrary={forceInLibrary}
+      isDownloading={handleIsDownloading}
+      onDownload={onDownload}
+      onNoSuitableQuality={onNoSuitableQuality}
+      onNotFound={onNotFound}
+      onPlexFound={onPlexFound}
+      onResolveRecommendation={handleResolve}
+      onTorrentsReady={onTorrentsReady}
+      recommendation={recommendation}
+    />
+  );
+}
+
 export default function ChatMessageList({
   bottomRef,
   forceRecommendationInLibrary,
@@ -49,27 +172,19 @@ export default function ChatMessageList({
       }}
     >
       {messages.map((message) => (
-        <div key={message.id}>
-          <Message
-            message={message}
-            thinking={isStreaming && message.role === 'assistant' && message.content === ''}
-          />
-          {message.role === 'assistant' && message.recommendations?.map((recommendation, index) => (
-            <RecommendationCard
-              key={recommendationKey(recommendation)}
-              recommendation={recommendation}
-              onPlexFound={onPlexFound}
-              onResolveRecommendation={(nextRecommendation) =>
-                onResolveRecommendation(message.id, index, nextRecommendation)}
-              onTorrentsReady={onTorrentsReady}
-              onNoSuitableQuality={onNoSuitableQuality}
-              onNotFound={onNotFound}
-              onDownload={onDownload}
-              isDownloading={(season) => isRecommendationDownloading(recommendation, season)}
-              forceInLibrary={forceRecommendationInLibrary(recommendation)}
-            />
-          ))}
-        </div>
+        <ChatMessageItem
+          key={message.id}
+          forceRecommendationInLibrary={forceRecommendationInLibrary}
+          isRecommendationDownloading={isRecommendationDownloading}
+          isStreaming={isStreaming}
+          message={message}
+          onDownload={onDownload}
+          onNoSuitableQuality={onNoSuitableQuality}
+          onNotFound={onNotFound}
+          onPlexFound={onPlexFound}
+          onResolveRecommendation={onResolveRecommendation}
+          onTorrentsReady={onTorrentsReady}
+        />
       ))}
       <div ref={bottomRef} />
     </div>

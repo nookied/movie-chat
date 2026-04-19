@@ -14,11 +14,23 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **OAuth CSRF state always required** (`app/api/openrouter/callback/route.ts`): Removed backwards-compat bypass that allowed requests without any state to skip CSRF validation. Both URL state and cookie state are now mandatory — requests missing either are rejected with `state_mismatch`
 
 ### Fixed
+- **Recommendation card refetch storm after refactor** (`components/chat/ChatMessageList.tsx`): Inline `onResolveRecommendation` and `isDownloading` arrows were recreated on every `ChatInterface` render (each keystroke and streaming token), churning `useRecommendationCardState`'s effect dep array and refiring the Plex / reviews / torrent fetches. Extracted `ChatMessageItem` and `RecommendationSlot` sub-components so the wrapper closures are memoised per-slot with stable deps — cards stop flickering and availability state stops thrashing mid-stream
+- **TV shows with `&` in title missed on Knaben** (`lib/eztv.ts`): `norm()` now converts `&` → ' and ' before stripping non-alphanumerics, so "Law & Order" matches releases titled "Law.and.Order". Brings TV search in line with movie (`lib/yts.ts`) and Plex (`lib/plex.ts`) normalisation
+- **Plex subtitle matches failing when titles contain `&`** (`lib/plex.ts`): `titleMatches()` subtitle-variant check now compares normalised forms, so "Fast & Furious" correctly matches a Plex entry titled "Fast and Furious: Tokyo Drift". `originalTitle` is also checked for subtitle variants, not just `title`
+- **`strictYear` dropped from LLM-emitted tags** (`lib/chatTags.ts`): `extractRecommendations` now propagates `strictYear: true` from the parsed JSON payload, and `recommendationTag` serialises it back out. Previously a model emitting `{"title":"X","year":2020,"strictYear":true}` lost the flag between streaming and rendering, causing fuzzy year matches to slip past the user's lock
+- **Strict-year param gate inconsistent between initial and re-check** (`hooks/useRecommendationCardState.ts`): Post-move Plex re-check now builds the URL the same way as the initial check — no redundant `type === 'movie'` gate baked into `strictYearParam`
+- **Diagnostics bundle cfg() envVar misuse** (`app/api/diagnostics/bundle/route.ts`): Token lookup previously passed `''` as the env-var name. Now uses `MOVIE_CHAT_DIAGNOSTICS_TOKEN`, allowing ops to override via environment in a reverse-proxied deployment without hand-editing `config.local.json`
+- **Unicode titles skipped in direct-title lookup** (`lib/directTitleLookup.ts`): `capitalizeWord` and `maybeTitleCase` now use Unicode property escapes (`\p{Ll}`) instead of ASCII-only `[a-z]`, so quoted titles like "über" and "élite" get title-cased correctly instead of passed through unchanged
+- **Same-title movie vs TV key collision** (`lib/mediaKeys.ts`): `recommendationKey` now includes `type` so a movie and a TV show sharing a title+year (e.g. "The Office" 2001 film vs the UK series) render as two distinct cards instead of colliding on React's `key`
+- **Malformed `<recommendation>` tags with `>` inside JSON leaked through strip** (`lib/chatTags.ts`): `stripChatActionTags` now uses lazy `[\s\S]*?` inside the self-closing-tag regex instead of `[^>]*`, so a title containing `>` (e.g. `{"title":"Foo -> Bar"}`) can't break the strip step and leak raw JSON into the rendered message
 - **Test route status code inconsistency** (`app/api/ollama/test/route.ts`, `app/api/openrouter/test/route.ts`): Error responses now return proper HTTP status codes (400 for config errors, 502 for upstream/connection errors) instead of always returning 200, consistent with all other test routes
 - **TypeScript strict check** (`__tests__/shell-scripts.test.ts`): Fixed `ProcessEnv` type mismatch causing `tsc --noEmit` to fail on the shell-script test env objects
 
 ### Tests
-- 30 test files / 557 tests passing (was 556 — added CSRF rejection test for stateless OAuth callback)
+- 31 test files / 569 tests passing (was 568 — added `recommendationKey` distinct-type assertion to cover the movie-vs-TV collision fix)
+
+### Docs
+- **Planned work consolidated into `NEXT_STEPS.md`**: merged `REFACTOR_RECOMMENDATIONS.md` (trimmed to the two still-open phases — chat route modularization and setup/settings consolidation) and `YTS_POPULAR_MOVIES_PLAN.md` into a single forward-looking doc. Added a "Callback identity" entry to the refactor risk notes, carrying forward the lesson from the `ChatMessageList` regression. `CLAUDE.md`, `AGENTS.md`, `HANDOFF.md`, `README.md`, and the handoff feedback memory updated to point at the consolidated file
 
 ---
 

@@ -13,8 +13,13 @@ function titleMatches(item: Record<string, unknown>, query: string): boolean {
   const t = String(item.title ?? '').toLowerCase();
   const o = String(item.originalTitle ?? '').toLowerCase();
   if (t === lc || o === lc) return true;
-  if (normalizeTitle(t) === norm || normalizeTitle(o) === norm) return true;
-  if (t.startsWith(lc + ':') || t.startsWith(lc + ' -')) return true;
+  const tNorm = normalizeTitle(t);
+  const oNorm = normalizeTitle(o);
+  if (tNorm === norm || oNorm === norm) return true;
+  // Subtitle match ("Fast & Furious: Tokyo Drift" when query is "Fast & Furious").
+  // Uses the normalised forms so `&` and whitespace differences don't prevent matches.
+  if (tNorm.startsWith(norm + ':') || tNorm.startsWith(norm + ' -')) return true;
+  if (oNorm.startsWith(norm + ':') || oNorm.startsWith(norm + ' -')) return true;
   return false;
 }
 

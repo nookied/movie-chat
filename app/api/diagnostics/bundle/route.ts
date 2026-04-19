@@ -69,7 +69,7 @@ function tokensMatch(provided: string, expected: string): boolean {
 
 export async function GET(req: NextRequest) {
   const providedToken = req.nextUrl.searchParams.get('token') ?? '';
-  const expectedToken = cfg('diagnosticsToken', '');
+  const expectedToken = cfg('diagnosticsToken', 'MOVIE_CHAT_DIAGNOSTICS_TOKEN');
   if (!expectedToken || !tokensMatch(providedToken, expectedToken)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

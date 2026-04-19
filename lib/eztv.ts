@@ -49,8 +49,9 @@ async function knabSearch(query: string, size = 30): Promise<KnabenHit[]> {
 
 // Normalise a string for title matching: lowercase, replace separators with spaces.
 // Using replace(/[^a-z0-9]+/g, ' ') so "Breaking.Bad" and "Breaking-Bad" both become "breaking bad".
+// `&` becomes ' and ' first so "Law & Order" matches scene releases titled "Law.and.Order".
 function norm(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return s.toLowerCase().replace(/\s*&\s*/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 // Quality tier score — higher = better.

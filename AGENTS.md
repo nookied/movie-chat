@@ -14,13 +14,15 @@
 |---|---|
 | `app/api/chat/route.ts` | LLM proxy — provider routing, streaming, rate limiter, per-turn chat log |
 | `lib/chatPrompts.ts` | `DEFAULT_SYSTEM_PROMPT`, `GEMMA_SYSTEM_PROMPT`, `isGemmaModel`, `getSystemPrompt` |
-| `lib/directTitleLookup.ts` | Deterministic exact-title parser — quoted titles and `the film is titled ...` declarations bypass provider latency |
-| `lib/chatTags.ts` | Shared `<recommendation>` / `<download>` parsing, stripping, and tag serialization helpers |
-| `REFACTOR_RECOMMENDATIONS.md` | Phased high-value refactor plan — recommendation flow split, chat-state extraction, route modularization, config workflow consolidation |
+| `lib/directTitleLookup.ts` | Deterministic exact-title parser — quoted titles and `the film is titled ...` declarations bypass provider latency. Unicode-aware title casing (`\p{Ll}`) |
+| `lib/chatTags.ts` | Shared `<recommendation>` / `<download>` parsing, stripping, and tag serialization helpers; carries `strictYear` end-to-end |
+| `NEXT_STEPS.md` | Consolidated planned work — chat route modularization (Phase 3), setup/settings consolidation (Phase 4), YTS popular-movies feature plan, and refactor risk notes |
 | `lib/logger.ts` | Structured JSONL logger — daily rotation, 7-day retention, 32 KB entry / 50 MB file caps |
 | `app/api/diagnostics/bundle/route.ts` | GET endpoint — token-gated zip-less JSON bundle (logs + redacted config + version) |
 | `components/ChatInterface.tsx` | Chat composition root — wires history, streaming, downloads, and message rendering together |
 | `hooks/useChatSendMessage.ts` | Streaming chat request orchestration — retry/backoff, Ollama fallback, silent recommendation-tag retry |
+| `hooks/useChatHistory.ts` | Persisted chat history state — auto-trim by age (7 days) and count, drops legacy messages without timestamps on load, save is suppressed while streaming |
+| `components/chat/ChatMessageList.tsx` | Renders message list + per-recommendation card slot. Callback identity matters here — inline arrows must be memoised per-item to avoid re-running the card's data effects on every render |
 | `components/RecommendationCard.tsx` | Recommendation renderer — movie/TV sections, disambiguation chooser, sits on top of `useRecommendationCardState()` |
 | `components/recommendation/MovieMatchChooser.tsx` | Disambiguation UI — shown when a bare title has multiple TMDB matches (e.g. remakes) |
 | `hooks/useRecommendationCardState.ts` | Recommendation card data hook — Plex/reviews/torrent fetches, TV season selection, movie disambiguation, strictYear locking, post-move Plex re-check |
@@ -31,10 +33,11 @@
 | `lib/appTorrents.ts` | In-memory + on-disk registry of app torrent IDs + mediaType/season/title metadata |
 | `lib/config.ts` | `cfg()` helper — 30s in-memory cache avoids per-request sync disk reads |
 | `lib/yts.ts` | YTS torrent search + magnet link builder (movies); supports `strictYear` option; `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries |
-| `lib/eztv.ts` | Knaben/EZTV torrent search + quality scoring (TV) |
+| `lib/eztv.ts` | Knaben/EZTV torrent search + quality scoring (TV); `norm` maps `&` → ` and ` so titles like "Law & Order" match "Law.and.Order" releases |
 | `lib/tmdb.ts` | TMDB metadata — posters, overviews, year, season count; `resolveMovieLookup` handles disambiguation for bare titles with multiple exact matches |
 | `lib/omdb.ts` | OMDB ratings — IMDb score, Rotten Tomatoes |
-| `lib/plex.ts` | Plex library check — movies and per-season TV; `searchLibraryWithOptions` supports `strictYear` mode; `titleMatches` normalises `&` → `and` |
+| `lib/plex.ts` | Plex library check — movies and per-season TV; `searchLibraryWithOptions` supports `strictYear` mode; `titleMatches` normalises `&` → `and` on both `title` and `originalTitle`, including subtitle variants |
+| `lib/mediaKeys.ts` | Title normalisation and React-key generation (`recommendationKey` includes `type` so a movie and TV show with the same title+year don't collide) |
 | `install.sh` | Remote installer — clone/update checkout, install deps, build, optional pm2 + cron setup |
 | `setup.sh` | Local one-shot setup — prerequisite check, install deps, build, optional pm2 + cron setup |
 | `update.sh` | Safe updater — dirty-worktree guard, rollback, lock file, optional auto-update cron target |
@@ -60,7 +63,7 @@
 
 These flows diverge significantly. If a change touches both, verify behaviour in each separately.
 
-If you are planning a broad cleanup rather than a bugfix, consult `REFACTOR_RECOMMENDATIONS.md` first and prefer that ordering over ad-hoc restructuring.
+If you are planning a broad cleanup or a new feature, consult `NEXT_STEPS.md` first and prefer that ordering over ad-hoc restructuring.
 
 ## System prompt design
 
@@ -115,7 +118,9 @@ The setup wizard (`app/setup/page.tsx`) serves dual purpose: post-install guided
 - Post-move Plex re-check: 2 min → 10 min → 60 min backoff; stops early once Plex confirms; all timeouts cancelled on unmount
 - Card year display comes from TMDB (`ReviewData.year`), not the LLM — `RecommendationCard` shows `reviews?.year ?? year`
 - **Movie disambiguation**: When a bare title (no year) matches multiple TMDB results, `/api/reviews` returns `ambiguityCandidates` and the card shows a `MovieMatchChooser` instead of proceeding. Once the user picks, the resolved title+year propagate with `strictYear: true` through Plex checks, torrent searches, and downloads so nothing can drift across remakes
-- **strictYear flow**: `Recommendation.strictYear` gates year-exact matching in Plex (`searchLibraryWithOptions`) and YTS (`searchTorrents` with `strictYear` option). Without it, year is treated as a hint (fuzzy match). Set automatically by disambiguation or when the LLM's tag includes a year
+- **strictYear flow**: `Recommendation.strictYear` gates year-exact matching in Plex (`searchLibraryWithOptions`) and YTS (`searchTorrents` with `strictYear` option). Without it, year is treated as a hint (fuzzy match). Set automatically by disambiguation, by the reviews route when it resolves an exact single TMDB match, or propagated from the LLM's tag when `strictYear: true` is present in the payload
+- **Chat history persistence**: `hooks/useChatHistory.ts` stores messages in `localStorage['movie-chat-history']`, trimmed to the last 100 and to a 7-day age window (`MAX_HISTORY_AGE_MS`). Messages without `timestamp` are dropped on load (legacy pre-timestamp data). The save effect is suppressed while `isStreaming` is true so in-progress assistant placeholders aren't persisted
+- **Callback stability in message list**: `components/chat/ChatMessageList.tsx` renders each message through a memoised per-item component (`ChatMessageItem`) so the inline arrows wrapping `onResolveRecommendation` and `isDownloading` keep stable identity across parent re-renders. Without this, the recommendation card's main effect re-fires every keystroke / streaming token and issues a storm of `/api/reviews`, `/api/plex/check`, `/api/torrents/search` requests. If you touch this file, preserve the per-item memoisation
 
 ## Debugging guidelines
 
@@ -143,7 +148,7 @@ Map out the architecture before attempting fixes: what services are involved, wh
 
 ## Testing
 
-`npm test` (Vitest, Node env). The suite covers libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, ThinkFilter streaming, and shell-script contract tests for `install.sh` / `update.sh`. Conventions:
+`npm test` (Vitest, Node env). 31 test files / 569 tests under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, ThinkFilter streaming, and shell-script contract tests for `install.sh` / `update.sh`. Conventions:
 
 - Mock `fs` with `vi.mock('fs', () => ({ default: fsMock, ...fsMock }))` so both ESM and CJS imports see the mock.
 - `vi.resetModules()` in `beforeEach` so module-level state (rate-limit map, logger caches, etc.) is fresh per test.
