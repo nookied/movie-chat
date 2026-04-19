@@ -1,6 +1,18 @@
 # Handoff
 
-## Latest pass (2026-04-19 — post-refactor bug hunt + simplify sweep)
+## Latest pass (2026-04-19 — popular card hover strip fix)
+
+### What changed
+
+**Bug fix** — `components/PopularMovieCard.tsx`: added `overflow-hidden` to the inner `div.relative.aspect-[2/3]` poster container. The image uses `group-hover:scale-105`; without overflow clipping on that div, the scaled image leaked below the poster area and produced a visible transparent/image strip between the poster and the title bar on hover. The outer `Link` element already had `overflow-hidden` but that only clipped at the card boundary, not at the poster boundary.
+
+### Validation
+
+Code-review verified: one-line addition, no tests affected, no other files changed.
+
+---
+
+## Previous pass (2026-04-19 — post-refactor bug hunt + simplify sweep)
 
 Ran a deep bug-hunt across the whole branch (`recommended-movies` vs `main`), fixed everything found, then ran the `simplify` skill (three parallel review agents) and fixed the real findings. All of this lands on top of the Node-guard removal described in the pass below.
 

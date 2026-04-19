@@ -21,7 +21,7 @@ export default function PopularMovieCard({ movie }: Props) {
       className="group block rounded-lg overflow-hidden bg-plex-card border border-plex-border hover:border-plex-accent transition-colors"
       aria-label={`Send "${movie.title}" to chat`}
     >
-      <div className="relative aspect-[2/3] bg-gray-800">
+      <div className="relative aspect-[2/3] bg-gray-800 overflow-hidden">
         {movie.poster && !imgFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
