@@ -12,6 +12,7 @@
 - **Checks your Plex library** instantly — every suggestion shows whether it's already available to watch
 - **One-click downloads** — each recommendation card has a Download button; no need to type anything
 - **TV season picker** — for TV shows, choose which season to download; seasons already in your library are greyed out automatically
+- **Browse popular movies** — a `/popular` page (flame icon in the header) with Most Downloaded and Newest tabs; click a poster to pull the title straight into chat
 - **Moves completed downloads** to your Plex folder automatically and triggers a library scan
 - **Fast title lookup** — quoted titles and explicit title declarations skip the LLM and go straight to search
 - Works from **any device on your local network** — desktop, phone, tablet
@@ -199,6 +200,15 @@ If the title isn't in your library and a copy is available:
 
 A download tracker card appears showing progress. When it finishes, the file is automatically moved to your library and Plex is refreshed — this happens in the background on the server, so it works even if you close the browser or navigate away. The **"On Plex ✓"** badge on the card updates automatically once Plex has indexed the file (usually within a few minutes).
 
+### Browsing popular movies
+
+Click the **flame icon** in the top-right header (next to "Movie Chat") to open `/popular`. Two tabs:
+
+- **Most Downloaded** — filter by genre and minimum release year.
+- **Newest** — the last 3 years of releases, sorted by release year (default) or by popularity.
+
+Click any poster → you land back in chat with that title pre-loaded on a recommendation card, ready to check Plex and download.
+
 ### Starting a new conversation
 
 Click the **pencil icon** ✏️ in the top right to start fresh. Your previous conversation is cleared.
@@ -260,7 +270,7 @@ Server (background)
 ## Maintainer docs
 
 - `HANDOFF.md` — current deployment and validation notes
-- `NEXT_STEPS.md` — consolidated planned refactors and the YTS popular-movies feature plan
+- `NEXT_STEPS.md` — consolidated planned refactors and follow-ups on shipped features
 - `AGENTS.md` / `CLAUDE.md` — architecture and implementation guidance for AI-assisted development
 - `install.sh` / `setup.sh` / `update.sh` — operational shell scripts; `install.sh` and `update.sh` are covered by `npm test`, and update-related work should always review `update.sh`
 

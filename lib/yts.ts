@@ -1,7 +1,18 @@
-import { TorrentOption, TorrentSearchResult } from '@/types';
+import {
+  TorrentOption,
+  TorrentSearchResult,
+  YtsMovieEntry,
+  YtsPopularOptions,
+  YtsPopularResult,
+} from '@/types';
 
 // yts.mx is down; yts.bz redirected to this new base as of early 2026
 const YTS_API = 'https://movies-api.accel.li/api/v2/list_movies.json';
+
+const POPULAR_CACHE_SECONDS = 14400;
+
+// YTS enforces `limit=50` as its ceiling.
+const YTS_MAX_LIMIT = 50;
 
 // Public trackers to include in magnet links
 const TRACKERS = [
@@ -33,6 +44,12 @@ interface YtsMovie {
   id: number;
   title: string;
   year: number;
+  rating?: number;
+  genres?: string[];
+  imdb_code?: string;
+  large_cover_image?: string;
+  synopsis?: string;
+  download_count?: number;
   torrents?: YtsTorrent[];
 }
 
@@ -137,4 +154,78 @@ export async function searchTorrents(
   }
 
   return { torrents: [], noSuitableQuality: false };
+}
+
+function mapPopularMovie(m: YtsMovie): YtsMovieEntry {
+  return {
+    ytsId: m.id,
+    title: m.title,
+    year: m.year,
+    imdbCode: m.imdb_code ?? '',
+    imdbRating: typeof m.rating === 'number' ? m.rating : 0,
+    genres: m.genres ?? [],
+    poster: m.large_cover_image ?? '',
+    synopsis: m.synopsis ?? '',
+    downloadCount: m.download_count ?? 0,
+    torrents: (m.torrents ?? []).map((t) => ({
+      hash: t.hash,
+      quality: t.quality,
+      type: t.type,
+      codec: t.video_codec,
+      size: t.size,
+      seeders: t.seeds,
+    })),
+  };
+}
+
+export async function fetchPopularMovies(options: YtsPopularOptions = {}): Promise<YtsPopularResult> {
+  const sortBy = options.sortBy ?? 'download_count';
+  const page = options.page ?? 1;
+  const limit = options.limit ?? 20;
+  const minimumYear = typeof options.minimumYear === 'number' && options.minimumYear > 0
+    ? options.minimumYear
+    : undefined;
+
+  // YTS has no year filter, so when minimumYear is set we over-fetch to keep
+  // each page roughly `limit`-sized after dropping old re-uploads client-side.
+  const fetchLimit = minimumYear
+    ? Math.min(YTS_MAX_LIMIT, Math.max(limit, limit * 3))
+    : limit;
+
+  const url = new URL(YTS_API);
+  url.searchParams.set('sort_by', sortBy);
+  url.searchParams.set('order_by', 'desc');
+  url.searchParams.set('page', String(page));
+  url.searchParams.set('limit', String(fetchLimit));
+  if (options.genre) url.searchParams.set('genre', options.genre);
+  if (typeof options.minimumRating === 'number' && options.minimumRating > 0) {
+    url.searchParams.set('minimum_rating', String(options.minimumRating));
+  }
+
+  const res = await fetch(url.toString(), {
+    signal: AbortSignal.timeout(8000),
+    next: { revalidate: POPULAR_CACHE_SECONDS },
+  });
+  if (!res.ok) throw new Error(`YTS HTTP ${res.status}`);
+
+  const data = await res.json();
+  const movies: YtsMovie[] = data?.data?.movies ?? [];
+  const rawTotalCount: number = data?.data?.movie_count ?? 0;
+
+  const filtered = minimumYear
+    ? movies.filter((m) => typeof m.year === 'number' && m.year >= minimumYear)
+    : movies;
+
+  // Scale totalCount by the filter's hit-rate so pagination shows a realistic
+  // number of pages instead of YTS's full catalog size.
+  const totalCount = minimumYear && movies.length > 0
+    ? Math.max(filtered.length, Math.round(rawTotalCount * (filtered.length / movies.length)))
+    : rawTotalCount;
+
+  return {
+    movies: filtered.slice(0, limit).map(mapPopularMovie),
+    totalCount,
+    page,
+    limit,
+  };
 }

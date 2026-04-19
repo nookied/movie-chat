@@ -1,7 +1,7 @@
 # movie-chat — QA Test Scenarios
 
 Comprehensive test coverage map for the movie-chat application.
-Updated: 2026-04-16
+Updated: 2026-04-19
 
 ---
 
@@ -38,8 +38,13 @@ Updated: 2026-04-16
 | `__tests__/autoMove.test.ts` | Auto-move poller logic | 16 | Implemented |
 | `__tests__/api-plex-check.test.ts` | Plex check API route | 5 | Implemented |
 | `__tests__/api-transmission-status.test.ts` | Transmission status API route | 5 | Implemented |
+| `__tests__/yts-popular.test.ts` | `fetchPopularMovies` — params, mapping, over-fetch, `minimumYear` filter, `totalCount` scaling | 16 | Implemented |
+| `__tests__/api-yts-popular.test.ts` | `/api/yts/popular` — defaults, `sort_by` whitelist, numeric clamping, `minimum_year` validation, 502 on upstream failure | 18 | Implemented |
+| `__tests__/recUrlParam.test.ts` | `?rec=<json>` parse/validate helper for the popular → chat handoff | 15 | Implemented |
+| `__tests__/chat-history.test.ts` | `hooks/useChatHistory` — age/count trim, load merge vs clobber, missing-timestamp drop | 7 | Implemented |
+| `__tests__/shell-scripts.test.ts` | `install.sh` / `update.sh` contract tests — fresh install, successful update, dirty skip, rollback | 4 | Implemented |
 
-**Total: 29 files / 544 tests**
+**Total: 34 files / 618 tests**
 
 ---
 
@@ -271,10 +276,37 @@ Key scenarios: readConfig/writeConfig/cfg caching, sensitive field masking, diag
 
 ---
 
+### 14. Popular Movies Browse (`/popular`)
+
+**Covered by:** `yts-popular.test.ts`, `api-yts-popular.test.ts`, `recUrlParam.test.ts` + manual for interactive flows
+
+| # | Scenario | Expected | Automated? |
+|---|----------|----------|-----------|
+| P1 | Open `/popular` — default tab | Most Downloaded active, 20 cards, genre + minimum-year dropdowns visible | Manual |
+| P2 | Click flame icon in header from `/` | Navigates to `/popular` without losing configured cookie | Manual |
+| P3 | Select genre → results update | Debounced 300ms; grid re-renders; pagination resets to page 1 | Manual |
+| P4 | Select minimum-year (e.g. 2023+) | Server over-fetches (up to 50) and client-filters; totalCount scales | `yts-popular.test.ts` |
+| P5 | Pagination Next/Prev | Updates `page` query param; disables at boundaries; skeleton during load | Manual |
+| P6 | Switch to Newest tab | Genre + year dropdowns disappear; single sort-order dropdown appears defaulted to "Sort by year" | Manual |
+| P7 | Newest + Sort by year | Returns 2026/2027 releases at the top | Manual |
+| P8 | Newest + Sort by popularity | All cards have year ≥ currentYear − 3 (implicit `NEWEST_MIN_YEAR`); no all-time classics leak through | Manual + `yts-popular.test.ts` |
+| P9 | Switch tabs back to Most Downloaded | Genre reset to "All genres", minYear reset to "Any year", newestSort reset to `year` | Manual |
+| P10 | Click a card | Navigates to `/?rec=<json>`; chat opens with recommendation card pre-loaded | Manual + `recUrlParam.test.ts` |
+| P11 | YTS upstream failure | `/api/yts/popular` returns 502; panel shows error + "Try again" button | `api-yts-popular.test.ts` |
+| P12 | `sort_by=bogus` in URL | Route falls back to `download_count` | `api-yts-popular.test.ts` |
+| P13 | `limit=999` in URL | Route clamps to 50 (YTS max) | `api-yts-popular.test.ts` |
+| P14 | `minimum_year=1700` in URL | Route ignores (below 1900 floor) | `api-yts-popular.test.ts` |
+| P15 | Card hover | Poster scales slightly; 6-line synopsis overlay fades in | Manual |
+| P16 | Broken poster URL | `onError` flips to placeholder SVG | Manual |
+| P17 | IMDb rating = 0 | Rating badge is not rendered | Manual |
+| P18 | Cache TTL (4h) | Repeated requests within 4h hit Next fetch cache | Manual |
+
+---
+
 ## Running the Tests
 
 ```bash
-npm test                        # run all 544 tests once
+npm test                        # run all 618 tests once
 npm run test:watch              # watch mode
 npm run test:coverage           # with coverage report
 npx vitest run __tests__/yts.test.ts  # single file

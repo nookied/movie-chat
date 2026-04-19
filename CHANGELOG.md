@@ -10,10 +10,19 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 
 ## [Unreleased]
 
+### Added
+- **Popular movies browse page** (`/popular`, `app/popular/page.tsx`, `components/PopularMoviesPanel.tsx`, `components/PopularMovieCard.tsx`, `lib/yts.ts` → `fetchPopularMovies()`, `app/api/yts/popular/route.ts`, `types/index.ts` → `YtsMovieEntry`, `YtsPopularOptions`, `YtsPopularSortBy`, `YtsPopularResult`): Browse YTS's 1080p catalog with tab-specific controls — **Most Downloaded** exposes genre + minimum-release-year dropdowns, **Newest** exposes a single sort-order dropdown (*Sort by year* default / *Sort by popularity*) and is hard-scoped to the last 3 years so rating-sort stays recent. Click a poster to land in chat with the title pre-loaded on a recommendation card via `?rec=<json>`. Flame icon in `app/page.tsx` header links into the page
+
 ### Security
 - **OAuth CSRF state always required** (`app/api/openrouter/callback/route.ts`): Removed backwards-compat bypass that allowed requests without any state to skip CSRF validation. Both URL state and cookie state are now mandatory — requests missing either are rejected with `state_mismatch`
 
+### Changed
+- **YTS popular-list cache TTL** (`lib/yts.ts`, `POPULAR_CACHE_SECONDS`): Bumped 1800s → 14400s (4h). `/popular` was previously refetching every 30 min for no user benefit. Next.js fetch cache invalidates naturally on `npm run build`, so no migration is needed
+- **Removed per-card 1080p badge and non-1080p dimming** (`components/PopularMovieCard.tsx`): YTS always carries a 1080p variant in practice, so the badge was redundant noise
+
 ### Fixed
+- **Chat history clobbered URL-injected recommendations on mount** (`hooks/useChatHistory.ts`): The localStorage load effect called `setMessages(valid)` non-functionally, racing with the `ChatInterface` effect that reads `?rec=` from the URL — landing on `/?rec=<json>` from the popular page could lose the card. The loader now uses a functional updater that preserves any messages already present other than the initial welcome placeholder
+- **Next.js 15 prerender warning on `/`** (`app/page.tsx`): Wrapped `<ChatInterface />` in `<Suspense fallback={null}>` — required by `useSearchParams()` used to read `?rec=`
 - **Recommendation card refetch storm after refactor** (`components/chat/ChatMessageList.tsx`): Inline `onResolveRecommendation` and `isDownloading` arrows were recreated on every `ChatInterface` render (each keystroke and streaming token), churning `useRecommendationCardState`'s effect dep array and refiring the Plex / reviews / torrent fetches. Extracted `ChatMessageItem` and `RecommendationSlot` sub-components so the wrapper closures are memoised per-slot with stable deps — cards stop flickering and availability state stops thrashing mid-stream
 - **TV shows with `&` in title missed on Knaben** (`lib/eztv.ts`): `norm()` now converts `&` → ' and ' before stripping non-alphanumerics, so "Law & Order" matches releases titled "Law.and.Order". Brings TV search in line with movie (`lib/yts.ts`) and Plex (`lib/plex.ts`) normalisation
 - **Plex subtitle matches failing when titles contain `&`** (`lib/plex.ts`): `titleMatches()` subtitle-variant check now compares normalised forms, so "Fast & Furious" correctly matches a Plex entry titled "Fast and Furious: Tokyo Drift". `originalTitle` is also checked for subtitle variants, not just `title`
@@ -27,10 +36,10 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **TypeScript strict check** (`__tests__/shell-scripts.test.ts`): Fixed `ProcessEnv` type mismatch causing `tsc --noEmit` to fail on the shell-script test env objects
 
 ### Tests
-- 31 test files / 569 tests passing (was 568 — added `recommendationKey` distinct-type assertion to cover the movie-vs-TV collision fix)
+- 34 test files / 618 tests passing (was 569 — added `__tests__/yts-popular.test.ts` with `fetchPopularMovies` coverage including over-fetch + `minimumYear` client-side filter + `totalCount` scaling, `__tests__/api-yts-popular.test.ts` for route param whitelisting and numeric clamping, and `__tests__/recUrlParam.test.ts` for the `?rec=` parse/validate helper used to hand off from `/popular` to chat)
 
 ### Docs
-- **Planned work consolidated into `NEXT_STEPS.md`**: merged `REFACTOR_RECOMMENDATIONS.md` (trimmed to the two still-open phases — chat route modularization and setup/settings consolidation) and `YTS_POPULAR_MOVIES_PLAN.md` into a single forward-looking doc. Added a "Callback identity" entry to the refactor risk notes, carrying forward the lesson from the `ChatMessageList` regression. `CLAUDE.md`, `AGENTS.md`, `HANDOFF.md`, `README.md`, and the handoff feedback memory updated to point at the consolidated file
+- **Planned work consolidated into `NEXT_STEPS.md`**: merged `REFACTOR_RECOMMENDATIONS.md` (trimmed to the two still-open phases — chat route modularization and setup/settings consolidation) and `YTS_POPULAR_MOVIES_PLAN.md` into a single forward-looking doc. After the `/popular` feature shipped, the YTS section was collapsed to a "shipped" pointer plus small follow-ups. Added a "Callback identity" entry to the refactor risk notes, carrying forward the lesson from the `ChatMessageList` regression. `CLAUDE.md`, `AGENTS.md`, `HANDOFF.md`, `README.md`, and the handoff feedback memory updated to point at the consolidated file
 
 ---
 

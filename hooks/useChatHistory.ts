@@ -41,9 +41,20 @@ export function useChatHistory({
       if (!stored) return;
       const parsed = JSON.parse(stored) as ChatMessage[];
       const valid = trimChatHistory(parsed, maxStoredMessages);
-      if (valid.length > 0) setMessages(valid);
+      if (valid.length === 0) return;
+
+      // Functional merge so we don't clobber messages appended by concurrent
+      // effects on the same mount (e.g., ?rec=... injecting a recommendation
+      // before this localStorage load commits).
+      setMessages((prev) => {
+        const validIds = new Set(valid.map((m) => m.id));
+        const additions = prev.filter(
+          (m) => m.id !== welcomeMessage.id && !validIds.has(m.id)
+        );
+        return additions.length === 0 ? valid : [...valid, ...additions];
+      });
     } catch { /* localStorage unavailable or corrupt — keep welcome */ }
-  }, [storageKey, maxStoredMessages]);
+  }, [maxStoredMessages, storageKey, welcomeMessage]);
 
   useEffect(() => {
     if (firstSaveRef.current) {

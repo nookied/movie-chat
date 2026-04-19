@@ -16,7 +16,7 @@
 | `lib/chatPrompts.ts` | `DEFAULT_SYSTEM_PROMPT`, `GEMMA_SYSTEM_PROMPT`, `isGemmaModel`, `getSystemPrompt` |
 | `lib/directTitleLookup.ts` | Deterministic exact-title parser — quoted titles and `the film is titled ...` declarations bypass provider latency |
 | `lib/chatTags.ts` | Shared `<recommendation>` / `<download>` parsing, stripping, and tag serialization helpers |
-| `NEXT_STEPS.md` | Consolidated planned work — chat route modularization (Phase 3), setup/settings consolidation (Phase 4), YTS popular-movies feature plan, and refactor risk notes |
+| `NEXT_STEPS.md` | Consolidated planned work — chat route modularization, setup/settings consolidation, refactor risk notes, and follow-ups on shipped features |
 | `lib/logger.ts` | Structured JSONL logger — daily rotation, 7-day retention, 32 KB entry / 50 MB file caps |
 | `app/api/diagnostics/bundle/route.ts` | GET endpoint — token-gated zip-less JSON bundle (logs + redacted config + version) |
 | `components/ChatInterface.tsx` | Chat composition root — wires history, streaming, downloads, and message rendering together |
@@ -32,7 +32,11 @@
 | `lib/autoMove.ts` | Server-side background poller — moves one torrent at a time with 15s gap |
 | `lib/appTorrents.ts` | In-memory + on-disk registry of app torrent IDs + mediaType/season/title metadata |
 | `lib/config.ts` | `cfg()` helper — 30s in-memory cache avoids per-request sync disk reads |
-| `lib/yts.ts` | YTS torrent search + magnet link builder (movies); supports `strictYear` option; `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries |
+| `lib/yts.ts` | YTS torrent search + magnet link builder (movies); supports `strictYear` option; `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries; also `fetchPopularMovies()` for the `/popular` browse page — over-fetches (up to 50) and client-side-filters by `minimumYear`, scales `totalCount` by the filter hit-rate |
+| `app/api/yts/popular/route.ts` | GET — whitelists `sort_by`, clamps `limit`/`page`/`minimum_rating`, validates `minimum_year` > 1900, returns 502 on upstream failure |
+| `components/PopularMoviesPanel.tsx` | `/popular` client grid + controls. Tab-specific filter layout: Most Downloaded exposes genre + minimum-year dropdowns; Newest exposes a single sort dropdown (`year` default / `rating`) and is hard-scoped to the last 3 years via `NEWEST_MIN_YEAR` so rating-sort stays recent |
+| `components/PopularMovieCard.tsx` | Individual YTS browse card — poster, IMDb ★ overlay, hover synopsis, click → `/?rec=<json>` |
+| `app/popular/page.tsx` | Server-component shell for the YTS browse page |
 | `lib/eztv.ts` | Knaben/EZTV torrent search + quality scoring (TV); `norm` maps `&` → ` and ` so titles like "Law & Order" match "Law.and.Order" releases |
 | `lib/tmdb.ts` | TMDB metadata — posters, overviews, year, season count; `resolveMovieLookup` handles disambiguation for bare titles with multiple exact matches |
 | `lib/omdb.ts` | OMDB ratings — IMDb score, Rotten Tomatoes |
@@ -59,8 +63,9 @@
 **Always identify the affected flow before making changes:**
 - **Movie flow**: YTS torrent → single download → file move
 - **TV flow**: Knaben/EZTV → season picker → multi-season logic
+- **Popular-movies browse flow**: YTS `list_movies.json` (via `fetchPopularMovies`) → grid → click card → `/?rec=<json>` → chat's `RecommendationCard` (reuses the Movie flow for the actual download)
 
-These flows diverge significantly. If a change touches both, verify behaviour in each separately.
+These flows diverge significantly. If a change touches both, verify behaviour in each separately. The popular-browse page only handles movies — TV is intentionally out of scope (no season picker there).
 
 If you are planning a broad cleanup or a new feature, consult `NEXT_STEPS.md` first and prefer that ordering over ad-hoc restructuring.
 
@@ -147,7 +152,7 @@ Map out the architecture before attempting fixes: what services are involved, wh
 
 ## Testing
 
-`npm test` (Vitest, Node env). 31 test files / 569 tests under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, ThinkFilter streaming, and shell-script contract tests for `install.sh` / `update.sh`. Conventions:
+`npm test` (Vitest, Node env). 34 test files / 618 tests under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, ThinkFilter streaming, YTS popular-list fetching and API-route param clamping, and shell-script contract tests for `install.sh` / `update.sh`. Conventions:
 
 - Mock `fs` with `vi.mock('fs', () => ({ default: fsMock, ...fsMock }))` so both ESM and CJS imports see the mock.
 - `vi.resetModules()` in `beforeEach` so module-level state (rate-limit map, logger caches, etc.) is fresh per test.
