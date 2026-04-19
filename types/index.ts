@@ -66,6 +66,46 @@ export interface TorrentSearchResult {
   noSuitableQuality: boolean;
 }
 
+export interface YtsTorrentEntry {
+  hash: string;
+  quality: string;
+  type: string;
+  codec: string;
+  size: string;
+  seeders: number;
+}
+
+export interface YtsMovieEntry {
+  ytsId: number;
+  title: string;
+  year: number;
+  imdbCode: string;
+  imdbRating: number;
+  genres: string[];
+  poster: string;
+  synopsis: string;
+  downloadCount: number;
+  torrents: YtsTorrentEntry[];
+}
+
+export type YtsPopularSortBy = 'download_count' | 'rating' | 'date_added' | 'seeds' | 'year';
+
+export interface YtsPopularOptions {
+  sortBy?: YtsPopularSortBy;
+  genre?: string;
+  minimumRating?: number;
+  minimumYear?: number;
+  page?: number;
+  limit?: number;
+}
+
+export interface YtsPopularResult {
+  movies: YtsMovieEntry[];
+  totalCount: number;
+  page: number;
+  limit: number;
+}
+
 export interface DownloadStatus {
   id: number;
   percentDone: number;

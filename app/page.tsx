@@ -1,7 +1,7 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import ChatInterface from '@/components/ChatInterface';
 import NewChatButton from '@/components/NewChatButton';
-import ShareButton from '@/components/ShareButton';
 
 export default function Home() {
   return (
@@ -25,12 +25,24 @@ export default function Home() {
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
           </svg>
         </div>
-        <div className="flex-1">
-          <h1 className="text-white font-semibold text-lg leading-none">Movie Chat</h1>
+        <div className="min-w-0">
+          <h1 className="text-white font-semibold text-lg leading-none whitespace-nowrap">Movie Chat</h1>
           <p className="hidden sm:block text-gray-400 text-xs mt-0.5">An AI-powered Plex assistant</p>
         </div>
+        <Link
+          href="/popular"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors text-sm font-medium"
+          aria-label="Popular movies"
+          title="Popular movies"
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+            <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z" />
+          </svg>
+          <span className="hidden sm:inline">Popular</span>
+        </Link>
+        <div className="flex-1" />
+        <div className="w-px h-6 bg-plex-border mx-1" aria-hidden="true" />
         <NewChatButton />
-        <ShareButton />
         <Link
           href="/settings"
           className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-700 transition-colors"
@@ -42,8 +54,10 @@ export default function Home() {
         </Link>
       </header>
 
-      {/* Chat */}
-      <ChatInterface />
+      {/* Chat — Suspense boundary is required by useSearchParams() inside ChatInterface. */}
+      <Suspense fallback={null}>
+        <ChatInterface />
+      </Suspense>
     </main>
   );
 }

@@ -1,11 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ChatMessage, Recommendation } from '@/types';
 import DownloadsPanel from './DownloadsPanel';
 import ChatComposer from './chat/ChatComposer';
 import ChatMessageList from './chat/ChatMessageList';
 import { randomId } from '@/lib/randomId';
+import { recommendationTag } from '@/lib/chatTags';
+import { parseRecFromUrl } from '@/lib/recUrlParam';
 import {
   noSuitableQualitySystemMessage,
   notFoundSystemMessage,
@@ -63,6 +66,29 @@ export default function ChatInterface() {
     setMessages,
     triggerDownload,
   });
+
+  const searchParams = useSearchParams();
+  const recParam = searchParams?.get('rec') ?? null;
+  useEffect(() => {
+    if (!recParam) return;
+    const rec = parseRecFromUrl(window.location.search);
+    if (!rec) return;
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('rec');
+    window.history.replaceState({}, '', url.toString());
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: randomId(),
+        role: 'assistant',
+        content: recommendationTag(rec),
+        recommendations: [rec],
+        timestamp: Date.now(),
+      },
+    ]);
+  }, [recParam, setMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

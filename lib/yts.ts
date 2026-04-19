@@ -1,7 +1,23 @@
-import { TorrentOption, TorrentSearchResult } from '@/types';
+import {
+  TorrentOption,
+  TorrentSearchResult,
+  YtsMovieEntry,
+  YtsPopularOptions,
+  YtsPopularResult,
+} from '@/types';
 
 // yts.mx is down; yts.bz redirected to this new base as of early 2026
 const YTS_API = 'https://movies-api.accel.li/api/v2/list_movies.json';
+
+const POPULAR_CACHE_SECONDS = 14400;
+
+// YTS enforces `limit=50` as its ceiling.
+const YTS_MAX_LIMIT = 50;
+
+// Cap how many raw pages we'll walk when filtering. A rare genre+year combo
+// could otherwise issue hundreds of serial requests to YTS. 20 raw pages (1000
+// titles) is plenty to fill any reasonable filtered grid.
+const POPULAR_MAX_RAW_PAGES = 20;
 
 // Public trackers to include in magnet links
 const TRACKERS = [
@@ -33,6 +49,12 @@ interface YtsMovie {
   id: number;
   title: string;
   year: number;
+  rating?: number;
+  genres?: string[];
+  imdb_code?: string;
+  large_cover_image?: string;
+  synopsis?: string;
+  download_count?: number;
   torrents?: YtsTorrent[];
 }
 
@@ -137,4 +159,136 @@ export async function searchTorrents(
   }
 
   return { torrents: [], noSuitableQuality: false };
+}
+
+function mapPopularMovie(m: YtsMovie): YtsMovieEntry {
+  return {
+    ytsId: m.id,
+    title: m.title,
+    year: m.year,
+    imdbCode: m.imdb_code ?? '',
+    imdbRating: typeof m.rating === 'number' ? m.rating : 0,
+    genres: m.genres ?? [],
+    poster: m.large_cover_image ?? '',
+    synopsis: m.synopsis ?? '',
+    downloadCount: m.download_count ?? 0,
+    torrents: (m.torrents ?? []).map((t) => ({
+      hash: t.hash,
+      quality: t.quality,
+      type: t.type,
+      codec: t.video_codec,
+      size: t.size,
+      seeders: t.seeds,
+    })),
+  };
+}
+
+interface FetchPopularPageOptions {
+  genre?: string;
+  limit: number;
+  minimumRating?: number;
+  page: number;
+  sortBy: YtsPopularOptions['sortBy'];
+}
+
+async function fetchPopularPage(options: FetchPopularPageOptions): Promise<{
+  movies: YtsMovie[];
+  rawTotalCount: number;
+}> {
+  const url = new URL(YTS_API);
+  url.searchParams.set('sort_by', options.sortBy ?? 'download_count');
+  url.searchParams.set('order_by', 'desc');
+  url.searchParams.set('page', String(options.page));
+  url.searchParams.set('limit', String(options.limit));
+  if (options.genre) url.searchParams.set('genre', options.genre);
+  if (typeof options.minimumRating === 'number' && options.minimumRating > 0) {
+    url.searchParams.set('minimum_rating', String(options.minimumRating));
+  }
+
+  const res = await fetch(url.toString(), {
+    signal: AbortSignal.timeout(8000),
+    next: { revalidate: POPULAR_CACHE_SECONDS },
+  });
+  if (!res.ok) throw new Error(`YTS HTTP ${res.status}`);
+
+  const data = await res.json();
+  return {
+    movies: data?.data?.movies ?? [],
+    rawTotalCount: data?.data?.movie_count ?? 0,
+  };
+}
+
+export async function fetchPopularMovies(options: YtsPopularOptions = {}): Promise<YtsPopularResult> {
+  const sortBy = options.sortBy ?? 'download_count';
+  const page = options.page ?? 1;
+  const limit = options.limit ?? 20;
+  const minimumYear = typeof options.minimumYear === 'number' && options.minimumYear > 0
+    ? options.minimumYear
+    : undefined;
+
+  if (!minimumYear) {
+    const { movies, rawTotalCount } = await fetchPopularPage({
+      genre: options.genre,
+      limit,
+      minimumRating: options.minimumRating,
+      page,
+      sortBy,
+    });
+
+    return {
+      movies: movies.map(mapPopularMovie),
+      totalCount: rawTotalCount,
+      page,
+      limit,
+    };
+  }
+
+  const rawPageSize = YTS_MAX_LIMIT;
+  const requiredMatches = page * limit;
+  const collected: YtsMovie[] = [];
+  let filteredSeen = 0;
+  let rawSeen = 0;
+  let rawTotalCount = 0;
+  let rawPage = 1;
+  let rawTotalPages = 1;
+
+  while (
+    rawPage <= rawTotalPages
+    && rawPage <= POPULAR_MAX_RAW_PAGES
+    && collected.length < requiredMatches
+  ) {
+    const { movies, rawTotalCount: nextRawTotalCount } = await fetchPopularPage({
+      genre: options.genre,
+      limit: rawPageSize,
+      minimumRating: options.minimumRating,
+      page: rawPage,
+      sortBy,
+    });
+
+    rawTotalCount = nextRawTotalCount;
+    rawTotalPages = Math.max(1, Math.ceil(rawTotalCount / rawPageSize));
+    rawSeen += movies.length;
+
+    const filtered = movies.filter((movie) => (
+      typeof movie.year === 'number' && movie.year >= minimumYear
+    ));
+    filteredSeen += filtered.length;
+    collected.push(...filtered);
+
+    if (movies.length === 0) break;
+    rawPage += 1;
+  }
+
+  const reachedEnd = rawPage > rawTotalPages || rawSeen >= rawTotalCount;
+  const totalCount = reachedEnd || rawSeen === 0
+    ? filteredSeen
+    : Math.max(filteredSeen, Math.round(rawTotalCount * (filteredSeen / rawSeen)));
+  const start = (page - 1) * limit;
+
+  return {
+    movies: collected.slice(start, start + limit).map(mapPopularMovie),
+    totalCount,
+    page,
+    limit,
+  };
 }

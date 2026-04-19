@@ -22,7 +22,7 @@ interface Props {
     strictYear?: boolean
   ) => void;
   onNoSuitableQuality: (title: string, year?: number) => void;
-  onDownload: (title: string, year?: number) => Promise<boolean>;
+  onDownload: (title: string, year?: number, mediaType?: 'movie' | 'tv') => Promise<boolean>;
   onNotFound?: (title: string) => void;
   isDownloading?: (season?: number) => boolean;
   forceInLibrary?: boolean;

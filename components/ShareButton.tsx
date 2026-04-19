@@ -1,81 +1,134 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 
-// Cache resolved values — neither changes during a session
-let cachedUrl: string | null = null;
-let cachedQrDataUrl: string | null = null;
+const HOSTNAME_FETCH_TIMEOUT_MS = 2000;
 
-export default function ShareButton() {
+function buildOrigin(protocol: string, hostname: string, port: string): string {
+  const defaultPort = protocol === 'https:' ? '443' : '80';
+  const portSuffix = port && port !== defaultPort ? `:${port}` : '';
+  return `${protocol}//${hostname}${portSuffix}`;
+}
+
+interface ShareButtonProps {
+  variant?: 'icon' | 'row';
+}
+
+export default function ShareButton({ variant = 'icon' }: ShareButtonProps = {}) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const copiedResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedResetTimeoutRef.current) clearTimeout(copiedResetTimeoutRef.current);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
+    const controller = new AbortController();
 
     async function resolve() {
-      if (cachedUrl && cachedQrDataUrl) {
-        setUrl(cachedUrl);
-        setQrDataUrl(cachedQrDataUrl);
-        return;
-      }
+      const port = window.location.port || '3000';
+      const hostname = window.location.hostname;
+      const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
 
-      let resolved = cachedUrl;
+      let resolved = buildOrigin(protocol, hostname, port);
 
-      if (!resolved) {
-        const port = window.location.port || '3000';
-        const hostname = window.location.hostname;
-
-        if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-          resolved = `http://${hostname}:${port}`;
-        } else {
-          resolved = `http://${hostname}:${port}`;
-          try {
-            const r = await fetch('/api/setup/hostname', { cache: 'no-store' });
-            const data: { hostname?: string } = await r.json();
-            resolved = data.hostname ? `http://${data.hostname}.local:${port}` : resolved;
-          } catch {
-            // keep the fallback
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        const hostnameTimeout = setTimeout(() => controller.abort(), HOSTNAME_FETCH_TIMEOUT_MS);
+        try {
+          const r = await fetch('/api/setup/hostname', {
+            cache: 'no-store',
+            signal: controller.signal,
+          });
+          const data: { hostname?: string } = await r.json();
+          if (data.hostname) {
+            resolved = buildOrigin(protocol, `${data.hostname}.local`, port);
           }
+        } catch {
+          // keep the localhost fallback
+        } finally {
+          clearTimeout(hostnameTimeout);
         }
-        cachedUrl = resolved;
       }
 
-      const dataUrl = await QRCode.toDataURL(resolved, { width: 180, margin: 1 });
-      cachedQrDataUrl = dataUrl;
-      setUrl(resolved);
-      setQrDataUrl(dataUrl);
+      if (controller.signal.aborted) return;
+
+      try {
+        const dataUrl = await QRCode.toDataURL(resolved, { width: 180, margin: 1 });
+        if (controller.signal.aborted) return;
+        setUrl(resolved);
+        setQrDataUrl(dataUrl);
+      } catch {
+        setUrl(resolved);
+        setQrDataUrl('');
+      }
     }
 
-    resolve();
+    void resolve();
+    return () => {
+      controller.abort();
+    };
   }, [open]);
 
   function copyUrl() {
-    navigator.clipboard.writeText(url).then(() => {
+    if (!url) return;
+    const markCopied = () => {
+      if (copiedResetTimeoutRef.current) clearTimeout(copiedResetTimeoutRef.current);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+      copiedResetTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
+    };
+    // navigator.clipboard requires a secure context — plain-HTTP LAN access
+    // lacks it, so fall back to the legacy execCommand path in that case.
+    if (navigator.clipboard && window.isSecureContext) {
+      void navigator.clipboard.writeText(url).then(markCopied).catch(() => setCopied(false));
+      return;
+    }
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (ok) markCopied();
+      else setCopied(false);
+    } catch {
+      setCopied(false);
+    }
   }
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-700 transition-colors"
-        aria-label="Share with family"
-        title="Share with family"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-          <circle cx="18" cy="5" r="3" />
-          <circle cx="6" cy="12" r="3" />
-          <circle cx="18" cy="19" r="3" />
-          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-        </svg>
-      </button>
+      {variant === 'row' ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors"
+        >
+          Show QR code
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-700 transition-colors"
+          aria-label="Share with family"
+          title="Share with family"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+          </svg>
+        </button>
+      )}
 
       {/* Modal */}
       {open && (

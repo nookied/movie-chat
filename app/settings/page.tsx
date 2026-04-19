@@ -8,6 +8,7 @@ import Section from '@/components/ui/Section';
 import Field from '@/components/ui/Field';
 import Toggle from '@/components/ui/Toggle';
 import ModelSelectField from '@/components/ui/ModelSelectField';
+import ShareButton from '@/components/ShareButton';
 
 interface ConfigFields {
   openRouterApiKey: string;
@@ -368,6 +369,12 @@ export default function SettingsPage() {
           paddingRight: 'max(1.5rem, env(safe-area-inset-right))',
         }}
       >
+
+        <Section title="Share with household" description="Show a QR code so others on your Wi-Fi can open Movie Chat on their phone">
+          <div className="px-4 py-3">
+            <ShareButton variant="row" />
+          </div>
+        </Section>
 
         <Section title="OpenRouter" description="Cloud LLM powering the chat assistant — free tier available at openrouter.ai">
           <Field label="API Key" value={form.openRouterApiKey} placeholder={sensitiveplaceholder('openRouterApiKey')}

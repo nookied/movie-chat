@@ -6,7 +6,7 @@ import { DownloadStatus, ActiveDownload } from '@/types';
 interface Props {
   download: ActiveDownload;
   onComplete: () => void;
-  onMoved?: (torrentName: string, year?: number) => void;
+  onMoved?: (torrentName: string, year?: number, mediaType?: 'movie' | 'tv') => void;
 }
 
 // Transmission status codes
@@ -40,6 +40,8 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
   const [controlLoading, setControlLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consecutiveErrors = useRef(0);
+  const requestControllerRef = useRef<AbortController | null>(null);
+  const allowMovedRef = useRef(true);
 
   function stopPolling() {
     if (intervalRef.current !== null) {
@@ -48,23 +50,36 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
     }
   }
 
+  function abortInFlightRequest() {
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = null;
+  }
+
   const fetchStatus = useCallback(async () => {
+    abortInFlightRequest();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+
     try {
-      const res = await fetch(`/api/transmission/status?id=${download.torrentId}`);
+      const res = await fetch(`/api/transmission/status?id=${download.torrentId}`, {
+        signal: controller.signal,
+      });
       const data = await res.json();
+      if (controller.signal.aborted) return;
       if (data.error) throw new Error(data.error);
       consecutiveErrors.current = 0;
       setStatus(data);
       setError('');
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       const msg = err instanceof Error ? err.message : 'Cannot reach Transmission';
       consecutiveErrors.current += 1;
 
       if (msg.toLowerCase().includes('not found')) {
         stopPolling();
-        if (download.fromApp) {
+        if (download.fromApp && allowMovedRef.current) {
           // Server poller moved it — show "Added to library" then dismiss
-          onMoved?.(download.torrentName, download.year);
+          onMoved?.(download.torrentName, download.year, download.mediaType);
           setMoved(true);
         } else {
           // External torrent manually removed — just dismiss quietly
@@ -76,17 +91,30 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
       setError(msg);
       // Stop polling after 3 consecutive errors (e.g. Transmission down)
       if (consecutiveErrors.current >= 3) stopPolling();
+    } finally {
+      if (requestControllerRef.current === controller) {
+        requestControllerRef.current = null;
+      }
     }
-  }, [download.torrentId, download.fromApp, download.torrentName, download.year, onMoved, onComplete]);
+  }, [download.torrentId, download.fromApp, download.mediaType, download.torrentName, download.year, onMoved, onComplete]);
 
   useEffect(() => {
+    allowMovedRef.current = true;
     fetchStatus();
     intervalRef.current = setInterval(fetchStatus, 5000);
-    return () => stopPolling();
+    return () => {
+      stopPolling();
+      abortInFlightRequest();
+    };
   }, [fetchStatus]);
 
   async function handleControl(action: 'pause' | 'resume' | 'remove') {
     setControlLoading(true);
+    if (action === 'remove') {
+      allowMovedRef.current = false;
+      abortInFlightRequest();
+    }
+
     try {
       await fetch('/api/transmission/control', {
         method: 'POST',
@@ -94,11 +122,15 @@ export default function DownloadTracker({ download, onComplete, onMoved }: Props
         body: JSON.stringify({ id: download.torrentId, action }),
       });
       if (action === 'remove') {
+        stopPolling();
         onComplete();
       } else {
         await fetchStatus();
       }
     } catch {
+      if (action === 'remove') {
+        allowMovedRef.current = true;
+      }
       // silently fail — next poll will reflect real state
     } finally {
       setControlLoading(false);

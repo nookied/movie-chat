@@ -12,6 +12,7 @@
 - **Checks your Plex library** instantly — every suggestion shows whether it's already available to watch
 - **One-click downloads** — each recommendation card has a Download button; no need to type anything
 - **TV season picker** — for TV shows, choose which season to download; seasons already in your library are greyed out automatically
+- **Browse popular movies** — a `/popular` page (flame icon in the header) with Most Downloaded and Newest tabs; click a poster to pull the title straight into chat
 - **Moves completed downloads** to your Plex folder automatically and triggers a library scan
 - **Fast title lookup** — quoted titles and explicit title declarations skip the LLM and go straight to search
 - Works from **any device on your local network** — desktop, phone, tablet
@@ -33,7 +34,7 @@
 
 | Service | What it's for | Cost |
 |---|---|---|
-| [Node.js](https://nodejs.org) v18.18+ | Run the app | Free |
+| [Node.js](https://nodejs.org) 20+ | Run the app | Free |
 | [Plex Media Server](https://www.plex.tv) | Your media library | Free |
 | [Transmission](https://transmissionbt.com) | Download manager | Free |
 | [OpenRouter](https://openrouter.ai) account | AI chat (cloud) | Free tier available |
@@ -59,7 +60,7 @@ Paste this into your terminal. It clones the repo, installs dependencies, builds
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/nookied/movie-chat/main/install.sh)"
 ```
 
-You'll need [git](https://git-scm.com) and [Node.js](https://nodejs.org) v18.18+ installed first.
+You'll need [git](https://git-scm.com) and [Node.js](https://nodejs.org) 20+ installed first. The one-liner installs Node.js automatically if it's missing.
 
 ### Option C — manual
 
@@ -199,6 +200,15 @@ If the title isn't in your library and a copy is available:
 
 A download tracker card appears showing progress. When it finishes, the file is automatically moved to your library and Plex is refreshed — this happens in the background on the server, so it works even if you close the browser or navigate away. The **"On Plex ✓"** badge on the card updates automatically once Plex has indexed the file (usually within a few minutes).
 
+### Browsing popular movies
+
+Click the **flame icon** in the top-right header (next to "Movie Chat") to open `/popular`. Two tabs:
+
+- **Most Downloaded** — filter by genre and minimum release year.
+- **Newest** — the last 3 years of releases, sorted by release year (default) or by popularity.
+
+Click any poster → you land back in chat with that exact title/year pre-loaded on a recommendation card, ready to check Plex and download.
+
 ### Starting a new conversation
 
 Click the **pencil icon** ✏️ in the top right to start fresh. Your previous conversation is cleared.
@@ -260,8 +270,9 @@ Server (background)
 ## Maintainer docs
 
 - `HANDOFF.md` — current deployment and validation notes
-- `NEXT_STEPS.md` — consolidated planned refactors and the YTS popular-movies feature plan
+- `NEXT_STEPS.md` — consolidated planned refactors and follow-ups on shipped features
 - `AGENTS.md` / `CLAUDE.md` — architecture and implementation guidance for AI-assisted development
+- `.agents/skills/qa/SCENARIOS.md` — per-file test coverage map and manual QA scenarios
 - `install.sh` / `setup.sh` / `update.sh` — operational shell scripts; `install.sh` and `update.sh` are covered by `npm test`, and update-related work should always review `update.sh`
 
 ---
@@ -271,7 +282,7 @@ Server (background)
 The app is designed for trusted local-network use only. It includes:
 
 - **Local-network restriction** — middleware blocks all requests from non-LAN IPs; only RFC-1918 addresses and `.local` mDNS hostnames are allowed
-- **Rate limiting** — 30 requests/minute per IP on the chat endpoint
+- **Rate limiting** — 30 requests/minute per IP on both the chat endpoint and the popular-movies browse endpoint; the limiter is soft-capped at 10k tracked IPs so the in-memory map can't grow unbounded under a burst
 - **OAuth CSRF protection** — OpenRouter OAuth flow uses a random state token in an httpOnly cookie; both URL state and cookie state are always required and verified with timing-safe comparison; redirects use a fixed origin, never the client-controlled Host header
 - **Request validation** — POST routes enforce a 64 KB body limit and validate all input fields; malformed JSON returns 400 instead of a stack trace
 - **Magnet URL validation** — only well-formed `magnet:?xt=urn:btih:` links are accepted
@@ -422,14 +433,20 @@ pm2 stop movie-chat
 npm run dev            # development server with hot reload (port 3001)
 npm run build          # production build (includes standalone output)
 npm run start          # production server (requires a build first)
-npm run lint           # ESLint
-npm test               # run the full suite, including install.sh/update.sh contract tests
+npm run lint           # ESLint (CI-safe, non-interactive)
+npm test               # Vitest unit + integration suite
+npm run test:coverage  # Vitest with enforced global coverage thresholds
+npm run build          # production build + typecheck
+npm run test:e2e       # production HTTP smoke tests against a built app
+npm run ci             # local mirror of the CI pipeline
 npm run electron:dev   # launch Electron app in dev mode (requires build first)
 npm run electron:build # build macOS .dmg in dist-electron/
 npm run release        # build + publish to GitHub Releases (needs GH_TOKEN)
 ```
 
 All configuration is read from `config.local.json` at runtime — no server restart needed after saving settings (except system prompt changes, which require `pm2 restart movie-chat`).
+
+Node 24 LTS is the recommended development version (`.nvmrc` / `.node-version` both pin to `24`). CI covers Node 20 and 24 LTS; any Node version is accepted at runtime.
 
 ---
 

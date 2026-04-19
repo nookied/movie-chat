@@ -171,12 +171,18 @@ export function useChatSendMessage({
   const timeoutIdsRef = useRef(new Set<ReturnType<typeof setTimeout>>());
   const isMountedRef = useRef(true);
 
-  useEffect(() => () => {
-    isMountedRef.current = false;
-    controllersRef.current.forEach((controller) => controller.abort());
-    controllersRef.current.clear();
-    timeoutIdsRef.current.forEach(clearTimeout);
-    timeoutIdsRef.current.clear();
+  // Reset on mount so StrictMode double-mount can't leave the ref stuck at false.
+  useEffect(() => {
+    isMountedRef.current = true;
+    const controllers = controllersRef.current;
+    const timeoutIds = timeoutIdsRef.current;
+    return () => {
+      isMountedRef.current = false;
+      controllers.forEach((controller) => controller.abort());
+      controllers.clear();
+      timeoutIds.forEach(clearTimeout);
+      timeoutIds.clear();
+    };
   }, []);
 
   const sendMessage = useCallback(async (text: string) => {

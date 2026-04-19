@@ -6,7 +6,7 @@ import DownloadTracker from './DownloadTracker';
 
 interface Props {
   downloads: ActiveDownload[];
-  onMoved: (name: string, year?: number) => void;
+  onMoved: (name: string, year?: number, mediaType?: 'movie' | 'tv') => void;
   onComplete: (torrentId: number) => void;
 }
 
@@ -18,7 +18,7 @@ function DownloadTrackerWrapper({
   onComplete,
 }: {
   download: ActiveDownload;
-  onMoved: (name: string, year?: number) => void;
+  onMoved: (name: string, year?: number, mediaType?: 'movie' | 'tv') => void;
   onComplete: (torrentId: number) => void;
 }) {
   const handleComplete = useCallback(

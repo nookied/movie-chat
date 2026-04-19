@@ -104,11 +104,14 @@ echo "unexpected git args: $*" >&2
 exit 1
 `);
     writeStub(binDir, 'node', `
-printf '20.11.0'
+printf '24.15.0'
 `);
     writeStub(binDir, 'npm', `
 printf 'npm %s\n' "$*" >> "$TEST_LOG"
 exit 0
+`);
+    writeStub(binDir, 'node', `
+printf '24.15.0'
 `);
 
     const result = runScript('install.sh', {
@@ -162,6 +165,9 @@ esac
 printf 'npm %s\n' "$*" >> "$TEST_LOG"
 exit 0
 `);
+    writeStub(binDir, 'node', `
+printf '24.15.0'
+`);
 
     const result = runScript('update.sh', {
       cwd: repoDir,
@@ -173,7 +179,9 @@ exit 0
     expect(result.stdout).toContain('Downloaded latest code');
     expect(result.stdout).toContain('Build complete');
     expect(readCalls(logFile)).toContain('git pull --quiet');
-    expect(readCalls(logFile)).toContain('npm install');
+    // update.sh prefers `npm ci` for reproducible installs and only falls back
+    // to `npm install` if ci fails. Under the happy-path stub, ci succeeds.
+    expect(readCalls(logFile)).toContain('npm ci');
     expect(readCalls(logFile)).toContain('npm run build');
   });
 
@@ -199,6 +207,9 @@ exit 1
     writeStub(binDir, 'npm', `
 printf 'npm %s\n' "$*" >> "$TEST_LOG"
 exit 0
+`);
+    writeStub(binDir, 'node', `
+printf '24.15.0'
 `);
 
     const result = runScript('update.sh', {
@@ -253,6 +264,9 @@ if [ "$1" = "run" ] && [ "$2" = "build" ] && [ "\${3:-}" != "--silent" ]; then
 fi
 exit 0
 `);
+writeStub(binDir, 'node', `
+printf '24.15.0'
+`);
 
     const result = runScript('update.sh', {
       cwd: repoDir,
@@ -263,5 +277,51 @@ exit 0
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('Update failed');
     expect(readCalls(logFile)).toContain('git reset --hard rollback-sha');
+  });
+
+  it('update.sh --auto proceeds on any Node version without gating', () => {
+    const root = makeTempDir();
+    const home = path.join(root, 'home');
+    const repoDir = path.join(root, 'repo');
+    fs.mkdirSync(home, { recursive: true });
+    fs.mkdirSync(repoDir, { recursive: true });
+    fs.writeFileSync(path.join(repoDir, 'ecosystem.config.js'), 'module.exports = {};');
+
+    const { binDir, env, logFile } = prepareScriptEnv(home);
+
+    // Newer-than-LTS Node 25 — if update.sh ever re-introduces a version gate
+    // this test will fail as the script will bail before running git fetch.
+    writeStub(binDir, 'node', `
+printf '25.9.0'
+`);
+    writeStub(binDir, 'git', `
+printf 'git %s\n' "$*" >> "$TEST_LOG"
+case "$1" in
+  status) exit 0 ;;
+  fetch) exit 0 ;;
+  rev-parse)
+    # Same sha on both sides → "Already up to date" → clean exit 0.
+    printf 'same-sha'
+    ;;
+  *) echo "unexpected git args: $*" >&2; exit 1 ;;
+esac
+`);
+    writeStub(binDir, 'npm', `
+printf 'npm %s\n' "$*" >> "$TEST_LOG"
+exit 0
+`);
+
+    const result = runScript('update.sh', {
+      cwd: repoDir,
+      env,
+      args: ['--auto'],
+    });
+
+    // Clean exit proves the script passed the Node check and reached the
+    // "already up to date" branch; git fetch confirms it got past version gating.
+    expect(result.status).toBe(0);
+    const calls = readCalls(logFile);
+    expect(calls).toContain('git fetch --quiet');
+    expect(calls.some((line) => line.startsWith('git rev-parse'))).toBe(true);
   });
 });

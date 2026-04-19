@@ -4,15 +4,20 @@
   "description": "AI-powered movie recommendations with Plex integration",
   "author": "nookied",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "main": "electron/main.js",
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start",
+    "ci": "npm run lint && npm run test:coverage && npm run build && npm run test:e2e",
+    "lint": "eslint . --ext .js,.mjs,.ts,.tsx",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "next lint",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "setup": "bash setup.sh",
     "update": "bash update.sh",
     "uninstall:app": "bash uninstall.sh",

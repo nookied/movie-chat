@@ -26,28 +26,11 @@ heading "1 / 5  Checking prerequisites"
 
 if ! command -v node &>/dev/null; then
   error "Node.js is not installed."
-  echo "       Install it from https://nodejs.org (v18.18 or later required)."
+  echo "       Install Node.js from https://nodejs.org."
   exit 1
 fi
 
-NODE_VER=$(node -e "process.stdout.write(process.version.slice(1))")
-NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
-NODE_MINOR=$(echo "$NODE_VER" | cut -d. -f2)
-
-# Next.js 15 requires ^18.18.0 || ^19.8.0 || >=20.0.0
-NODE_OK=0
-if   [ "$NODE_MAJOR" -ge 20 ]; then NODE_OK=1
-elif [ "$NODE_MAJOR" -eq 19 ] && [ "$NODE_MINOR" -ge 8  ]; then NODE_OK=1
-elif [ "$NODE_MAJOR" -eq 18 ] && [ "$NODE_MINOR" -ge 18 ]; then NODE_OK=1
-fi
-
-if [ "$NODE_OK" -eq 0 ]; then
-  error "Node.js $NODE_VER found — v18.18 or later is required (v20+ recommended)."
-  echo "       Download a newer version from https://nodejs.org"
-  exit 1
-fi
-
-info "Node.js $NODE_VER"
+info "Node.js $(node --version | sed 's/^v//')"
 
 # ── 2. npm install ────────────────────────────────────────────────────────────
 heading "2 / 5  Installing dependencies"

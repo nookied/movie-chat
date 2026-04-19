@@ -13,14 +13,27 @@ interface Options {
 }
 
 export function useDownloadTrigger({ addInfoMessage, pendingTorrents, trackStartedDownload }: Options) {
-  return useCallback(async (title: string, year?: number) => {
-    const exactEntry = pendingTorrents.current.get(torrentKey(title, year));
-    const fallbackEntries = year === undefined
-      ? Array.from(pendingTorrents.current.values()).filter(
-        (pending) => normalizeComparableTitle(pending.title) === normalizeComparableTitle(title)
-      )
-      : [];
-    const entry = exactEntry ?? (fallbackEntries.length === 1 ? fallbackEntries[0] : undefined);
+  return useCallback(async (title: string, year?: number, requestedMediaType?: 'movie' | 'tv') => {
+    // Fast path: exact key hit for movies (no season ambiguity).
+    let entry = requestedMediaType === 'movie'
+      ? pendingTorrents.current.get(torrentKey(title, year, 'movie'))
+      : undefined;
+
+    // Fallback: scan for title/type/year matches. For TV, multiple seasons may
+    // be pending at once — Map preserves insertion order, so the last match is
+    // the one the user just queued.
+    if (!entry) {
+      const normalizedTitle = normalizeComparableTitle(title);
+      let latestMatch: PendingTorrentEntry | undefined;
+      for (const pending of pendingTorrents.current.values()) {
+        if (normalizeComparableTitle(pending.title) !== normalizedTitle) continue;
+        if (year !== undefined && pending.year !== year) continue;
+        if (requestedMediaType !== undefined && pending.mediaType !== requestedMediaType) continue;
+        latestMatch = pending;
+      }
+      entry = latestMatch;
+    }
+
     if (!entry) {
       addInfoMessage(downloadNotReadySystemMessage(title));
       return false;

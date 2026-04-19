@@ -14,9 +14,9 @@
 |---|---|
 | `app/api/chat/route.ts` | LLM proxy — provider routing, streaming, rate limiter, per-turn chat log |
 | `lib/chatPrompts.ts` | `DEFAULT_SYSTEM_PROMPT`, `GEMMA_SYSTEM_PROMPT`, `isGemmaModel`, `getSystemPrompt` |
-| `lib/directTitleLookup.ts` | Deterministic exact-title parser — quoted titles and `the film is titled ...` declarations bypass provider latency |
-| `lib/chatTags.ts` | Shared `<recommendation>` / `<download>` parsing, stripping, and tag serialization helpers |
-| `NEXT_STEPS.md` | Consolidated planned work — chat route modularization (Phase 3), setup/settings consolidation (Phase 4), YTS popular-movies feature plan, and refactor risk notes |
+| `lib/directTitleLookup.ts` | Deterministic exact-title parser — quoted titles and `the film is titled ...` declarations bypass provider latency. Unicode-aware title casing (`\p{Ll}`) |
+| `lib/chatTags.ts` | Shared `<recommendation>` / `<download>` parsing, stripping, and tag serialization helpers; carries `strictYear` end-to-end |
+| `NEXT_STEPS.md` | Consolidated planned work — chat route modularization, setup/settings consolidation, refactor risk notes, and follow-ups on shipped features |
 | `lib/logger.ts` | Structured JSONL logger — daily rotation, 7-day retention, 32 KB entry / 50 MB file caps |
 | `app/api/diagnostics/bundle/route.ts` | GET endpoint — token-gated zip-less JSON bundle (logs + redacted config + version) |
 | `components/ChatInterface.tsx` | Chat composition root — wires history, streaming, downloads, and message rendering together |
@@ -26,18 +26,26 @@
 | `components/RecommendationCard.tsx` | Recommendation renderer — movie/TV sections, disambiguation chooser, sits on top of `useRecommendationCardState()` |
 | `components/recommendation/MovieMatchChooser.tsx` | Disambiguation UI — shown when a bare title has multiple TMDB matches (e.g. remakes) |
 | `hooks/useRecommendationCardState.ts` | Recommendation card data hook — Plex/reviews/torrent fetches, TV season selection, movie disambiguation, strictYear locking, post-move Plex re-check |
-| `components/DownloadTracker.tsx` | Polls `/api/transmission/status` every 5s; read-only, no client-side move logic |
+| `components/DownloadTracker.tsx` | Polls `/api/transmission/status` every 5s; aborts stale requests on unmount/cancel; read-only, no client-side move logic |
 | `lib/transmission.ts` | Transmission RPC with session-ID handshake (always 409 first) |
 | `lib/moveFiles.ts` | Core file-move logic — shared between HTTP route and autoMove poller |
 | `lib/autoMove.ts` | Server-side background poller — moves one torrent at a time with 15s gap |
 | `lib/appTorrents.ts` | In-memory + on-disk registry of app torrent IDs + mediaType/season/title metadata |
 | `lib/config.ts` | `cfg()` helper — 30s in-memory cache avoids per-request sync disk reads |
-| `lib/yts.ts` | YTS torrent search + magnet link builder (movies); supports `strictYear` option; `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries |
+| `lib/yts.ts` | YTS torrent search + magnet link builder (movies); supports `strictYear` option; `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries; also `fetchPopularMovies()` for the `/popular` browse page — when `minimumYear` is set it scans raw YTS pages in 50-item chunks, accumulates filtered matches until it can fill the requested filtered page, and returns an exact `totalCount` if it reaches the end (otherwise a bounded estimate) |
+| `app/api/yts/popular/route.ts` | GET — whitelists `sort_by`, clamps `limit`/`page`/`minimum_rating`, validates `minimum_year` > 1900, returns 502 on upstream failure |
+| `components/PopularMoviesPanel.tsx` | `/popular` client grid + controls. Tab-specific filter layout: Most Downloaded exposes genre + minimum-year dropdowns; Newest exposes a single sort dropdown (`year` default / `rating`) and is hard-scoped to the last 3 years via `NEWEST_MIN_YEAR` so rating-sort stays recent |
+| `components/PopularMovieCard.tsx` | Individual YTS browse card — poster, IMDb ★ overlay, hover synopsis, click → `/?rec=<json>` |
+| `app/popular/page.tsx` | Server-component shell for the YTS browse page |
 | `lib/eztv.ts` | Knaben/EZTV torrent search + quality scoring (TV); `norm` maps `&` → ` and ` so titles like "Law & Order" match "Law.and.Order" releases |
 | `lib/tmdb.ts` | TMDB metadata — posters, overviews, year, season count; `resolveMovieLookup` handles disambiguation for bare titles with multiple exact matches |
 | `lib/omdb.ts` | OMDB ratings — IMDb score, Rotten Tomatoes |
-| `lib/plex.ts` | Plex library check — movies and per-season TV; `searchLibraryWithOptions` supports `strictYear` mode; `titleMatches` normalises `&` → `and` |
-| `install.sh` | Remote installer — clone/update checkout, install deps, build, optional pm2 + cron setup |
+| `lib/plex.ts` | Plex library check — movies and per-season TV; `searchLibraryWithOptions` supports `strictYear` mode; `titleMatches` normalises `&` → `and` on both `title` and `originalTitle`, including subtitle variants |
+| `lib/mediaKeys.ts` | Title normalisation and React-key generation (`recommendationKey` includes `type` so a movie and TV show with the same title+year don't collide; `torrentKey` takes an optional `season` suffix used by the pending-torrent map) |
+| `lib/recUrlParam.ts` | Safe `?rec=<json>` parser for the popular → chat handoff; preserves `strictYear` only when year is valid so remake titles stay locked |
+| `lib/ytsGenres.ts` | Shared YTS genre whitelist (`YTS_GENRES` array + `YTS_GENRE_SET` validator) — used by the popular panel dropdown and the API param validator |
+| `lib/rateLimit.ts` | Shared per-IP rate-limiter factory. Each route gets its own isolated Map; soft-capped at 10k tracked IPs to prevent unbounded growth under a unique-IP burst |
+| `install.sh` | Remote installer — clone/update checkout, install deps, build, optional pm2 + cron setup; auto-installs Node.js on first run when missing (Homebrew on macOS, NodeSource apt/dnf/yum on Linux) |
 | `setup.sh` | Local one-shot setup — prerequisite check, install deps, build, optional pm2 + cron setup |
 | `update.sh` | Safe updater — dirty-worktree guard, rollback, lock file, optional auto-update cron target |
 | `instrumentation.ts` | Next.js startup hook — starts autoMove poller |
@@ -51,7 +59,7 @@
 | `app/api/setup/detect/route.ts` | Auto-detect Ollama/Plex/Transmission on network |
 | `app/api/openrouter/auth/route.ts` | OAuth initiation — CSRF state cookie + redirect to OpenRouter |
 | `app/api/openrouter/callback/route.ts` | OAuth PKCE callback — CSRF state always required, timing-safe comparison, fixed-origin redirects, key exchange |
-| `components/ShareButton.tsx` | QR code modal for sharing app URL with household |
+| `components/ShareButton.tsx` | QR code modal for sharing app URL with household; preserves protocol/origin and cleans up stale QR/clipboard async work |
 | `components/ui/` | Shared UI: StatusIcon, Section, Field, Toggle |
 
 ## Development guidelines
@@ -59,8 +67,9 @@
 **Always identify the affected flow before making changes:**
 - **Movie flow**: YTS torrent → single download → file move
 - **TV flow**: Knaben/EZTV → season picker → multi-season logic
+- **Popular-movies browse flow**: YTS `list_movies.json` (via `fetchPopularMovies`) → grid → click card → `/?rec=<json>` → chat's `RecommendationCard` (reuses the Movie flow for the actual download)
 
-These flows diverge significantly. If a change touches both, verify behaviour in each separately.
+These flows diverge significantly. If a change touches both, verify behaviour in each separately. The popular-browse page only handles movies — TV is intentionally out of scope (no season picker there).
 
 If you are planning a broad cleanup or a new feature, consult `NEXT_STEPS.md` first and prefer that ordering over ad-hoc restructuring.
 
@@ -147,7 +156,7 @@ Map out the architecture before attempting fixes: what services are involved, wh
 
 ## Testing
 
-`npm test` (Vitest, Node env). 31 test files / 569 tests under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, ThinkFilter streaming, and shell-script contract tests for `install.sh` / `update.sh`. Conventions:
+`npm test` (Vitest, Node env) covers the unit + integration suite under `__tests__/` — 34 files / 623 tests at last run, covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, ThinkFilter streaming, YTS popular-list fetching and API-route param clamping, and shell-script contract tests for `install.sh` / `update.sh`. `npm run test:e2e` runs production HTTP smoke tests from `__e2e__/` against a built app. `npm run ci` mirrors the full CI pipeline locally: `lint` → `test:coverage` → `build` → `test:e2e`. Conventions:
 
 - Mock `fs` with `vi.mock('fs', () => ({ default: fsMock, ...fsMock }))` so both ESM and CJS imports see the mock.
 - `vi.resetModules()` in `beforeEach` so module-level state (rate-limit map, logger caches, etc.) is fresh per test.
@@ -155,7 +164,9 @@ Map out the architecture before attempting fixes: what services are involved, wh
 - `lib/autoMove.ts` exposes `__testHooks = { tick }` so tests can drive a single poll pass without fake-timer juggling.
 - If a change touches install, setup, deployment, pm2, cron, or rollback behavior, always inspect `update.sh` and keep the shell-script tests green.
 
-CI runs `npm test` on push and PRs (`.github/workflows/test.yml`, `TZ=UTC` for deterministic date tests).
+CI runs against `20` and `24` LTS. Any Node version is accepted at runtime — `install.sh` / `setup.sh` / `update.sh` report the version but do not gate on it. Node 25 was empirically verified (full `npm run ci` pass on 25.9.0).
+
+CI runs `npm run lint`, `npm run test:coverage`, `npm run build`, and `npm run test:e2e` on push and PRs for both Node 20 and Node 24 (`.github/workflows/test.yml`, `TZ=UTC` for deterministic date tests, `NEXT_TELEMETRY_DISABLED=1`).
 
 ## Deployment
 

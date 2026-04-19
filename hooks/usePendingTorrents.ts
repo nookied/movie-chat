@@ -27,7 +27,7 @@ export function usePendingTorrents(addInfoMessage: (content: string) => void) {
     season?: number,
     strictYear?: boolean
   ) => {
-    pendingTorrents.current.set(torrentKey(title, year), {
+    pendingTorrents.current.set(torrentKey(title, year, mediaType, season), {
       torrent: torrents[0],
       mediaType,
       season,

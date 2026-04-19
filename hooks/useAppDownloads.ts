@@ -45,10 +45,14 @@ export function useAppDownloads() {
   const isMountedRef = useRef(true);
 
   useEffect(() => {
+    // Reset on mount — StrictMode double-mount (or any real remount) would
+    // otherwise leave the ref stuck at false and skip all post-fetch state updates.
+    isMountedRef.current = true;
+    const controllers = controllersRef.current;
     return () => {
       isMountedRef.current = false;
-      controllersRef.current.forEach((controller) => controller.abort());
-      controllersRef.current.clear();
+      controllers.forEach((controller) => controller.abort());
+      controllers.clear();
     };
   }, []);
 
@@ -131,8 +135,13 @@ export function useAppDownloads() {
     ]);
   }, []);
 
-  const handleDownloadMoved = useCallback((name: string, year?: number) => {
-    setMovedTitles((prev) => addCappedSetEntry(prev, torrentKey(trackedDownloadBaseTitle(name), year), 100));
+  const handleDownloadMoved = useCallback((name: string, year?: number, mediaType?: 'movie' | 'tv') => {
+    if (!mediaType) return;
+    setMovedTitles((prev) => addCappedSetEntry(
+      prev,
+      torrentKey(trackedDownloadBaseTitle(name), year, mediaType),
+      100,
+    ));
   }, []);
 
   const handleDownloadComplete = useCallback((id: number) => {
@@ -144,6 +153,11 @@ export function useAppDownloads() {
 
   const isRecommendationDownloading = useCallback((recommendation: Recommendation, season?: number) => (
     activeDownloads.some((download) => {
+      // Require mediaType to match strictly — treating undefined as a wildcard
+      // caused movie/TV cards with the same normalised title to all show "downloading".
+      if (download.mediaType !== recommendation.type) {
+        return false;
+      }
       if (
         normalizeComparableTitle(trackedDownloadBaseTitle(download.torrentName))
         !== normalizeComparableTitle(recommendation.title)
@@ -153,6 +167,8 @@ export function useAppDownloads() {
       if (season !== undefined && download.season !== undefined && download.season !== season) {
         return false;
       }
+      // Year only counts as a match when both sides agree. If one is missing,
+      // title+type already narrowed it enough — don't widen with a blanket true.
       if (download.year !== undefined && recommendation.year !== undefined) {
         return download.year === recommendation.year;
       }
@@ -161,7 +177,7 @@ export function useAppDownloads() {
   ), [activeDownloads]);
 
   const isRecommendationForcedInLibrary = useCallback((recommendation: Recommendation) => (
-    movedTitles.has(torrentKey(recommendation.title, recommendation.year))
+    movedTitles.has(torrentKey(recommendation.title, recommendation.year, recommendation.type))
   ), [movedTitles]);
 
   return {

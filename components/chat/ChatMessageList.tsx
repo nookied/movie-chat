@@ -1,6 +1,6 @@
 'use client';
 
-import { RefObject, useCallback } from 'react';
+import { memo, RefObject, useCallback } from 'react';
 import { ChatMessage, Recommendation, TorrentOption } from '@/types';
 import { recommendationKey } from '@/lib/mediaKeys';
 import Message from '@/components/Message';
@@ -12,7 +12,7 @@ interface Props {
   isRecommendationDownloading: (recommendation: Recommendation, season?: number) => boolean;
   isStreaming: boolean;
   messages: ChatMessage[];
-  onDownload: (title: string, year?: number) => Promise<boolean>;
+  onDownload: (title: string, year?: number, mediaType?: 'movie' | 'tv') => Promise<boolean>;
   onNoSuitableQuality: (title: string, year?: number) => void;
   onNotFound: (title: string) => void;
   onPlexFound: (title: string, year?: number) => void;
@@ -36,7 +36,7 @@ interface ItemProps {
   isRecommendationDownloading: (recommendation: Recommendation, season?: number) => boolean;
   isStreaming: boolean;
   message: ChatMessage;
-  onDownload: (title: string, year?: number) => Promise<boolean>;
+  onDownload: (title: string, year?: number, mediaType?: 'movie' | 'tv') => Promise<boolean>;
   onNoSuitableQuality: (title: string, year?: number) => void;
   onNotFound: (title: string) => void;
   onPlexFound: (title: string, year?: number) => void;
@@ -51,7 +51,10 @@ interface ItemProps {
   ) => void;
 }
 
-function ChatMessageItem({
+// Wrapped in `memo` so older messages in the list skip re-rendering each time
+// the assistant message streams a new chunk — only the message whose `message`
+// prop actually changed re-renders.
+const ChatMessageItem = memo(function ChatMessageItem({
   forceRecommendationInLibrary,
   isRecommendationDownloading,
   isStreaming,
@@ -87,14 +90,14 @@ function ChatMessageItem({
       ))}
     </div>
   );
-}
+});
 
 interface SlotProps {
   forceInLibrary: boolean;
   index: number;
   isRecommendationDownloading: (recommendation: Recommendation, season?: number) => boolean;
   messageId: string;
-  onDownload: (title: string, year?: number) => Promise<boolean>;
+  onDownload: (title: string, year?: number, mediaType?: 'movie' | 'tv') => Promise<boolean>;
   onNoSuitableQuality: (title: string, year?: number) => void;
   onNotFound: (title: string) => void;
   onPlexFound: (title: string, year?: number) => void;
