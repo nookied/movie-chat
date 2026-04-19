@@ -3,6 +3,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChatMessage } from '@/types';
 
+const MAX_HISTORY_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function trimChatHistory(
+  messages: ChatMessage[],
+  maxMessages: number,
+  maxAgeMs = MAX_HISTORY_AGE_MS,
+  now = Date.now()
+): ChatMessage[] {
+  return messages
+    .filter((m) =>
+      m.id && m.role && m.content &&
+      (!m.timestamp || now - m.timestamp < maxAgeMs)
+    )
+    .slice(-maxMessages);
+}
+
 interface Options {
   isStreaming: boolean;
   maxStoredMessages?: number;
@@ -12,7 +28,7 @@ interface Options {
 
 export function useChatHistory({
   isStreaming,
-  maxStoredMessages = 200,
+  maxStoredMessages = 100,
   storageKey = 'movie-chat-history',
   welcomeMessage,
 }: Options) {
@@ -24,10 +40,10 @@ export function useChatHistory({
       const stored = localStorage.getItem(storageKey);
       if (!stored) return;
       const parsed = JSON.parse(stored) as ChatMessage[];
-      const valid = parsed.filter((message) => message.id && message.role && message.content);
+      const valid = trimChatHistory(parsed, maxStoredMessages);
       if (valid.length > 0) setMessages(valid);
     } catch { /* localStorage unavailable or corrupt — keep welcome */ }
-  }, [storageKey]);
+  }, [storageKey, maxStoredMessages]);
 
   useEffect(() => {
     if (firstSaveRef.current) {
