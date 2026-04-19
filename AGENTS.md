@@ -41,8 +41,10 @@
 | `lib/tmdb.ts` | TMDB metadata — posters, overviews, year, season count; `resolveMovieLookup` handles disambiguation for bare titles with multiple exact matches |
 | `lib/omdb.ts` | OMDB ratings — IMDb score, Rotten Tomatoes |
 | `lib/plex.ts` | Plex library check — movies and per-season TV; `searchLibraryWithOptions` supports `strictYear` mode; `titleMatches` normalises `&` → `and` on both `title` and `originalTitle`, including subtitle variants |
-| `lib/mediaKeys.ts` | Title normalisation and React-key generation (`recommendationKey` includes `type` so a movie and TV show with the same title+year don't collide) |
-| `install.sh` | Remote installer — clone/update checkout, install deps, build, optional pm2 + cron setup |
+| `lib/mediaKeys.ts` | Title normalisation and React-key generation (`recommendationKey` includes `type` so a movie and TV show with the same title+year don't collide; `torrentKey` takes an optional `season` suffix used by the pending-torrent map) |
+| `lib/ytsGenres.ts` | Shared YTS genre whitelist (`YTS_GENRES` array + `YTS_GENRE_SET` validator) — used by the popular panel dropdown and the API param validator |
+| `lib/rateLimit.ts` | Shared per-IP rate-limiter factory. Each route gets its own isolated Map; soft-capped at 10k tracked IPs to prevent unbounded growth under a unique-IP burst |
+| `install.sh` | Remote installer — clone/update checkout, install deps, build, optional pm2 + cron setup; auto-installs Node.js on first run when missing (Homebrew on macOS, NodeSource apt/dnf/yum on Linux) |
 | `setup.sh` | Local one-shot setup — prerequisite check, install deps, build, optional pm2 + cron setup |
 | `update.sh` | Safe updater — dirty-worktree guard, rollback, lock file, optional auto-update cron target |
 | `instrumentation.ts` | Next.js startup hook — starts autoMove poller |
@@ -161,7 +163,7 @@ Map out the architecture before attempting fixes: what services are involved, wh
 - `lib/autoMove.ts` exposes `__testHooks = { tick }` so tests can drive a single poll pass without fake-timer juggling.
 - If a change touches install, setup, deployment, pm2, cron, or rollback behavior, always inspect `update.sh` and keep the shell-script tests green.
 
-The repo's supported Node versions are `20 LTS` and `24 LTS` (`24` recommended for local dev; `.nvmrc` / `.node-version` both pin to `24`). `scripts/check-node-version.mjs` gates the local npm entrypoints, and `install.sh`, `setup.sh`, and `update.sh` reject unsupported majors so untested current releases do not get as far as `next build`.
+CI runs against `20` and `24` LTS. Any Node version is accepted at runtime — `install.sh` / `setup.sh` / `update.sh` report the version but do not gate on it. Node 25 was empirically verified (full `npm run ci` pass on 25.9.0).
 
 CI runs `npm run lint`, `npm run test:coverage`, `npm run build`, and `npm run test:e2e` on push and PRs for both Node 20 and Node 24 (`.github/workflows/test.yml`, `TZ=UTC` for deterministic date tests, `NEXT_TELEMETRY_DISABLED=1`).
 

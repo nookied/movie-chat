@@ -1,6 +1,6 @@
 'use client';
 
-import { RefObject, useCallback } from 'react';
+import { memo, RefObject, useCallback } from 'react';
 import { ChatMessage, Recommendation, TorrentOption } from '@/types';
 import { recommendationKey } from '@/lib/mediaKeys';
 import Message from '@/components/Message';
@@ -51,7 +51,10 @@ interface ItemProps {
   ) => void;
 }
 
-function ChatMessageItem({
+// Wrapped in `memo` so older messages in the list skip re-rendering each time
+// the assistant message streams a new chunk — only the message whose `message`
+// prop actually changed re-renders.
+const ChatMessageItem = memo(function ChatMessageItem({
   forceRecommendationInLibrary,
   isRecommendationDownloading,
   isStreaming,
@@ -87,7 +90,7 @@ function ChatMessageItem({
       ))}
     </div>
   );
-}
+});
 
 interface SlotProps {
   forceInLibrary: boolean;

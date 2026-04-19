@@ -79,29 +79,15 @@ fi
 ensure_supported_node() {
   if ! command -v node &>/dev/null; then
     if [ "$AUTO" -eq 1 ]; then
-      echo "[$(date '+%Y-%m-%d %H:%M')] Skipped — Node.js is not installed. Install Node.js 24 LTS (recommended) or 20 LTS."
+      echo "[$(date '+%Y-%m-%d %H:%M')] Skipped — Node.js is not installed."
     else
-      error "Node.js is not installed. Install Node.js 24 LTS (recommended) or 20 LTS from https://nodejs.org and re-run."
-    fi
-    exit 1
-  fi
-
-  local NODE_VER
-  local NODE_MAJOR
-  NODE_VER=$(node -e "process.stdout.write(process.version.slice(1))")
-  NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
-
-  if [ "$NODE_MAJOR" -ne 20 ] && [ "$NODE_MAJOR" -ne 24 ]; then
-    if [ "$AUTO" -eq 1 ]; then
-      echo "[$(date '+%Y-%m-%d %H:%M')] Skipped — Node.js $NODE_VER is unsupported. Movie Chat supports Node.js 20 LTS and 24 LTS."
-    else
-      error "Node.js $NODE_VER is unsupported. Movie Chat supports Node.js 20 LTS and 24 LTS (24 LTS recommended)."
+      error "Node.js is not installed. Install Node.js from https://nodejs.org and re-run."
     fi
     exit 1
   fi
 
   if [ "$AUTO" -eq 0 ]; then
-    info "Node.js $NODE_VER"
+    info "Node.js $(node --version | sed 's/^v//')"
   fi
 }
 
@@ -191,16 +177,22 @@ fi
 ROLLBACK_SHA="$LOCAL"
 
 rollback() {
+  local ROLLBACK_LOG="$INSTALL_DIR/.update-rollback.log"
   error "Update failed — rolling back to previous version..."
-  git reset --hard "$ROLLBACK_SHA" 2>/dev/null || true
-  # Attempt to restore a working build from the rolled-back code
-  npm install --silent 2>/dev/null || true
-  npm run build --silent 2>/dev/null || true
+  : > "$ROLLBACK_LOG"
+  {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Rolling back to $ROLLBACK_SHA"
+    git reset --hard "$ROLLBACK_SHA" || echo "git reset failed"
+    # Use npm install (not ci) — node_modules may not match the rolled-back lockfile
+    npm install || echo "npm install failed during rollback"
+    npm run build || echo "npm run build failed during rollback"
+  } >>"$ROLLBACK_LOG" 2>&1
+
   if command -v pm2 &>/dev/null && pm2 describe movie-chat &>/dev/null 2>&1; then
-    pm2 restart movie-chat --silent 2>/dev/null || true
-    warn "Rolled back and restarted previous version."
+    pm2 restart movie-chat --update-env --silent 2>/dev/null || true
+    warn "Rolled back and restarted previous version. See $ROLLBACK_LOG for details."
   else
-    warn "Rolled back to $ROLLBACK_SHA. Start manually with: npm run build && npm run start"
+    warn "Rolled back to $ROLLBACK_SHA. See $ROLLBACK_LOG for details, then start with: npm run build && npm run start"
   fi
 }
 
@@ -226,13 +218,20 @@ fi
 info "Downloaded latest code"
 
 # ── npm install ──────────────────────────────────────────────────────────────
+# Use `npm ci` for reproducible installs — after git pull the lockfile matches
+# package.json, and ci is faster + stricter than install. Fall back to install
+# if ci fails (e.g. optional-dep platform quirk) so a bad lockfile doesn't
+# brick the update.
 if [ "$AUTO" -eq 0 ]; then
   echo "  Installing dependencies..."
 fi
-if ! npm install 2>&1 | tail -5; then
-  error "npm install failed."
-  rollback
-  exit 1
+if ! npm ci 2>&1 | tail -5; then
+  warn "npm ci failed — retrying with npm install..."
+  if ! npm install 2>&1 | tail -5; then
+    error "npm install failed."
+    rollback
+    exit 1
+  fi
 fi
 info "Dependencies ready"
 
@@ -249,7 +248,9 @@ info "Build complete"
 
 # ── restart pm2 ───────────────────────────────────────────────────────────────
 if command -v pm2 &>/dev/null && pm2 describe movie-chat &>/dev/null 2>&1; then
-  pm2 restart movie-chat --silent
+  # --update-env picks up any new env vars from the ecosystem file or shell;
+  # plain restart reuses the previous env snapshot.
+  pm2 restart movie-chat --update-env --silent
 
   # Health check — wait for the server to respond
   HEALTH_OK=0

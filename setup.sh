@@ -26,22 +26,11 @@ heading "1 / 5  Checking prerequisites"
 
 if ! command -v node &>/dev/null; then
   error "Node.js is not installed."
-  echo "       Install Node.js 24 LTS (recommended) or 20 LTS from https://nodejs.org."
+  echo "       Install Node.js from https://nodejs.org."
   exit 1
 fi
 
-NODE_VER=$(node -e "process.stdout.write(process.version.slice(1))")
-NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
-NODE_OK=0
-if [ "$NODE_MAJOR" -eq 20 ] || [ "$NODE_MAJOR" -eq 24 ]; then NODE_OK=1; fi
-
-if [ "$NODE_OK" -eq 0 ]; then
-  error "Node.js $NODE_VER found — Movie Chat supports Node.js 20 LTS and 24 LTS (24 LTS recommended)."
-  echo "       Download an LTS release from https://nodejs.org"
-  exit 1
-fi
-
-info "Node.js $NODE_VER"
+info "Node.js $(node --version | sed 's/^v//')"
 
 # ── 2. npm install ────────────────────────────────────────────────────────────
 heading "2 / 5  Installing dependencies"

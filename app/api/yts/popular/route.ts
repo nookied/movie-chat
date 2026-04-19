@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchPopularMovies } from '@/lib/yts';
 import { getLogger } from '@/lib/logger';
+import { createRateLimiter } from '@/lib/rateLimit';
+import { extractRequestIp } from '@/lib/requestIp';
+import { YTS_GENRE_SET } from '@/lib/ytsGenres';
 import type { YtsPopularSortBy } from '@/types';
 
 const log = getLogger('torrents');
@@ -13,11 +16,25 @@ const ALLOWED_SORTS: ReadonlySet<YtsPopularSortBy> = new Set([
   'year',
 ]);
 
+// Each filtered request can walk up to POPULAR_MAX_RAW_PAGES (20) YTS pages.
+// Cap per-IP so an abusive client can't amplify to YTS — 30 req/min matches
+// the chat limiter; grid browsing is bursty but bounded.
+const checkPopularRateLimit = createRateLimiter({ limit: 30, windowMs: 60_000 });
+
 function clamp(n: number, min: number, max: number): number {
   return Math.min(Math.max(n, min), max);
 }
 
 export async function GET(req: NextRequest) {
+  const ip = extractRequestIp(req.headers);
+  if (!checkPopularRateLimit(ip)) {
+    log.warn('popular rate limited', { ip });
+    return NextResponse.json(
+      { error: 'Too many requests — please wait a moment.' },
+      { status: 429 }
+    );
+  }
+
   const { searchParams } = req.nextUrl;
 
   const rawSort = searchParams.get('sort_by');
@@ -39,7 +56,8 @@ export async function GET(req: NextRequest) {
   const yearNum = yearStr !== null ? Number(yearStr) : NaN;
   const minimumYear = Number.isFinite(yearNum) && yearNum > 1900 ? Math.floor(yearNum) : undefined;
 
-  const genre = searchParams.get('genre') ?? undefined;
+  const rawGenre = searchParams.get('genre');
+  const genre = rawGenre && YTS_GENRE_SET.has(rawGenre) ? rawGenre : undefined;
 
   try {
     const result = await fetchPopularMovies({ sortBy, limit, page, minimumRating, minimumYear, genre });

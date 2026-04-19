@@ -45,6 +45,9 @@ export function useAppDownloads() {
   const isMountedRef = useRef(true);
 
   useEffect(() => {
+    // Reset on mount — StrictMode double-mount (or any real remount) would
+    // otherwise leave the ref stuck at false and skip all post-fetch state updates.
+    isMountedRef.current = true;
     const controllers = controllersRef.current;
     return () => {
       isMountedRef.current = false;
@@ -150,7 +153,9 @@ export function useAppDownloads() {
 
   const isRecommendationDownloading = useCallback((recommendation: Recommendation, season?: number) => (
     activeDownloads.some((download) => {
-      if (download.mediaType && download.mediaType !== recommendation.type) {
+      // Require mediaType to match strictly — treating undefined as a wildcard
+      // caused movie/TV cards with the same normalised title to all show "downloading".
+      if (download.mediaType !== recommendation.type) {
         return false;
       }
       if (
@@ -162,6 +167,8 @@ export function useAppDownloads() {
       if (season !== undefined && download.season !== undefined && download.season !== season) {
         return false;
       }
+      // Year only counts as a match when both sides agree. If one is missing,
+      // title+type already narrowed it enough — don't widen with a blanket true.
       if (download.year !== undefined && recommendation.year !== undefined) {
         return download.year === recommendation.year;
       }

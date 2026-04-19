@@ -27,6 +27,66 @@ is_movie_chat_repo() {
   grep -Eq '"name"[[:space:]]*:[[:space:]]*"movie-chat"' "$DIR/package.json"
 }
 
+install_node_lts() {
+  local OS
+  OS="$(uname -s)"
+
+  case "$OS" in
+    Darwin)
+      if ! command -v brew &>/dev/null; then
+        error "Homebrew is not installed. Install it from https://brew.sh or Node.js from https://nodejs.org, then re-run."
+        return 1
+      fi
+      info "Installing Node.js via Homebrew (brew install node)..."
+      if ! brew install node; then
+        error "Homebrew failed to install Node.js. Install it manually from https://nodejs.org and re-run."
+        return 1
+      fi
+      ;;
+    Linux)
+      local NS_URL="https://deb.nodesource.com/setup_24.x"
+      local PKG_INSTALL=""
+      if command -v apt-get &>/dev/null; then
+        PKG_INSTALL="sudo apt-get install -y nodejs"
+      elif command -v dnf &>/dev/null; then
+        NS_URL="https://rpm.nodesource.com/setup_24.x"
+        PKG_INSTALL="sudo dnf install -y nodejs"
+      elif command -v yum &>/dev/null; then
+        NS_URL="https://rpm.nodesource.com/setup_24.x"
+        PKG_INSTALL="sudo yum install -y nodejs"
+      else
+        error "No supported package manager (apt-get / dnf / yum). Install Node.js manually from https://nodejs.org and re-run."
+        return 1
+      fi
+      if ! command -v sudo &>/dev/null; then
+        error "sudo is required to install Node.js on Linux. Install Node.js manually from https://nodejs.org and re-run."
+        return 1
+      fi
+      info "Installing Node.js 24 LTS via NodeSource (sudo required)..."
+      if ! curl -fsSL "$NS_URL" | sudo -E bash -; then
+        error "NodeSource setup failed. Install Node.js manually from https://nodejs.org and re-run."
+        return 1
+      fi
+      if ! eval "$PKG_INSTALL"; then
+        error "Package install failed. Install Node.js manually from https://nodejs.org and re-run."
+        return 1
+      fi
+      ;;
+    *)
+      error "Automatic Node.js install is not supported on $OS. Install Node.js manually from https://nodejs.org and re-run."
+      return 1
+      ;;
+  esac
+
+  hash -r
+  if ! command -v node &>/dev/null; then
+    error "Node.js install completed but 'node' is still not on PATH. Open a new terminal and re-run, or install manually from https://nodejs.org."
+    return 1
+  fi
+  info "Node.js $(node --version | sed 's/^v//') installed"
+  return 0
+}
+
 tracked_changes_in_dir() {
   local DIR="$1"
   git -C "$DIR" status --porcelain=v1 --untracked-files=no
@@ -48,19 +108,14 @@ if ! command -v git &>/dev/null; then
 fi
 
 if ! command -v node &>/dev/null; then
-  error "Node.js is not installed. Install Node.js 24 LTS (recommended) or 20 LTS from https://nodejs.org and try again."
-  MISSING=1
-else
-  NODE_VER=$(node -e "process.stdout.write(process.version.slice(1))")
-  NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
-  NODE_OK=0
-  if [ "$NODE_MAJOR" -eq 20 ] || [ "$NODE_MAJOR" -eq 24 ]; then NODE_OK=1; fi
-  if [ "$NODE_OK" -eq 0 ]; then
-    error "Node.js $NODE_VER found — Movie Chat supports Node.js 20 LTS and 24 LTS (24 LTS recommended). Download an LTS release from https://nodejs.org"
+  warn "Node.js is not installed — installing now."
+  if ! install_node_lts; then
     MISSING=1
-  else
-    info "Node.js $NODE_VER"
   fi
+fi
+
+if command -v node &>/dev/null; then
+  info "Node.js $(node --version | sed 's/^v//')"
 fi
 
 [ "$MISSING" -eq 1 ] && exit 1

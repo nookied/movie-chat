@@ -5,26 +5,25 @@
   "author": "nookied",
   "private": true,
   "engines": {
-    "node": "^20.0.0 || ^24.0.0"
+    "node": ">=20.0.0"
   },
   "main": "electron/main.js",
   "scripts": {
-    "node:check": "node scripts/check-node-version.mjs",
-    "dev": "npm run node:check && next dev -p 3001",
-    "build": "npm run node:check && next build",
-    "start": "npm run node:check && next start",
-    "ci": "npm run node:check && npm run lint && npm run test:coverage && npm run build && npm run test:e2e",
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start",
+    "ci": "npm run lint && npm run test:coverage && npm run build && npm run test:e2e",
     "lint": "eslint . --ext .js,.mjs,.ts,.tsx",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "npm run node:check && vitest run --config vitest.e2e.config.ts",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "setup": "bash setup.sh",
     "update": "bash update.sh",
     "uninstall:app": "bash uninstall.sh",
-    "electron:dev": "npm run node:check && electron .",
-    "electron:build": "npm run node:check && npm run build && electron-builder --mac",
-    "release": "npm run node:check && npm run build && electron-builder --mac --publish always"
+    "electron:dev": "electron .",
+    "electron:build": "npm run build && electron-builder --mac",
+    "release": "npm run build && electron-builder --mac --publish always"
   },
   "dependencies": {
     "electron-updater": "^6.8.3",

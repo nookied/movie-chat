@@ -53,6 +53,24 @@ describe('normalizeComparableTitle', () => {
   it('strips punctuation and collapses whitespace for cross-source title matching', () => {
     expect(normalizeComparableTitle('Kung Fury:  Street-Level!')).toBe('kung fury street level');
   });
+
+  it('maps ampersands to "and" so LLM tags match torrent/Plex metadata', () => {
+    expect(normalizeComparableTitle('Law & Order')).toBe('law and order');
+  });
+
+  it('strips diacritics so "Amélie" matches "Amelie"', () => {
+    expect(normalizeComparableTitle('Amélie')).toBe('amelie');
+  });
+});
+
+describe('recommendationKey / torrentKey normalization', () => {
+  it('collapses punctuation and diacritics so the same title produces one key', () => {
+    expect(
+      recommendationKey({ title: 'Amélie', year: 2001, type: 'movie' })
+    ).toBe(recommendationKey({ title: 'Amelie', year: 2001, type: 'movie' }));
+
+    expect(torrentKey('Law & Order', 1990, 'tv')).toBe(torrentKey('Law and Order', 1990, 'tv'));
+  });
 });
 
 describe('addCappedSetEntry', () => {

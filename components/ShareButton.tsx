@@ -3,10 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 
-// Cache resolved values — neither changes during a session
-let cachedUrl: string | null = null;
-let cachedQrDataUrl: string | null = null;
-let cachedWindowOrigin: string | null = null;
+const HOSTNAME_FETCH_TIMEOUT_MS = 2000;
 
 function buildOrigin(protocol: string, hostname: string, port: string): string {
   const defaultPort = protocol === 'https:' ? '443' : '80';
@@ -31,68 +28,80 @@ export default function ShareButton({ variant = 'icon' }: ShareButtonProps = {})
 
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
+    const controller = new AbortController();
 
     async function resolve() {
-      const currentOrigin = window.location.origin;
-      if (cachedWindowOrigin === currentOrigin && cachedUrl && cachedQrDataUrl) {
-        setUrl(cachedUrl);
-        setQrDataUrl(cachedQrDataUrl);
-        return;
-      }
+      const port = window.location.port || '3000';
+      const hostname = window.location.hostname;
+      const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
 
-      let resolved = cachedWindowOrigin === currentOrigin ? cachedUrl : null;
+      let resolved = buildOrigin(protocol, hostname, port);
 
-      if (!resolved) {
-        const port = window.location.port || '3000';
-        const hostname = window.location.hostname;
-        const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-
-        if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-          resolved = buildOrigin(protocol, hostname, port);
-        } else {
-          resolved = buildOrigin(protocol, hostname, port);
-          try {
-            const r = await fetch('/api/setup/hostname', { cache: 'no-store' });
-            const data: { hostname?: string } = await r.json();
-            resolved = data.hostname ? buildOrigin(protocol, `${data.hostname}.local`, port) : resolved;
-          } catch {
-            // keep the fallback
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        const hostnameTimeout = setTimeout(() => controller.abort(), HOSTNAME_FETCH_TIMEOUT_MS);
+        try {
+          const r = await fetch('/api/setup/hostname', {
+            cache: 'no-store',
+            signal: controller.signal,
+          });
+          const data: { hostname?: string } = await r.json();
+          if (data.hostname) {
+            resolved = buildOrigin(protocol, `${data.hostname}.local`, port);
           }
+        } catch {
+          // keep the localhost fallback
+        } finally {
+          clearTimeout(hostnameTimeout);
         }
-        cachedUrl = resolved;
-        cachedWindowOrigin = currentOrigin;
       }
+
+      if (controller.signal.aborted) return;
 
       try {
         const dataUrl = await QRCode.toDataURL(resolved, { width: 180, margin: 1 });
-        if (cancelled) return;
-        cachedQrDataUrl = dataUrl;
+        if (controller.signal.aborted) return;
         setUrl(resolved);
         setQrDataUrl(dataUrl);
       } catch {
-        if (!cancelled) {
-          setUrl(resolved);
-          setQrDataUrl('');
-        }
+        setUrl(resolved);
+        setQrDataUrl('');
       }
     }
 
     void resolve();
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [open]);
 
   function copyUrl() {
     if (!url) return;
-    void navigator.clipboard.writeText(url).then(() => {
+    const markCopied = () => {
       if (copiedResetTimeoutRef.current) clearTimeout(copiedResetTimeoutRef.current);
       setCopied(true);
       copiedResetTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
-    }).catch(() => {
+    };
+    // navigator.clipboard requires a secure context — plain-HTTP LAN access
+    // lacks it, so fall back to the legacy execCommand path in that case.
+    if (navigator.clipboard && window.isSecureContext) {
+      void navigator.clipboard.writeText(url).then(markCopied).catch(() => setCopied(false));
+      return;
+    }
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (ok) markCopied();
+      else setCopied(false);
+    } catch {
       setCopied(false);
-    });
+    }
   }
 
   return (

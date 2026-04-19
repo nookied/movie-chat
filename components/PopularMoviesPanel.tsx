@@ -2,13 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { YtsMovieEntry, YtsPopularResult, YtsPopularSortBy } from '@/types';
+import { YTS_GENRES } from '@/lib/ytsGenres';
 import PopularMovieCard from './PopularMovieCard';
-
-const GENRES = [
-  'Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime',
-  'Documentary', 'Drama', 'Family', 'Fantasy', 'History', 'Horror',
-  'Music', 'Mystery', 'Romance', 'Sci-Fi', 'Sport', 'Thriller', 'War', 'Western',
-] as const;
 
 // Top-level tabs. The Newest tab's actual sort_by is driven by NEWEST_SUB_SORTS
 // below; this value (`year`) is only used to identify the tab and as its
@@ -38,13 +33,15 @@ const NEWEST_SUB_SORTS: Array<{ value: YtsPopularSortBy; label: string }> = [
   { value: 'rating', label: 'Sort by popularity' },
 ];
 
+const PAGE_SIZE = 20;
+const FILTER_DEBOUNCE_MS = 300;
+
 // The Newest tab is implicitly scoped to the last few years. Without this
 // the 'rating' sort surfaces all-time high-rated concerts/kids titles from
 // any decade, which defeats the point of a "Newest" tab.
-const NEWEST_MIN_YEAR = new Date().getFullYear() - 3;
-
-const PAGE_SIZE = 20;
-const FILTER_DEBOUNCE_MS = 300;
+function newestMinYear(): number {
+  return new Date().getFullYear() - 3;
+}
 
 export default function PopularMoviesPanel() {
   const [activeTab, setActiveTab] = useState<'download_count' | 'year'>('download_count');
@@ -61,6 +58,22 @@ export default function PopularMoviesPanel() {
     setGenre('');
     setMinYear(0);
     setNewestSort('year');
+    setPage(1);
+  };
+
+  const handleGenreChange = (next: string) => {
+    setGenre(next);
+    setPage(1);
+  };
+
+  const handleMinYearChange = (next: number) => {
+    setMinYear(next);
+    setPage(1);
+  };
+
+  const handleNewestSortChange = (next: YtsPopularSortBy) => {
+    setNewestSort(next);
+    setPage(1);
   };
 
   const [movies, setMovies] = useState<YtsMovieEntry[]>([]);
@@ -70,15 +83,9 @@ export default function PopularMoviesPanel() {
   const activeControllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef(0);
 
-  useEffect(() => {
-    setPage(1);
-  }, [sortBy, genre, minYear]);
-
   useEffect(() => () => {
     activeControllerRef.current?.abort();
   }, []);
-
-  const fetchKey = `${sortBy}|${genre}|${minYear}|${page}`;
 
   const loadPage = useCallback(
     async () => {
@@ -97,7 +104,7 @@ export default function PopularMoviesPanel() {
         if (genre) params.set('genre', genre);
         if (minYear > 0) params.set('minimum_year', String(minYear));
       } else {
-        params.set('minimum_year', String(NEWEST_MIN_YEAR));
+        params.set('minimum_year', String(newestMinYear()));
       }
       try {
         const res = await fetch(`/api/yts/popular?${params.toString()}`, { signal: controller.signal });
@@ -138,7 +145,10 @@ export default function PopularMoviesPanel() {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const from = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const to = from === 0 ? 0 : Math.min(from - 1 + movies.length, totalCount);
+  // totalCount from fetchPopularMovies can be a bounded estimate when filtered
+  // paging terminates early — clamp `to` so the counter never reads "21 of 20".
+  const to = from === 0 ? 0 : Math.max(from, Math.min(from - 1 + movies.length, totalCount));
+  const showEmptyState = !loading && !error && movies.length === 0;
 
   const retry = () => {
     void loadPage();
@@ -170,7 +180,7 @@ export default function PopularMoviesPanel() {
         {activeTab === 'year' ? (
           <select
             value={newestSort}
-            onChange={(e) => setNewestSort(e.target.value as YtsPopularSortBy)}
+            onChange={(e) => handleNewestSortChange(e.target.value as YtsPopularSortBy)}
             className={selectClass}
             aria-label="Newest sort order"
           >
@@ -182,19 +192,19 @@ export default function PopularMoviesPanel() {
           <>
             <select
               value={genre}
-              onChange={(e) => setGenre(e.target.value)}
+              onChange={(e) => handleGenreChange(e.target.value)}
               className={selectClass}
               aria-label="Filter by genre"
             >
               <option value="">All genres</option>
-              {GENRES.map((g) => (
+              {YTS_GENRES.map((g) => (
                 <option key={g} value={g}>{g}</option>
               ))}
             </select>
 
             <select
               value={minYear}
-              onChange={(e) => setMinYear(Number(e.target.value))}
+              onChange={(e) => handleMinYearChange(Number(e.target.value))}
               className={selectClass}
               aria-label="Minimum release year"
             >
@@ -223,11 +233,13 @@ export default function PopularMoviesPanel() {
             Try again
           </button>
         </div>
+      ) : showEmptyState ? (
+        <div className="rounded-lg border border-plex-border bg-plex-card p-10 text-center">
+          <p className="text-gray-300 mb-1">No matches for this filter.</p>
+          <p className="text-gray-500 text-sm">Try a different genre or loosen the minimum year.</p>
+        </div>
       ) : (
-        <div
-          key={fetchKey}
-          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4"
-        >
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
           {loading
             ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
                 <div

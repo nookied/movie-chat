@@ -5,6 +5,7 @@ import { getSystemPrompt, isGemmaModel } from '@/lib/chatPrompts';
 import { extractDirectTitleLookup } from '@/lib/directTitleLookup';
 import { recommendationTag } from '@/lib/chatTags';
 import { extractRequestIp } from '@/lib/requestIp';
+import { createRateLimiter } from '@/lib/rateLimit';
 import { isPlainObject, readJsonBody, RequestBodyError } from '@/lib/requestBody';
 
 const log = getLogger('llm');
@@ -20,38 +21,13 @@ const SEED_MESSAGES = [
   { role: 'assistant' as const, content: 'On it!\n<recommendation>{"title":"Mad Men","type":"tv"}</recommendation>' },
 ];
 
-// Simple in-memory rate limiter: max 30 requests per minute per IP.
-// Protects against runaway OpenRouter spend if the app is accessible on the LAN.
-const RATE_LIMIT = 30;
-const RATE_WINDOW_MS = 60_000;
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+// Max 30 requests per minute per IP — protects against runaway OpenRouter
+// spend if the app is accessible on the LAN.
+const checkRateLimit = createRateLimiter({ limit: 30, windowMs: 60_000 });
 const TEXT_STREAM_HEADERS = {
   'Content-Type': 'text/plain; charset=utf-8',
   'Cache-Control': 'no-cache',
 };
-
-// Prune expired entries so the map doesn't grow unbounded over days of use.
-// Runs at most once per minute — O(n) over the number of unique IPs seen.
-let lastPrune = 0;
-function pruneRateLimitMap(now: number) {
-  if (now - lastPrune < 60_000) return;
-  lastPrune = now;
-  for (const [ip, entry] of rateLimitMap) {
-    if (now > entry.resetAt) rateLimitMap.delete(ip);
-  }
-}
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  pruneRateLimitMap(now);
-  const entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
-    return true;
-  }
-  entry.count += 1;
-  return entry.count <= RATE_LIMIT;
-}
 
 // Keep the conversation history from growing too large — sliding window of last N messages
 const MAX_HISTORY_MESSAGES = 20;

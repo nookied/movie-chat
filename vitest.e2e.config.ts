@@ -6,7 +6,7 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['__e2e__/**/*.test.ts'],
-    exclude: configDefaults.exclude,
+    exclude: [...configDefaults.exclude, '.claude/**'],
     testTimeout: 120_000,
     hookTimeout: 120_000,
     coverage: {

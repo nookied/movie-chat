@@ -179,7 +179,9 @@ printf '24.15.0'
     expect(result.stdout).toContain('Downloaded latest code');
     expect(result.stdout).toContain('Build complete');
     expect(readCalls(logFile)).toContain('git pull --quiet');
-    expect(readCalls(logFile)).toContain('npm install');
+    // update.sh prefers `npm ci` for reproducible installs and only falls back
+    // to `npm install` if ci fails. Under the happy-path stub, ci succeeds.
+    expect(readCalls(logFile)).toContain('npm ci');
     expect(readCalls(logFile)).toContain('npm run build');
   });
 
@@ -277,7 +279,7 @@ printf '24.15.0'
     expect(readCalls(logFile)).toContain('git reset --hard rollback-sha');
   });
 
-  it('update.sh --auto fails fast on unsupported Node versions before git or npm work starts', () => {
+  it('update.sh --auto proceeds on any Node version without gating', () => {
     const root = makeTempDir();
     const home = path.join(root, 'home');
     const repoDir = path.join(root, 'repo');
@@ -287,15 +289,25 @@ printf '24.15.0'
 
     const { binDir, env, logFile } = prepareScriptEnv(home);
 
-    writeStub(binDir, 'npm', `
-printf 'npm %s\n' "$*" >> "$TEST_LOG"
-exit 0
-`);
+    // Newer-than-LTS Node 25 — if update.sh ever re-introduces a version gate
+    // this test will fail as the script will bail before running git fetch.
     writeStub(binDir, 'node', `
 printf '25.9.0'
 `);
     writeStub(binDir, 'git', `
 printf 'git %s\n' "$*" >> "$TEST_LOG"
+case "$1" in
+  status) exit 0 ;;
+  fetch) exit 0 ;;
+  rev-parse)
+    # Same sha on both sides → "Already up to date" → clean exit 0.
+    printf 'same-sha'
+    ;;
+  *) echo "unexpected git args: $*" >&2; exit 1 ;;
+esac
+`);
+    writeStub(binDir, 'npm', `
+printf 'npm %s\n' "$*" >> "$TEST_LOG"
 exit 0
 `);
 
@@ -305,8 +317,11 @@ exit 0
       args: ['--auto'],
     });
 
-    expect(result.status).toBe(1);
-    expect(result.stdout).toContain('Node.js 25.9.0 is unsupported');
-    expect(readCalls(logFile)).toEqual([]);
+    // Clean exit proves the script passed the Node check and reached the
+    // "already up to date" branch; git fetch confirms it got past version gating.
+    expect(result.status).toBe(0);
+    const calls = readCalls(logFile);
+    expect(calls).toContain('git fetch --quiet');
+    expect(calls.some((line) => line.startsWith('git rev-parse'))).toBe(true);
   });
 });

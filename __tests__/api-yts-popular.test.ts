@@ -13,8 +13,9 @@ vi.mock('@/lib/logger', () => ({
   getLogger: vi.fn(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() })),
 }));
 
-function getReq(url: string): NextRequest {
-  return { nextUrl: new URL(url) } as unknown as NextRequest;
+function getReq(url: string, extraHeaders: Record<string, string> = {}): NextRequest {
+  const headers = new Headers({ 'x-forwarded-for': '127.0.0.1', ...extraHeaders });
+  return { nextUrl: new URL(url), headers } as unknown as NextRequest;
 }
 
 let GET: typeof import('@/app/api/yts/popular/route').GET;
@@ -105,10 +106,20 @@ describe('GET /api/yts/popular — numeric clamping', () => {
   });
 });
 
-describe('GET /api/yts/popular — genre pass-through', () => {
-  it('forwards genre as provided', async () => {
+describe('GET /api/yts/popular — genre whitelist', () => {
+  it('forwards whitelisted genres as provided', async () => {
     await GET(getReq('http://localhost/api/yts/popular?genre=Comedy'));
     expect(fetchPopularMock).toHaveBeenCalledWith(expect.objectContaining({ genre: 'Comedy' }));
+  });
+
+  it('drops unknown genres so the upstream query stays clean', async () => {
+    await GET(getReq('http://localhost/api/yts/popular?genre=bogus'));
+    expect(fetchPopularMock).toHaveBeenCalledWith(expect.objectContaining({ genre: undefined }));
+  });
+
+  it('rejects case-mismatched genres (YTS is case-sensitive)', async () => {
+    await GET(getReq('http://localhost/api/yts/popular?genre=comedy'));
+    expect(fetchPopularMock).toHaveBeenCalledWith(expect.objectContaining({ genre: undefined }));
   });
 });
 

@@ -14,6 +14,11 @@ const POPULAR_CACHE_SECONDS = 14400;
 // YTS enforces `limit=50` as its ceiling.
 const YTS_MAX_LIMIT = 50;
 
+// Cap how many raw pages we'll walk when filtering. A rare genre+year combo
+// could otherwise issue hundreds of serial requests to YTS. 20 raw pages (1000
+// titles) is plenty to fill any reasonable filtered grid.
+const POPULAR_MAX_RAW_PAGES = 20;
+
 // Public trackers to include in magnet links
 const TRACKERS = [
   'udp://open.demonii.com:1337/announce',
@@ -247,7 +252,11 @@ export async function fetchPopularMovies(options: YtsPopularOptions = {}): Promi
   let rawPage = 1;
   let rawTotalPages = 1;
 
-  while (rawPage <= rawTotalPages && collected.length < requiredMatches) {
+  while (
+    rawPage <= rawTotalPages
+    && rawPage <= POPULAR_MAX_RAW_PAGES
+    && collected.length < requiredMatches
+  ) {
     const { movies, rawTotalCount: nextRawTotalCount } = await fetchPopularPage({
       genre: options.genre,
       limit: rawPageSize,

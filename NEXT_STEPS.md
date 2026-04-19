@@ -18,7 +18,7 @@ The route currently owns: direct-title shortcut, rate limiting, prompt selection
 - `lib/chat/providerFallback.ts` — provider order / fallback rules
 - `lib/chat/streamSseText.ts` — provider-independent SSE-to-text stream adapter
 - `lib/chat/thinkFilter.ts` — extracted `ThinkFilter`
-- `lib/chat/rateLimit.ts` — small reusable in-memory limiter
+- ~~`lib/chat/rateLimit.ts` — small reusable in-memory limiter~~ **DONE** 2026-04-19: extracted to `lib/rateLimit.ts`, already shared between `/api/chat` and `/api/yts/popular`, soft-capped at 10k tracked IPs
 
 ### Acceptance
 
@@ -32,7 +32,7 @@ The route currently owns: direct-title shortcut, rate limiting, prompt selection
 - `__tests__/chat-provider-openrouter.test.ts`
 - `__tests__/chat-provider-ollama.test.ts`
 - `__tests__/chat-stream-sse.test.ts`
-- `__tests__/chat-rate-limit.test.ts`
+- ~~`__tests__/chat-rate-limit.test.ts`~~ → already landed as `__tests__/rate-limit.test.ts`
 
 ---
 

@@ -1,7 +1,7 @@
 # movie-chat — QA Test Scenarios
 
 Comprehensive test coverage map for the movie-chat application.
-Updated: 2026-04-19
+Updated: 2026-04-19 (post bug-hunt + simplify pass)
 
 ---
 
@@ -9,42 +9,43 @@ Updated: 2026-04-19
 
 | File | Suite | Count | Status |
 |------|-------|-------|--------|
-| `__tests__/eztv.test.ts` | TV torrent search + scoring | 58 | Implemented |
+| `__tests__/eztv.test.ts` | TV torrent search + scoring (incl. `&` → `and` normalisation) | 58 | Implemented |
 | `__tests__/api-config.test.ts` | Config API CRUD + redaction | 52 | Implemented |
 | `__tests__/setup.test.ts` | Setup wizard, probes, middleware | 37 | Implemented |
 | `__tests__/middleware.test.ts` | IP extraction, RFC-1918, LAN guard | 33 | Implemented |
-| `__tests__/plex.test.ts` | Plex library search + TV seasons | 29 | Implemented |
+| `__tests__/plex.test.ts` | Plex library search + TV seasons (incl. `&` → `and` on subtitle variants) | 31 | Implemented |
 | `__tests__/logger.test.ts` | JSONL logger rotation + caps | 27 | Implemented |
+| `__tests__/yts.test.ts` | YTS movie torrent search | 27 | Implemented |
 | `__tests__/moveFiles.test.ts` | File move + path traversal | 26 | Implemented |
-| `__tests__/yts.test.ts` | YTS movie torrent search | 26 | Implemented |
 | `__tests__/chat-route.test.ts` | Chat route + ThinkFilter streaming | 25 | Implemented |
 | `__tests__/appTorrents.test.ts` | Torrent registry CRUD + pruning | 24 | Implemented |
 | `__tests__/diagnostics-bundle.test.ts` | Diagnostics bundle + redaction | 21 | Implemented |
-| `__tests__/chat-tags.test.ts` | Tag parsing, stripping, edge cases | 20 | Implemented |
-| `__tests__/api-transmission-add.test.ts` | Transmission add + validation | 13 | Implemented |
-| `__tests__/chat-helpers.test.ts` | Chat helper utilities | 12 | Implemented |
-| `__tests__/api-files-move.test.ts` | File move API route | 12 | Implemented |
-| `__tests__/openrouter-callback.test.ts` | OAuth exchange + CSRF state | 12 | Implemented |
-| `__tests__/api-transmission-control.test.ts` | Transmission pause/resume/cancel | 10 | Implemented |
-| `__tests__/tmdb.test.ts` | TMDB metadata fetcher | 10 | Implemented |
-| `__tests__/chat-client-helpers.test.ts` | Client-side chat helpers | 10 | Implemented |
-| `__tests__/direct-title-lookup.test.ts` | Direct title parser | 9 | Implemented |
-| `__tests__/media-keys.test.ts` | Media key normalisation | 9 | Implemented |
-| `__tests__/api-torrents-search.test.ts` | Torrent search API route | 7 | Implemented |
-| `__tests__/api-reviews.test.ts` | Reviews API route | 7 | Implemented |
-| `__tests__/chatPrompts.test.ts` | System prompt routing + Gemma detection | 7 | Implemented |
-| `__tests__/config.test.ts` | Config read/write/cache | 16 | Implemented |
-| `__tests__/request-ip.test.ts` | IP extraction from headers | 6 | Implemented |
+| `__tests__/api-yts-popular.test.ts` | `/api/yts/popular` — defaults, `sort_by` whitelist, numeric clamping, `minimum_year` validation, genre whitelist via `YTS_GENRE_SET`, 502 on upstream failure | 20 | Implemented |
+| `__tests__/chat-tags.test.ts` | Tag parsing, stripping, edge cases (incl. `strictYear` round-trip, lazy strip regex) | 20 | Implemented |
+| `__tests__/yts-popular.test.ts` | `fetchPopularMovies` — params, mapping, multi-page filtered pagination, exact end-of-scan `totalCount` | 18 | Implemented |
+| `__tests__/recUrlParam.test.ts` | `?rec=<json>` parse/validate helper for the popular → chat handoff; `strictYear` preserved only when year is valid | 17 | Implemented |
 | `__tests__/autoMove.test.ts` | Auto-move poller logic | 16 | Implemented |
-| `__tests__/api-plex-check.test.ts` | Plex check API route | 5 | Implemented |
-| `__tests__/api-transmission-status.test.ts` | Transmission status API route | 5 | Implemented |
-| `__tests__/yts-popular.test.ts` | `fetchPopularMovies` — params, mapping, over-fetch, `minimumYear` filter, `totalCount` scaling | 16 | Implemented |
-| `__tests__/api-yts-popular.test.ts` | `/api/yts/popular` — defaults, `sort_by` whitelist, numeric clamping, `minimum_year` validation, 502 on upstream failure | 18 | Implemented |
-| `__tests__/recUrlParam.test.ts` | `?rec=<json>` parse/validate helper for the popular → chat handoff | 15 | Implemented |
+| `__tests__/config.test.ts` | Config read/write/cache | 16 | Implemented |
+| `__tests__/api-transmission-add.test.ts` | Transmission add + validation | 13 | Implemented |
+| `__tests__/direct-title-lookup.test.ts` | Direct title parser (incl. Unicode title-casing via `\p{Ll}`) | 13 | Implemented |
+| `__tests__/media-keys.test.ts` | Media key normalisation (incl. movie-vs-TV separation, optional season suffix on `torrentKey`) | 13 | Implemented |
+| `__tests__/openrouter-callback.test.ts` | OAuth exchange + CSRF state (always required) | 13 | Implemented |
+| `__tests__/api-files-move.test.ts` | File move API route | 12 | Implemented |
+| `__tests__/chat-helpers.test.ts` | Chat helper utilities | 12 | Implemented |
+| `__tests__/tmdb.test.ts` | TMDB metadata fetcher | 12 | Implemented |
+| `__tests__/api-transmission-control.test.ts` | Transmission pause/resume/cancel | 10 | Implemented |
+| `__tests__/chat-client-helpers.test.ts` | Client-side chat helpers | 10 | Implemented |
+| `__tests__/api-reviews.test.ts` | Reviews API route | 8 | Implemented |
+| `__tests__/api-torrents-search.test.ts` | Torrent search API route | 8 | Implemented |
 | `__tests__/chat-history.test.ts` | `hooks/useChatHistory` — age/count trim, load merge vs clobber, missing-timestamp drop | 7 | Implemented |
-| `__tests__/shell-scripts.test.ts` | `install.sh` / `update.sh` contract tests — fresh install, successful update, dirty skip, rollback | 4 | Implemented |
+| `__tests__/chatPrompts.test.ts` | System prompt routing + Gemma detection | 7 | Implemented |
+| `__tests__/api-plex-check.test.ts` | Plex check API route | 6 | Implemented |
+| `__tests__/request-ip.test.ts` | IP extraction from headers | 6 | Implemented |
+| `__tests__/api-transmission-status.test.ts` | Transmission status API route | 5 | Implemented |
+| `__tests__/shell-scripts.test.ts` | `install.sh` / `update.sh` contract tests — fresh install, successful update, dirty skip, rollback, any-Node-version proceed | 5 | Implemented |
+| `__tests__/rate-limit.test.ts` | Shared `createRateLimiter` — per-IP limit enforcement, independent per-route instances, window reset | 4 | Implemented |
 
-**Total: 34 files / 618 tests**
+**Total: 35 files / 632 tests** (plus `__e2e__/app-smoke.test.ts` — 4 production HTTP smoke tests via `npm run test:e2e`)
 
 ---
 
@@ -193,7 +194,7 @@ Updated: 2026-04-19
 | SEC7 | OAuth: cookie but no URL state | `state_mismatch` error | `openrouter-callback.test.ts` |
 | SEC8 | OAuth: state values don't match | `state_mismatch` error | `openrouter-callback.test.ts` |
 | SEC9 | OAuth: state values match | Key exchanged and saved | `openrouter-callback.test.ts` |
-| SEC10 | OAuth: no state at all (legacy) | Allowed (backwards compat) | `openrouter-callback.test.ts` |
+| SEC10 | OAuth: no state at all | `state_mismatch` error (legacy bypass removed) | `openrouter-callback.test.ts` |
 | SEC11 | OAuth: missing code param | `no_code` error | `openrouter-callback.test.ts` |
 | SEC12 | OAuth: exchange fails | `exchange_failed` error | `openrouter-callback.test.ts` |
 
@@ -285,7 +286,7 @@ Key scenarios: readConfig/writeConfig/cfg caching, sensitive field masking, diag
 | P1 | Open `/popular` — default tab | Most Downloaded active, 20 cards, genre + minimum-year dropdowns visible | Manual |
 | P2 | Click flame icon in header from `/` | Navigates to `/popular` without losing configured cookie | Manual |
 | P3 | Select genre → results update | Debounced 300ms; grid re-renders; pagination resets to page 1 | Manual |
-| P4 | Select minimum-year (e.g. 2023+) | Server over-fetches (up to 50) and client-filters; totalCount scales | `yts-popular.test.ts` |
+| P4 | Select minimum-year (e.g. 2023+) | Server scans raw YTS pages in 50-item chunks until it can fill the requested filtered page; `totalCount` is exact at end-of-scan or a bounded estimate otherwise | `yts-popular.test.ts` |
 | P5 | Pagination Next/Prev | Updates `page` query param; disables at boundaries; skeleton during load | Manual |
 | P6 | Switch to Newest tab | Genre + year dropdowns disappear; single sort-order dropdown appears defaulted to "Sort by year" | Manual |
 | P7 | Newest + Sort by year | Returns 2026/2027 releases at the top | Manual |
@@ -306,9 +307,11 @@ Key scenarios: readConfig/writeConfig/cfg caching, sensitive field masking, diag
 ## Running the Tests
 
 ```bash
-npm test                        # run all 618 tests once
+npm test                        # run all 623 unit/integration tests once
 npm run test:watch              # watch mode
-npm run test:coverage           # with coverage report
+npm run test:coverage           # with coverage thresholds
+npm run test:e2e                # built-app HTTP smoke tests
+npm run ci                      # full CI mirror (lint → coverage → build → e2e)
 npx vitest run __tests__/yts.test.ts  # single file
 ```
 

@@ -34,7 +34,7 @@
 
 | Service | What it's for | Cost |
 |---|---|---|
-| [Node.js](https://nodejs.org) 24 LTS _(recommended)_ or 20 LTS | Run the app | Free |
+| [Node.js](https://nodejs.org) 20+ | Run the app | Free |
 | [Plex Media Server](https://www.plex.tv) | Your media library | Free |
 | [Transmission](https://transmissionbt.com) | Download manager | Free |
 | [OpenRouter](https://openrouter.ai) account | AI chat (cloud) | Free tier available |
@@ -60,7 +60,7 @@ Paste this into your terminal. It clones the repo, installs dependencies, builds
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/nookied/movie-chat/main/install.sh)"
 ```
 
-You'll need [git](https://git-scm.com) and [Node.js](https://nodejs.org) 24 LTS installed first. Node 20 LTS is also supported.
+You'll need [git](https://git-scm.com) and [Node.js](https://nodejs.org) 20+ installed first. The one-liner installs Node.js automatically if it's missing.
 
 ### Option C — manual
 
@@ -272,6 +272,7 @@ Server (background)
 - `HANDOFF.md` — current deployment and validation notes
 - `NEXT_STEPS.md` — consolidated planned refactors and follow-ups on shipped features
 - `AGENTS.md` / `CLAUDE.md` — architecture and implementation guidance for AI-assisted development
+- `.agents/skills/qa/SCENARIOS.md` — per-file test coverage map and manual QA scenarios
 - `install.sh` / `setup.sh` / `update.sh` — operational shell scripts; `install.sh` and `update.sh` are covered by `npm test`, and update-related work should always review `update.sh`
 
 ---
@@ -281,7 +282,7 @@ Server (background)
 The app is designed for trusted local-network use only. It includes:
 
 - **Local-network restriction** — middleware blocks all requests from non-LAN IPs; only RFC-1918 addresses and `.local` mDNS hostnames are allowed
-- **Rate limiting** — 30 requests/minute per IP on the chat endpoint
+- **Rate limiting** — 30 requests/minute per IP on both the chat endpoint and the popular-movies browse endpoint; the limiter is soft-capped at 10k tracked IPs so the in-memory map can't grow unbounded under a burst
 - **OAuth CSRF protection** — OpenRouter OAuth flow uses a random state token in an httpOnly cookie; both URL state and cookie state are always required and verified with timing-safe comparison; redirects use a fixed origin, never the client-controlled Host header
 - **Request validation** — POST routes enforce a 64 KB body limit and validate all input fields; malformed JSON returns 400 instead of a stack trace
 - **Magnet URL validation** — only well-formed `magnet:?xt=urn:btih:` links are accepted
@@ -445,7 +446,7 @@ npm run release        # build + publish to GitHub Releases (needs GH_TOKEN)
 
 All configuration is read from `config.local.json` at runtime — no server restart needed after saving settings (except system prompt changes, which require `pm2 restart movie-chat`).
 
-Use Node 24 LTS for local development unless you have a reason not to. The repo pins `.nvmrc` / `.node-version` to `24`, CI verifies both Node 20 and Node 24, and both the npm entrypoints and the install/update scripts reject untested current majors like Node 25 so they fail fast instead of hanging mid-build.
+Node 24 LTS is the recommended development version (`.nvmrc` / `.node-version` both pin to `24`). CI covers Node 20 and 24 LTS; any Node version is accepted at runtime.
 
 ---
 
