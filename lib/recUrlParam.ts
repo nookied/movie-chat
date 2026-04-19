@@ -30,10 +30,12 @@ export function parseRecFromUrl(search: string): Recommendation | null {
     typeof obj.year === 'number' && Number.isFinite(obj.year) && obj.year > 1800 && obj.year < 3000
       ? obj.year
       : undefined;
+  const strictYear = obj.strictYear === true && year !== undefined ? true : undefined;
 
   return {
     title,
     type: obj.type,
     ...(year !== undefined ? { year } : {}),
+    ...(strictYear ? { strictYear: true } : {}),
   };
 }

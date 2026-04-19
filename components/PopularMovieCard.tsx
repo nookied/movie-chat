@@ -12,7 +12,7 @@ export default function PopularMovieCard({ movie }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
   const firstGenre = movie.genres[0];
   const rec = encodeURIComponent(
-    JSON.stringify({ title: movie.title, year: movie.year, type: 'movie' }),
+    JSON.stringify({ title: movie.title, year: movie.year, type: 'movie', strictYear: true }),
   );
 
   return (
@@ -23,6 +23,7 @@ export default function PopularMovieCard({ movie }: Props) {
     >
       <div className="relative aspect-[2/3] bg-gray-800">
         {movie.poster && !imgFailed ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={movie.poster}
             alt={`${movie.title} poster`}

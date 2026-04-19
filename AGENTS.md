@@ -26,13 +26,13 @@
 | `components/RecommendationCard.tsx` | Recommendation renderer — movie/TV sections, disambiguation chooser, sits on top of `useRecommendationCardState()` |
 | `components/recommendation/MovieMatchChooser.tsx` | Disambiguation UI — shown when a bare title has multiple TMDB matches (e.g. remakes) |
 | `hooks/useRecommendationCardState.ts` | Recommendation card data hook — Plex/reviews/torrent fetches, TV season selection, movie disambiguation, strictYear locking, post-move Plex re-check |
-| `components/DownloadTracker.tsx` | Polls `/api/transmission/status` every 5s; read-only, no client-side move logic |
+| `components/DownloadTracker.tsx` | Polls `/api/transmission/status` every 5s; aborts stale requests on unmount/cancel; read-only, no client-side move logic |
 | `lib/transmission.ts` | Transmission RPC with session-ID handshake (always 409 first) |
 | `lib/moveFiles.ts` | Core file-move logic — shared between HTTP route and autoMove poller |
 | `lib/autoMove.ts` | Server-side background poller — moves one torrent at a time with 15s gap |
 | `lib/appTorrents.ts` | In-memory + on-disk registry of app torrent IDs + mediaType/season/title metadata |
 | `lib/config.ts` | `cfg()` helper — 30s in-memory cache avoids per-request sync disk reads |
-| `lib/yts.ts` | YTS torrent search + magnet link builder (movies); supports `strictYear` option; `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries; also `fetchPopularMovies()` for the `/popular` browse page — over-fetches (up to 50) and client-side-filters by `minimumYear`, scales `totalCount` by the filter hit-rate |
+| `lib/yts.ts` | YTS torrent search + magnet link builder (movies); supports `strictYear` option; `normalizeTitle` maps `&` → `and` so LLM tags match YTS entries; also `fetchPopularMovies()` for the `/popular` browse page — when `minimumYear` is set it scans raw YTS pages in 50-item chunks, accumulates filtered matches until it can fill the requested filtered page, and returns an exact `totalCount` if it reaches the end (otherwise a bounded estimate) |
 | `app/api/yts/popular/route.ts` | GET — whitelists `sort_by`, clamps `limit`/`page`/`minimum_rating`, validates `minimum_year` > 1900, returns 502 on upstream failure |
 | `components/PopularMoviesPanel.tsx` | `/popular` client grid + controls. Tab-specific filter layout: Most Downloaded exposes genre + minimum-year dropdowns; Newest exposes a single sort dropdown (`year` default / `rating`) and is hard-scoped to the last 3 years via `NEWEST_MIN_YEAR` so rating-sort stays recent |
 | `components/PopularMovieCard.tsx` | Individual YTS browse card — poster, IMDb ★ overlay, hover synopsis, click → `/?rec=<json>` |
@@ -56,7 +56,7 @@
 | `app/api/setup/detect/route.ts` | Auto-detect Ollama/Plex/Transmission on network |
 | `app/api/openrouter/auth/route.ts` | OAuth initiation — CSRF state cookie + redirect to OpenRouter |
 | `app/api/openrouter/callback/route.ts` | OAuth PKCE callback — CSRF state always required, timing-safe comparison, fixed-origin redirects, key exchange |
-| `components/ShareButton.tsx` | QR code modal for sharing app URL with household |
+| `components/ShareButton.tsx` | QR code modal for sharing app URL with household; preserves protocol/origin and cleans up stale QR/clipboard async work |
 | `components/ui/` | Shared UI: StatusIcon, Section, Field, Toggle |
 
 ## Development guidelines
@@ -153,7 +153,7 @@ Map out the architecture before attempting fixes: what services are involved, wh
 
 ## Testing
 
-`npm test` (Vitest, Node env). 34 test files / 618 tests under `__tests__/` covering libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, ThinkFilter streaming, YTS popular-list fetching and API-route param clamping, and shell-script contract tests for `install.sh` / `update.sh`. Conventions:
+`npm test` (Vitest, Node env) covers the unit + integration suite under `__tests__/`; `npm run test:e2e` runs production HTTP smoke tests from `__e2e__/` against a built app; `npm run ci` mirrors the full CI pipeline (`lint` → `test:coverage` → `build` → `test:e2e`). The Vitest suite covers libs, route handlers (using fetch-API `Request` cast to `NextRequest`), tag helpers, direct-title lookup, chat client helpers, media-key normalization, logger/diagnostics surfaces, middleware/IP validation, OAuth CSRF flows, system prompt routing, ThinkFilter streaming, YTS popular-list fetching and API-route param clamping, and shell-script contract tests for `install.sh` / `update.sh`. Conventions:
 
 - Mock `fs` with `vi.mock('fs', () => ({ default: fsMock, ...fsMock }))` so both ESM and CJS imports see the mock.
 - `vi.resetModules()` in `beforeEach` so module-level state (rate-limit map, logger caches, etc.) is fresh per test.
@@ -161,7 +161,9 @@ Map out the architecture before attempting fixes: what services are involved, wh
 - `lib/autoMove.ts` exposes `__testHooks = { tick }` so tests can drive a single poll pass without fake-timer juggling.
 - If a change touches install, setup, deployment, pm2, cron, or rollback behavior, always inspect `update.sh` and keep the shell-script tests green.
 
-CI runs `npm test` on push and PRs (`.github/workflows/test.yml`, `TZ=UTC` for deterministic date tests).
+The repo's supported Node versions are `20 LTS` and `24 LTS` (`24` recommended for local dev; `.nvmrc` / `.node-version` both pin to `24`). `scripts/check-node-version.mjs` gates the local npm entrypoints, and `install.sh`, `setup.sh`, and `update.sh` reject unsupported majors so untested current releases do not get as far as `next build`.
+
+CI runs `npm run lint`, `npm run test:coverage`, `npm run build`, and `npm run test:e2e` on push and PRs for both Node 20 and Node 24 (`.github/workflows/test.yml`, `TZ=UTC` for deterministic date tests, `NEXT_TELEMETRY_DISABLED=1`).
 
 ## Deployment
 

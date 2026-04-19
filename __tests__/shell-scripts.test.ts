@@ -104,11 +104,14 @@ echo "unexpected git args: $*" >&2
 exit 1
 `);
     writeStub(binDir, 'node', `
-printf '20.11.0'
+printf '24.15.0'
 `);
     writeStub(binDir, 'npm', `
 printf 'npm %s\n' "$*" >> "$TEST_LOG"
 exit 0
+`);
+    writeStub(binDir, 'node', `
+printf '24.15.0'
 `);
 
     const result = runScript('install.sh', {
@@ -162,6 +165,9 @@ esac
 printf 'npm %s\n' "$*" >> "$TEST_LOG"
 exit 0
 `);
+    writeStub(binDir, 'node', `
+printf '24.15.0'
+`);
 
     const result = runScript('update.sh', {
       cwd: repoDir,
@@ -199,6 +205,9 @@ exit 1
     writeStub(binDir, 'npm', `
 printf 'npm %s\n' "$*" >> "$TEST_LOG"
 exit 0
+`);
+    writeStub(binDir, 'node', `
+printf '24.15.0'
 `);
 
     const result = runScript('update.sh', {
@@ -253,6 +262,9 @@ if [ "$1" = "run" ] && [ "$2" = "build" ] && [ "\${3:-}" != "--silent" ]; then
 fi
 exit 0
 `);
+writeStub(binDir, 'node', `
+printf '24.15.0'
+`);
 
     const result = runScript('update.sh', {
       cwd: repoDir,
@@ -263,5 +275,38 @@ exit 0
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('Update failed');
     expect(readCalls(logFile)).toContain('git reset --hard rollback-sha');
+  });
+
+  it('update.sh --auto fails fast on unsupported Node versions before git or npm work starts', () => {
+    const root = makeTempDir();
+    const home = path.join(root, 'home');
+    const repoDir = path.join(root, 'repo');
+    fs.mkdirSync(home, { recursive: true });
+    fs.mkdirSync(repoDir, { recursive: true });
+    fs.writeFileSync(path.join(repoDir, 'ecosystem.config.js'), 'module.exports = {};');
+
+    const { binDir, env, logFile } = prepareScriptEnv(home);
+
+    writeStub(binDir, 'npm', `
+printf 'npm %s\n' "$*" >> "$TEST_LOG"
+exit 0
+`);
+    writeStub(binDir, 'node', `
+printf '25.9.0'
+`);
+    writeStub(binDir, 'git', `
+printf 'git %s\n' "$*" >> "$TEST_LOG"
+exit 0
+`);
+
+    const result = runScript('update.sh', {
+      cwd: repoDir,
+      env,
+      args: ['--auto'],
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('Node.js 25.9.0 is unsupported');
+    expect(readCalls(logFile)).toEqual([]);
   });
 });

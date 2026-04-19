@@ -12,8 +12,12 @@ export function recommendationKey(rec: Recommendation): string {
   return `${rec.type}-${rec.title.toLowerCase()}-${rec.year ?? 'unknown'}`;
 }
 
-export function torrentKey(title: string, year?: number): string {
-  return `${title.toLowerCase()}-${year ?? 'unknown'}`;
+export function torrentKey(
+  title: string,
+  year?: number,
+  mediaType?: Recommendation['type']
+): string {
+  return `${mediaType ?? 'unknown'}-${title.toLowerCase()}-${year ?? 'unknown'}`;
 }
 
 export function trackedDownloadLabel(

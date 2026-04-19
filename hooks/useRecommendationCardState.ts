@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TvTorrentResult, TvTorrentOption } from '@/lib/eztv';
 import {
   MovieDisambiguationCandidate,
@@ -47,7 +47,7 @@ interface Options {
     season?: number,
     strictYear?: boolean
   ) => void;
-  onDownload: (title: string, year?: number) => Promise<boolean>;
+  onDownload: (title: string, year?: number, mediaType?: 'movie' | 'tv') => Promise<boolean>;
   recommendation: Recommendation;
 }
 
@@ -362,7 +362,7 @@ export function useRecommendationCardState({
   ]);
 
   const numberOfSeasons = reviews?.numberOfSeasons;
-  const seasonsInLibrary = new Set(plex?.seasons ?? []);
+  const seasonsInLibrary = useMemo(() => new Set(plex?.seasons ?? []), [plex?.seasons]);
   const allSeasonsInPlex =
     type === 'tv' &&
     plex?.found === true &&
@@ -481,13 +481,13 @@ export function useRecommendationCardState({
 
   const startMovieDownload = useCallback(async () => {
     setDownloading(true);
-    const started = await onDownload(title, year);
+    const started = await onDownload(title, year, 'movie');
     if (!started) setDownloading(false);
   }, [onDownload, title, year]);
 
   const startTvDownload = useCallback(async () => {
     setTvDownloading(true);
-    const started = await onDownload(title, year);
+    const started = await onDownload(title, year, 'tv');
     if (!started) setTvDownloading(false);
   }, [onDownload, title, year]);
 

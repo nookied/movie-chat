@@ -1,27 +1,48 @@
-name: test
+name: ci
 
 on:
   push:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['20', '24']
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: '1'
+      TZ: UTC
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node-version }}
           cache: 'npm'
 
       - run: npm ci
 
-      - run: npm test
-        env:
-          # Force UTC so date-sensitive tests (rotation, retention cutoff) behave
-          # identically regardless of the runner's local TZ.
-          TZ: UTC
+      - run: npm run lint
+
+      - run: npm run test:coverage
+
+      - run: npm run build
+
+      - run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report-node-${{ matrix.node-version }}
+          path: coverage
+          if-no-files-found: ignore

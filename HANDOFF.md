@@ -1,6 +1,76 @@
 # Handoff
 
-## Latest pass (2026-04-19 — popular-movies browse UX)
+## Latest pass (2026-04-19 — regression sweep, testing expansion, handoff prep)
+
+Closed the biggest regressions found in the post-Claude sweep, expanded automated verification into a real CI-shaped pipeline, and aligned the maintainer docs with the shipped behavior. The final wrap-up verification on this machine landed in a mixed state: `npm run lint` and `npm test` passed on the finished tree, while a fresh `npm run ci` rerun cleared lint + coverage and then hung inside `next build` under local Node `v25.9.0` before producing `.next/BUILD_ID`.
+
+### What changed
+
+1. **Automated testing + CI now covers the full release path**
+   - Replaced `next lint` with CI-safe `eslint . --ext .js,.mjs,.ts,.tsx` so lint is non-interactive locally and in GitHub Actions.
+   - Added enforced Vitest global coverage thresholds in `vitest.config.ts`.
+   - Added `vitest.e2e.config.ts` + `__e2e__/app-smoke.test.ts` so we boot the built standalone app and hit core routes over real HTTP.
+   - Added `npm run ci` as the local mirror of GitHub Actions and updated `.github/workflows/test.yml` to run `lint` → `test:coverage` → `build` → `test:e2e`.
+   - CI now runs on both Node 20 and Node 24, while `.nvmrc`, `.node-version`, and `package.json#engines` pin the repo to tested LTS majors instead of following unsupported current releases.
+2. **`/popular` browse flow is now pagination-correct and race-safe**
+   - `lib/yts.ts` no longer filters a single raw YTS page and hopes the math works out. When `minimumYear` is set, it now accumulates filtered results across raw YTS pages until it can fill the requested filtered page, then returns an exact `totalCount` if it reached the end or a bounded estimate otherwise.
+   - `components/PopularMoviesPanel.tsx` now routes debounce, pagination, and retry through one request path with abort + request-id guards, so stale responses can no longer overwrite newer tab/filter/page state.
+   - The visible "Showing X-Y of Z" range is clamped to the actual rendered card count.
+3. **Popular-card handoff now preserves exact movie identity**
+   - `components/PopularMovieCard.tsx` adds `strictYear: true` to the `?rec=` payload.
+   - `lib/recUrlParam.ts` preserves that flag only when the year is valid, so remake titles clicked from `/popular` stay locked to the intended movie all the way through chat, Plex checks, and YTS search.
+4. **Download bookkeeping no longer collides across movie/TV name matches**
+   - `lib/mediaKeys.ts` now keys torrent/download state by `mediaType + title + year`, not just `title + year`.
+   - `usePendingTorrents`, `useDownloadTrigger`, `useAppDownloads`, `DownloadTracker`, `RecommendationCard`, `DownloadsPanel`, `ChatMessageList`, and `useRecommendationCardState` were updated so a movie and TV show sharing title/year do not steal each other’s pending/downloaded state.
+5. **Stale async work was tightened up in the two remaining weak spots**
+   - `components/DownloadTracker.tsx` now aborts in-flight status polls and suppresses the "Added to library" path after a user-initiated cancel, so a stale "not found" response cannot misclassify a canceled torrent as moved.
+   - `components/ShareButton.tsx` now preserves protocol/origin correctly, avoids stale cached QR state across origin changes, cancels the QR promise chain on close/unmount, and handles clipboard write failures quietly.
+6. **Regression coverage was added for the risky fixes**
+   - `__tests__/yts-popular.test.ts` covers multi-page filtered pagination and exact filtered `totalCount` at end-of-scan.
+   - `__tests__/media-keys.test.ts` covers movie-vs-TV torrent key separation.
+   - `__tests__/recUrlParam.test.ts` covers `strictYear` preservation through the `?rec=` handoff.
+7. **Node/runtime policy is now explicit and operationally enforced**
+   - `install.sh` and `setup.sh` now require Node 20 LTS or 24 LTS, with 24 recommended.
+   - `update.sh` now checks Node before any git/npm work and fails fast on unsupported majors. Verified locally on this machine: `bash update.sh --auto` under Node `25.9.0` exits immediately with a clear skip message instead of hanging in `next build`.
+   - `scripts/check-node-version.mjs` now gates the local npm entrypoints (`build`, `dev`, `start`, `ci`, Electron, and E2E) so unsupported runtimes fail fast before invoking Next.js.
+   - While landing that guard, the shell test suite caught a real `set -e` footgun in `update.sh`; the updater now uses explicit `if` blocks instead of bare `[ ... ] && ...` checks in auto-mode branches.
+
+### Files to know about
+
+| File | Why |
+|---|---|
+| `package.json` | `lint`, `test:e2e`, and `ci` scripts; local CI mirror |
+| `.eslintrc.json`, `.eslintignore` | ESLint is now explicit and CI-safe |
+| `.github/workflows/test.yml` | Full PR/push pipeline |
+| `.nvmrc`, `.node-version`, `package.json` | Tested Node support policy (`24` default, `20` also supported) |
+| `scripts/check-node-version.mjs` | Fast-fails unsupported local runtimes before `next build` / `next start` / Electron |
+| `vitest.config.ts`, `vitest.e2e.config.ts` | Coverage thresholds + E2E runner split |
+| `__e2e__/app-smoke.test.ts` | Built-app HTTP smoke tests |
+| `install.sh`, `setup.sh`, `update.sh` | LTS-only Node guards; updater fails fast before git/build work on unsupported majors |
+| `lib/yts.ts` | Correct filtered `/popular` pagination |
+| `components/PopularMoviesPanel.tsx` | Abort-safe browse loading + clamped range display |
+| `components/PopularMovieCard.tsx`, `lib/recUrlParam.ts` | `strictYear` handoff fix |
+| `lib/mediaKeys.ts` and download hooks/components | Type-aware torrent/download identity |
+| `components/DownloadTracker.tsx` | Cancel-safe polling |
+| `components/ShareButton.tsx` | Share-link lifecycle hardening |
+
+### Validation
+
+```bash
+npm run lint     # pass
+npm test         # pass (34 files / 623 tests)
+npm run ci       # lint + coverage passed; hung in `next build` before `.next/BUILD_ID`
+bash update.sh --auto  # under local Node 25.9.0: fast-fails with "unsupported Node.js" skip message
+```
+
+### Remaining follow-ups worth watching
+
+- Investigate the local `next build` hang observed during the final `npm run ci` rerun (Node `v25.9.0`, no `.next/BUILD_ID`, stalled for >10 minutes after coverage)
+- `SEC-1` diagnostics token exposure via `GET /api/config`
+- `CR-4` `ThinkFilter` dropping buffered content on unclosed `<think>`
+- Torrent-search result caching in `lib/yts.ts` / `lib/eztv.ts`
+
+## Previous pass (2026-04-19 — popular-movies browse UX)
 
 Shipped the `/popular` YTS browse feature with tab-specific controls, cleaned up a recommendation-injection race in chat history, and raised the YTS popular-list cache TTL to 4h. All 618 tests pass, production build is clean.
 
@@ -12,10 +82,10 @@ Shipped the `/popular` YTS browse feature with tab-specific controls, cleaned up
    - Switching tabs resets `genre`, `minYear`, and `newestSort` so stale state from the other tab can't linger.
 2. **Card chrome trimmed** (`components/PopularMovieCard.tsx`): removed the per-card `1080p` quality badge and the `opacity-60` dim state for non-1080p entries — YTS always has a 1080p variant in practice, so the badge was redundant noise.
 3. **YTS popular-list cache TTL** bumped 1800s → 14400s (4h) in `lib/yts.ts` (`POPULAR_CACHE_SECONDS`). `/popular` was previously refetching every 30 min for no user benefit. Next.js fetch cache invalidates naturally on `npm run build`, so no migration is needed.
-4. **`minimumYear` filter with over-fetch** (`lib/yts.ts`): YTS API has no year filter, so when `minimumYear` is set we request up to 50 items (YTS max), client-side filter, and scale `totalCount` by the filter hit-rate so pagination stays sensible. Applied *after* YTS's own sort, so `sort_by=rating` + `minimumYear=2023` correctly returns highest-rated films from 2023+. Supported in the route at `app/api/yts/popular/route.ts` (validated > 1900, floored).
+4. **`minimumYear` filter groundwork** (`lib/yts.ts`): YTS API has no year filter, so the initial ship over-fetched and client-side filtered. The follow-up pass above replaced the single-page hit-rate estimate with accumulated filtered pagination across raw pages.
 5. **Chat history race fix** (`hooks/useChatHistory.ts`): the localStorage load effect was clobbering any URL-injected recommendation because it called `setMessages(valid)` non-functionally on mount, racing with the `ChatInterface` effect that reads `?rec=` from the URL. Now the loader uses a functional updater that preserves any messages already present (other than the welcome placeholder).
 6. **Suspense wrap on ChatInterface** (`app/page.tsx`): required by `useSearchParams()` — the previous setup was silently building but prerender-warning.
-7. **Tests**: +12 added for the new `minimumYear` over-fetch, cache TTL, and API-route param clamping. 618 total / 34 files / all green.
+7. **Tests**: +12 added for the new `minimumYear` groundwork, cache TTL, and API-route param clamping; later expanded again by the regression/CI pass above.
 
 ### Files touched
 
@@ -174,5 +244,5 @@ Prompt changes require a server restart. Config changes are hot-reloaded (30s ca
 
 ## Known quirks
 
-- `npm run lint` launches Next's ESLint setup prompt interactively — not usable in CI without first completing the ESLint migration.
+- A fresh `npm run ci` rerun on this machine hung in `next build` under Node `v25.9.0` before writing `.next/BUILD_ID`. Lint + coverage completed first; the stall needs a follow-up.
 - `assertWithinDir` error message when `allowSameDir=false` says "outside allowed directory" — cosmetically inaccurate (path equals the root). No functional impact.

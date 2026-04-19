@@ -23,6 +23,16 @@ function mockYtsPopular(payload: unknown, opts: { ok?: boolean; status?: number 
   return capture;
 }
 
+function mockYtsPopularSequence(payloads: unknown[]): string[] {
+  const urls: string[] = [];
+  vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+    urls.push(typeof input === 'string' ? input : input.toString());
+    const payload = payloads.shift() ?? { data: { movies: [], movie_count: 0 } };
+    return { ok: true, status: 200, json: async () => payload } as Response;
+  });
+  return urls;
+}
+
 beforeEach(() => vi.restoreAllMocks());
 
 describe('fetchPopularMovies() — URL params', () => {
@@ -82,7 +92,7 @@ describe('fetchPopularMovies() — minimumYear filter', () => {
   it('drops movies older than minimumYear', async () => {
     mockYtsPopular({
       data: {
-        movie_count: 100,
+        movie_count: 4,
         movies: [movie(1, 2025), movie(2, 1980), movie(3, 2024), movie(4, 1999)],
       },
     });
@@ -106,6 +116,47 @@ describe('fetchPopularMovies() — minimumYear filter', () => {
     mockYtsPopular({ data: { movie_count: 50, movies } });
     const result = await fetchPopularMovies({ minimumYear: 2023, limit: 20 });
     expect(result.movies).toHaveLength(20);
+  });
+
+  it('fills later filtered pages by continuing into subsequent raw YTS pages', async () => {
+    const urls = mockYtsPopularSequence([
+      {
+        data: {
+          movie_count: 100,
+          movies: [
+            ...Array.from({ length: 15 }, (_, index) => movie(index + 1, 2025)),
+            ...Array.from({ length: 35 }, (_, index) => movie(index + 16, 1999)),
+          ],
+        },
+      },
+      {
+        data: {
+          movie_count: 100,
+          movies: [
+            ...Array.from({ length: 10 }, (_, index) => movie(index + 51, 2024)),
+            ...Array.from({ length: 40 }, (_, index) => movie(index + 61, 1998)),
+          ],
+        },
+      },
+    ]);
+
+    const result = await fetchPopularMovies({ minimumYear: 2023, limit: 10, page: 2 });
+
+    expect(result.movies.map((m) => m.ytsId)).toEqual([11, 12, 13, 14, 15, 51, 52, 53, 54, 55]);
+    expect(urls).toHaveLength(2);
+    expect(new URL(urls[0]).searchParams.get('page')).toBe('1');
+    expect(new URL(urls[1]).searchParams.get('page')).toBe('2');
+  });
+
+  it('returns an exact filtered totalCount when it scans to the end of the raw result set', async () => {
+    mockYtsPopular({
+      data: {
+        movie_count: 6,
+        movies: [movie(1, 2025), movie(2, 2024), movie(3, 1999), movie(4, 1998), movie(5, 2023), movie(6, 1997)],
+      },
+    });
+    const result = await fetchPopularMovies({ minimumYear: 2023, limit: 20 });
+    expect(result.totalCount).toBe(3);
   });
 
   it('leaves totalCount unchanged when minimumYear is not provided', async () => {

@@ -1,11 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 
 // Cache resolved values — neither changes during a session
 let cachedUrl: string | null = null;
 let cachedQrDataUrl: string | null = null;
+let cachedWindowOrigin: string | null = null;
+
+function buildOrigin(protocol: string, hostname: string, port: string): string {
+  const defaultPort = protocol === 'https:' ? '443' : '80';
+  const portSuffix = port && port !== defaultPort ? `:${port}` : '';
+  return `${protocol}//${hostname}${portSuffix}`;
+}
 
 interface ShareButtonProps {
   variant?: 'icon' | 'row';
@@ -16,51 +23,75 @@ export default function ShareButton({ variant = 'icon' }: ShareButtonProps = {})
   const [url, setUrl] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const copiedResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedResetTimeoutRef.current) clearTimeout(copiedResetTimeoutRef.current);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
 
     async function resolve() {
-      if (cachedUrl && cachedQrDataUrl) {
+      const currentOrigin = window.location.origin;
+      if (cachedWindowOrigin === currentOrigin && cachedUrl && cachedQrDataUrl) {
         setUrl(cachedUrl);
         setQrDataUrl(cachedQrDataUrl);
         return;
       }
 
-      let resolved = cachedUrl;
+      let resolved = cachedWindowOrigin === currentOrigin ? cachedUrl : null;
 
       if (!resolved) {
         const port = window.location.port || '3000';
         const hostname = window.location.hostname;
+        const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
 
         if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-          resolved = `http://${hostname}:${port}`;
+          resolved = buildOrigin(protocol, hostname, port);
         } else {
-          resolved = `http://${hostname}:${port}`;
+          resolved = buildOrigin(protocol, hostname, port);
           try {
             const r = await fetch('/api/setup/hostname', { cache: 'no-store' });
             const data: { hostname?: string } = await r.json();
-            resolved = data.hostname ? `http://${data.hostname}.local:${port}` : resolved;
+            resolved = data.hostname ? buildOrigin(protocol, `${data.hostname}.local`, port) : resolved;
           } catch {
             // keep the fallback
           }
         }
         cachedUrl = resolved;
+        cachedWindowOrigin = currentOrigin;
       }
 
-      const dataUrl = await QRCode.toDataURL(resolved, { width: 180, margin: 1 });
-      cachedQrDataUrl = dataUrl;
-      setUrl(resolved);
-      setQrDataUrl(dataUrl);
+      try {
+        const dataUrl = await QRCode.toDataURL(resolved, { width: 180, margin: 1 });
+        if (cancelled) return;
+        cachedQrDataUrl = dataUrl;
+        setUrl(resolved);
+        setQrDataUrl(dataUrl);
+      } catch {
+        if (!cancelled) {
+          setUrl(resolved);
+          setQrDataUrl('');
+        }
+      }
     }
 
-    resolve();
+    void resolve();
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
 
   function copyUrl() {
-    navigator.clipboard.writeText(url).then(() => {
+    if (!url) return;
+    void navigator.clipboard.writeText(url).then(() => {
+      if (copiedResetTimeoutRef.current) clearTimeout(copiedResetTimeoutRef.current);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      copiedResetTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      setCopied(false);
     });
   }
 

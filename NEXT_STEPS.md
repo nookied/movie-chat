@@ -63,7 +63,6 @@ The `/popular` browse page with `fetchPopularMovies()` in `lib/yts.ts`, the `GET
 
 ### Possible follow-ups (small, opt-in)
 
-- **Show-count vs card-count mismatch on Newest tab:** `to = min(page * PAGE_SIZE, totalCount)` in `components/PopularMoviesPanel.tsx` can overstate the rendered card count when the client-side minimum-year filter in `lib/yts.ts` drops some of the over-fetched items. A chip has been filed to clamp `to` to `from - 1 + movies.length`.
 - **Direct-download button on the card:** V1 routes every click through the chat via `?rec=`. A future direct-download path would avoid the round-trip but needs a season picker for the TV case, which doesn't exist yet on this page (TV isn't in scope for the YTS browse).
 - **Genre picker on Newest tab:** deliberately omitted — YTS doesn't expose a genre-within-recent-years combination, so adding a genre dropdown would give unpredictable behaviour. Revisit only if the API changes.
 

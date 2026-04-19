@@ -1,0 +1,11 @@
+{
+  "extends": ["next/core-web-vitals"],
+  "overrides": [
+    {
+      "files": ["__tests__/**/*.ts", "__tests__/**/*.tsx", "__e2e__/**/*.ts", "__e2e__/**/*.tsx"],
+      "env": {
+        "node": true
+      }
+    }
+  ]
+}

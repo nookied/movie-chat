@@ -12,7 +12,7 @@ interface Props {
   isRecommendationDownloading: (recommendation: Recommendation, season?: number) => boolean;
   isStreaming: boolean;
   messages: ChatMessage[];
-  onDownload: (title: string, year?: number) => Promise<boolean>;
+  onDownload: (title: string, year?: number, mediaType?: 'movie' | 'tv') => Promise<boolean>;
   onNoSuitableQuality: (title: string, year?: number) => void;
   onNotFound: (title: string) => void;
   onPlexFound: (title: string, year?: number) => void;
@@ -36,7 +36,7 @@ interface ItemProps {
   isRecommendationDownloading: (recommendation: Recommendation, season?: number) => boolean;
   isStreaming: boolean;
   message: ChatMessage;
-  onDownload: (title: string, year?: number) => Promise<boolean>;
+  onDownload: (title: string, year?: number, mediaType?: 'movie' | 'tv') => Promise<boolean>;
   onNoSuitableQuality: (title: string, year?: number) => void;
   onNotFound: (title: string) => void;
   onPlexFound: (title: string, year?: number) => void;
@@ -94,7 +94,7 @@ interface SlotProps {
   index: number;
   isRecommendationDownloading: (recommendation: Recommendation, season?: number) => boolean;
   messageId: string;
-  onDownload: (title: string, year?: number) => Promise<boolean>;
+  onDownload: (title: string, year?: number, mediaType?: 'movie' | 'tv') => Promise<boolean>;
   onNoSuitableQuality: (title: string, year?: number) => void;
   onNotFound: (title: string) => void;
   onPlexFound: (title: string, year?: number) => void;

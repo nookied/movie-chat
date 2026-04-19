@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { YtsMovieEntry, YtsPopularResult, YtsPopularSortBy } from '@/types';
 import PopularMovieCard from './PopularMovieCard';
 
@@ -67,15 +67,26 @@ export default function PopularMoviesPanel() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const activeControllerRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     setPage(1);
   }, [sortBy, genre, minYear]);
 
+  useEffect(() => () => {
+    activeControllerRef.current?.abort();
+  }, []);
+
   const fetchKey = `${sortBy}|${genre}|${minYear}|${page}`;
 
   const loadPage = useCallback(
-    async (signal: AbortSignal) => {
+    async () => {
+      activeControllerRef.current?.abort();
+      const controller = new AbortController();
+      activeControllerRef.current = controller;
+      const requestId = ++requestIdRef.current;
+
       setLoading(true);
       setError(null);
       const params = new URLSearchParams();
@@ -89,28 +100,39 @@ export default function PopularMoviesPanel() {
         params.set('minimum_year', String(NEWEST_MIN_YEAR));
       }
       try {
-        const res = await fetch(`/api/yts/popular?${params.toString()}`, { signal });
+        const res = await fetch(`/api/yts/popular?${params.toString()}`, { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as YtsPopularResult;
-        if (signal.aborted) return;
+        if (controller.signal.aborted || requestId !== requestIdRef.current) return;
         setMovies(data.movies);
         setTotalCount(data.totalCount);
       } catch (err) {
-        if (signal.aborted || (err instanceof DOMException && err.name === 'AbortError')) return;
+        if (
+          controller.signal.aborted
+          || requestId !== requestIdRef.current
+          || (err instanceof DOMException && err.name === 'AbortError')
+        ) {
+          return;
+        }
         setError('YTS may be unavailable. Try again in a moment.');
       } finally {
-        if (!signal.aborted) setLoading(false);
+        if (requestId === requestIdRef.current && !controller.signal.aborted) {
+          setLoading(false);
+        }
+        if (activeControllerRef.current === controller) {
+          activeControllerRef.current = null;
+        }
       }
     },
     [sortBy, genre, minYear, page, activeTab],
   );
 
   useEffect(() => {
-    const ac = new AbortController();
-    const t = setTimeout(() => loadPage(ac.signal), FILTER_DEBOUNCE_MS);
+    const t = setTimeout(() => {
+      void loadPage();
+    }, FILTER_DEBOUNCE_MS);
     return () => {
       clearTimeout(t);
-      ac.abort();
     };
   }, [loadPage]);
 
@@ -119,8 +141,7 @@ export default function PopularMoviesPanel() {
   const to = from === 0 ? 0 : Math.min(from - 1 + movies.length, totalCount);
 
   const retry = () => {
-    const ac = new AbortController();
-    loadPage(ac.signal);
+    void loadPage();
   };
 
   const selectClass =

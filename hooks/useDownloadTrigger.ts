@@ -13,14 +13,19 @@ interface Options {
 }
 
 export function useDownloadTrigger({ addInfoMessage, pendingTorrents, trackStartedDownload }: Options) {
-  return useCallback(async (title: string, year?: number) => {
-    const exactEntry = pendingTorrents.current.get(torrentKey(title, year));
-    const fallbackEntries = year === undefined
-      ? Array.from(pendingTorrents.current.values()).filter(
-        (pending) => normalizeComparableTitle(pending.title) === normalizeComparableTitle(title)
-      )
-      : [];
-    const entry = exactEntry ?? (fallbackEntries.length === 1 ? fallbackEntries[0] : undefined);
+  return useCallback(async (title: string, year?: number, requestedMediaType?: 'movie' | 'tv') => {
+    const exactEntry = requestedMediaType
+      ? pendingTorrents.current.get(torrentKey(title, year, requestedMediaType))
+      : undefined;
+    const matchingEntries = Array.from(pendingTorrents.current.values()).filter((pending) => {
+      if (normalizeComparableTitle(pending.title) !== normalizeComparableTitle(title)) {
+        return false;
+      }
+      if (year !== undefined && pending.year !== year) return false;
+      if (requestedMediaType !== undefined && pending.mediaType !== requestedMediaType) return false;
+      return true;
+    });
+    const entry = exactEntry ?? (matchingEntries.length === 1 ? matchingEntries[0] : undefined);
     if (!entry) {
       addInfoMessage(downloadNotReadySystemMessage(title));
       return false;

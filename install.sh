@@ -48,20 +48,15 @@ if ! command -v git &>/dev/null; then
 fi
 
 if ! command -v node &>/dev/null; then
-  error "Node.js is not installed. Install it from https://nodejs.org (v18.18+) and try again."
+  error "Node.js is not installed. Install Node.js 24 LTS (recommended) or 20 LTS from https://nodejs.org and try again."
   MISSING=1
 else
   NODE_VER=$(node -e "process.stdout.write(process.version.slice(1))")
   NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
-  NODE_MINOR=$(echo "$NODE_VER" | cut -d. -f2)
-  # Next.js 15 requires ^18.18.0 || ^19.8.0 || >=20.0.0
   NODE_OK=0
-  if   [ "$NODE_MAJOR" -ge 20 ]; then NODE_OK=1
-  elif [ "$NODE_MAJOR" -eq 19 ] && [ "$NODE_MINOR" -ge 8  ]; then NODE_OK=1
-  elif [ "$NODE_MAJOR" -eq 18 ] && [ "$NODE_MINOR" -ge 18 ]; then NODE_OK=1
-  fi
+  if [ "$NODE_MAJOR" -eq 20 ] || [ "$NODE_MAJOR" -eq 24 ]; then NODE_OK=1; fi
   if [ "$NODE_OK" -eq 0 ]; then
-    error "Node.js $NODE_VER found — v18.18 or later required (v20+ recommended). Download from https://nodejs.org"
+    error "Node.js $NODE_VER found — Movie Chat supports Node.js 20 LTS and 24 LTS (24 LTS recommended). Download an LTS release from https://nodejs.org"
     MISSING=1
   else
     info "Node.js $NODE_VER"

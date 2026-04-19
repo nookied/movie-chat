@@ -20,6 +20,13 @@ describe('parseRecFromUrl() — happy path', () => {
     expect(rec).toEqual({ title: 'Inception', year: 2010, type: 'movie' });
   });
 
+  it('preserves strictYear when explicitly set alongside a valid year', () => {
+    const rec = parseRecFromUrl(
+      makeSearch({ title: 'The Thing', year: 1982, type: 'movie', strictYear: true }),
+    );
+    expect(rec).toEqual({ title: 'The Thing', year: 1982, type: 'movie', strictYear: true });
+  });
+
   it('returns a recommendation for a valid tv payload', () => {
     const rec = parseRecFromUrl(makeSearch({ title: 'Succession', type: 'tv' }));
     expect(rec).toEqual({ title: 'Succession', type: 'tv' });
@@ -93,9 +100,16 @@ describe('parseRecFromUrl() — rejects malformed input', () => {
     ).toEqual({ title: 'X', type: 'movie' });
   });
 
-  it('does not pass through extra fields like strictYear', () => {
+  it('does not pass through unrelated extra fields', () => {
     const rec = parseRecFromUrl(
       makeSearch({ title: 'X', type: 'movie', strictYear: true, hostile: 'payload' }),
+    );
+    expect(rec).toEqual({ title: 'X', type: 'movie' });
+  });
+
+  it('drops strictYear when the payload does not have a valid year', () => {
+    const rec = parseRecFromUrl(
+      makeSearch({ title: 'X', type: 'movie', year: 'abc', strictYear: true }),
     );
     expect(rec).toEqual({ title: 'X', type: 'movie' });
   });

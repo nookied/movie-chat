@@ -34,7 +34,7 @@
 
 | Service | What it's for | Cost |
 |---|---|---|
-| [Node.js](https://nodejs.org) v18.18+ | Run the app | Free |
+| [Node.js](https://nodejs.org) 24 LTS _(recommended)_ or 20 LTS | Run the app | Free |
 | [Plex Media Server](https://www.plex.tv) | Your media library | Free |
 | [Transmission](https://transmissionbt.com) | Download manager | Free |
 | [OpenRouter](https://openrouter.ai) account | AI chat (cloud) | Free tier available |
@@ -60,7 +60,7 @@ Paste this into your terminal. It clones the repo, installs dependencies, builds
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/nookied/movie-chat/main/install.sh)"
 ```
 
-You'll need [git](https://git-scm.com) and [Node.js](https://nodejs.org) v18.18+ installed first.
+You'll need [git](https://git-scm.com) and [Node.js](https://nodejs.org) 24 LTS installed first. Node 20 LTS is also supported.
 
 ### Option C — manual
 
@@ -207,7 +207,7 @@ Click the **flame icon** in the top-right header (next to "Movie Chat") to open 
 - **Most Downloaded** — filter by genre and minimum release year.
 - **Newest** — the last 3 years of releases, sorted by release year (default) or by popularity.
 
-Click any poster → you land back in chat with that title pre-loaded on a recommendation card, ready to check Plex and download.
+Click any poster → you land back in chat with that exact title/year pre-loaded on a recommendation card, ready to check Plex and download.
 
 ### Starting a new conversation
 
@@ -432,14 +432,20 @@ pm2 stop movie-chat
 npm run dev            # development server with hot reload (port 3001)
 npm run build          # production build (includes standalone output)
 npm run start          # production server (requires a build first)
-npm run lint           # ESLint
-npm test               # run the full suite, including install.sh/update.sh contract tests
+npm run lint           # ESLint (CI-safe, non-interactive)
+npm test               # Vitest unit + integration suite
+npm run test:coverage  # Vitest with enforced global coverage thresholds
+npm run build          # production build + typecheck
+npm run test:e2e       # production HTTP smoke tests against a built app
+npm run ci             # local mirror of the CI pipeline
 npm run electron:dev   # launch Electron app in dev mode (requires build first)
 npm run electron:build # build macOS .dmg in dist-electron/
 npm run release        # build + publish to GitHub Releases (needs GH_TOKEN)
 ```
 
 All configuration is read from `config.local.json` at runtime — no server restart needed after saving settings (except system prompt changes, which require `pm2 restart movie-chat`).
+
+Use Node 24 LTS for local development unless you have a reason not to. The repo pins `.nvmrc` / `.node-version` to `24`, CI verifies both Node 20 and Node 24, and both the npm entrypoints and the install/update scripts reject untested current majors like Node 25 so they fail fast instead of hanging mid-build.
 
 ---
 

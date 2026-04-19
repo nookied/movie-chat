@@ -76,6 +76,37 @@ if ! command -v npm &>/dev/null; then
   exit 1
 fi
 
+ensure_supported_node() {
+  if ! command -v node &>/dev/null; then
+    if [ "$AUTO" -eq 1 ]; then
+      echo "[$(date '+%Y-%m-%d %H:%M')] Skipped — Node.js is not installed. Install Node.js 24 LTS (recommended) or 20 LTS."
+    else
+      error "Node.js is not installed. Install Node.js 24 LTS (recommended) or 20 LTS from https://nodejs.org and re-run."
+    fi
+    exit 1
+  fi
+
+  local NODE_VER
+  local NODE_MAJOR
+  NODE_VER=$(node -e "process.stdout.write(process.version.slice(1))")
+  NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
+
+  if [ "$NODE_MAJOR" -ne 20 ] && [ "$NODE_MAJOR" -ne 24 ]; then
+    if [ "$AUTO" -eq 1 ]; then
+      echo "[$(date '+%Y-%m-%d %H:%M')] Skipped — Node.js $NODE_VER is unsupported. Movie Chat supports Node.js 20 LTS and 24 LTS."
+    else
+      error "Node.js $NODE_VER is unsupported. Movie Chat supports Node.js 20 LTS and 24 LTS (24 LTS recommended)."
+    fi
+    exit 1
+  fi
+
+  if [ "$AUTO" -eq 0 ]; then
+    info "Node.js $NODE_VER"
+  fi
+}
+
+ensure_supported_node
+
 # ── locate the install dir ────────────────────────────────────────────────────
 if [ -f "$(pwd)/ecosystem.config.js" ]; then
   INSTALL_DIR="$(pwd)"
@@ -93,8 +124,11 @@ LOCKFILE="$INSTALL_DIR/.update.lock"
 if [ -f "$LOCKFILE" ]; then
   OLD_PID=$(cat "$LOCKFILE" 2>/dev/null || echo "")
   if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
-    [ "$AUTO" -eq 1 ] && echo "[$(date '+%Y-%m-%d %H:%M')] Skipped — another update is already running (PID $OLD_PID)."
-    [ "$AUTO" -eq 0 ] && warn "Another update is already running (PID $OLD_PID). Aborting."
+    if [ "$AUTO" -eq 1 ]; then
+      echo "[$(date '+%Y-%m-%d %H:%M')] Skipped — another update is already running (PID $OLD_PID)."
+    else
+      warn "Another update is already running (PID $OLD_PID). Aborting."
+    fi
     exit 0
   fi
   # Stale lock file — previous run crashed; clean up and continue
@@ -132,7 +166,9 @@ fi
 
 if [ "$LOCAL" = "$REMOTE" ]; then
   info "Already up to date."
-  [ "$AUTO" -eq 0 ] && echo ""
+  if [ "$AUTO" -eq 0 ]; then
+    echo ""
+  fi
   exit 0
 fi
 
@@ -190,7 +226,9 @@ fi
 info "Downloaded latest code"
 
 # ── npm install ──────────────────────────────────────────────────────────────
-[ "$AUTO" -eq 0 ] && echo "  Installing dependencies..."
+if [ "$AUTO" -eq 0 ]; then
+  echo "  Installing dependencies..."
+fi
 if ! npm install 2>&1 | tail -5; then
   error "npm install failed."
   rollback
@@ -199,7 +237,9 @@ fi
 info "Dependencies ready"
 
 # ── build ────────────────────────────────────────────────────────────────────
-[ "$AUTO" -eq 0 ] && echo "  Building..."
+if [ "$AUTO" -eq 0 ]; then
+  echo "  Building..."
+fi
 if ! npm run build 2>&1 | tail -20; then
   error "Build failed."
   rollback

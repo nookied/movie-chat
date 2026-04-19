@@ -45,10 +45,11 @@ export function useAppDownloads() {
   const isMountedRef = useRef(true);
 
   useEffect(() => {
+    const controllers = controllersRef.current;
     return () => {
       isMountedRef.current = false;
-      controllersRef.current.forEach((controller) => controller.abort());
-      controllersRef.current.clear();
+      controllers.forEach((controller) => controller.abort());
+      controllers.clear();
     };
   }, []);
 
@@ -131,8 +132,13 @@ export function useAppDownloads() {
     ]);
   }, []);
 
-  const handleDownloadMoved = useCallback((name: string, year?: number) => {
-    setMovedTitles((prev) => addCappedSetEntry(prev, torrentKey(trackedDownloadBaseTitle(name), year), 100));
+  const handleDownloadMoved = useCallback((name: string, year?: number, mediaType?: 'movie' | 'tv') => {
+    if (!mediaType) return;
+    setMovedTitles((prev) => addCappedSetEntry(
+      prev,
+      torrentKey(trackedDownloadBaseTitle(name), year, mediaType),
+      100,
+    ));
   }, []);
 
   const handleDownloadComplete = useCallback((id: number) => {
@@ -144,6 +150,9 @@ export function useAppDownloads() {
 
   const isRecommendationDownloading = useCallback((recommendation: Recommendation, season?: number) => (
     activeDownloads.some((download) => {
+      if (download.mediaType && download.mediaType !== recommendation.type) {
+        return false;
+      }
       if (
         normalizeComparableTitle(trackedDownloadBaseTitle(download.torrentName))
         !== normalizeComparableTitle(recommendation.title)
@@ -161,7 +170,7 @@ export function useAppDownloads() {
   ), [activeDownloads]);
 
   const isRecommendationForcedInLibrary = useCallback((recommendation: Recommendation) => (
-    movedTitles.has(torrentKey(recommendation.title, recommendation.year))
+    movedTitles.has(torrentKey(recommendation.title, recommendation.year, recommendation.type))
   ), [movedTitles]);
 
   return {
