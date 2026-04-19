@@ -37,7 +37,7 @@ export default function ChatInterface() {
   const addInfoMessage = useCallback((content: string) => {
     setMessages((prev) => [
       ...prev,
-      { id: randomId(), role: 'info', content },
+      { id: randomId(), role: 'info', content, timestamp: Date.now() },
     ]);
   }, [setMessages]);
 

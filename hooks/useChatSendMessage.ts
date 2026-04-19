@@ -185,8 +185,9 @@ export function useChatSendMessage({
 
     const controller = new AbortController();
     controllersRef.current.add(controller);
-    const userMsg: ChatMessage = { id: randomId(), role: 'user', content: trimmedText };
-    const assistantMsg: ChatMessage = { id: randomId(), role: 'assistant', content: '' };
+    const now = Date.now();
+    const userMsg: ChatMessage = { id: randomId(), role: 'user', content: trimmedText, timestamp: now };
+    const assistantMsg: ChatMessage = { id: randomId(), role: 'assistant', content: '', timestamp: now };
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setIsStreaming(true);
 

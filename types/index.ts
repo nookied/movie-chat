@@ -4,6 +4,7 @@ export interface ChatMessage {
   id: string;
   role: MessageRole;
   content: string;
+  timestamp?: number;
   recommendations?: Recommendation[];
 }
 
