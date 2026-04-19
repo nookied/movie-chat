@@ -170,8 +170,8 @@ export default function PopularMoviesPanel() {
 
   return (
     <div className="max-w-[1400px] mx-auto p-4 sm:p-6">
-      <div className="flex flex-wrap gap-3 items-center mb-4">
-        <div className="flex rounded-lg bg-plex-card border border-plex-border overflow-hidden">
+      <div className="flex flex-nowrap gap-3 items-center mb-1 overflow-x-auto pb-1">
+        <div className="flex rounded-lg bg-plex-card border border-plex-border overflow-hidden shrink-0">
           {SORT_OPTIONS.map((o) => (
             <button
               key={o.value}
@@ -192,7 +192,7 @@ export default function PopularMoviesPanel() {
           <select
             value={newestSort}
             onChange={(e) => handleNewestSortChange(e.target.value as YtsPopularSortBy)}
-            className={selectClass}
+            className={`${selectClass} shrink-0`}
             aria-label="Newest sort order"
           >
             {NEWEST_SUB_SORTS.map((o) => (
@@ -204,7 +204,7 @@ export default function PopularMoviesPanel() {
             <select
               value={genre}
               onChange={(e) => handleGenreChange(e.target.value)}
-              className={selectClass}
+              className={`${selectClass} shrink-0`}
               aria-label="Filter by genre"
             >
               <option value="">All genres</option>
@@ -216,7 +216,7 @@ export default function PopularMoviesPanel() {
             <select
               value={yearValue}
               onChange={(e) => handleYearValueChange(e.target.value)}
-              className={selectClass}
+              className={`${selectClass} shrink-0`}
               aria-label="Release year range"
             >
               {YEAR_OPTIONS.map((o) => (
@@ -225,12 +225,14 @@ export default function PopularMoviesPanel() {
             </select>
           </>
         )}
+      </div>
 
-        <div className="ml-auto text-xs text-gray-400">
+      <div className="flex justify-end mb-3">
+        <span className="text-xs text-gray-400">
           {totalCount > 0 && !error
             ? `Showing ${from.toLocaleString()}–${to.toLocaleString()} of ${totalCount.toLocaleString()}`
             : null}
-        </div>
+        </span>
       </div>
 
       {error ? (
