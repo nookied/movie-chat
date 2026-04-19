@@ -14,7 +14,7 @@ export function trimChatHistory(
   return messages
     .filter((m) =>
       m.id && m.role && m.content &&
-      (!m.timestamp || now - m.timestamp < maxAgeMs)
+      (!!m.timestamp && now - m.timestamp < maxAgeMs)
     )
     .slice(-maxMessages);
 }

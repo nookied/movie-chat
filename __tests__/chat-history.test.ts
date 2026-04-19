@@ -21,14 +21,14 @@ describe('trimChatHistory', () => {
     expect(trimChatHistory([old, fresh], 100, 7 * DAY_MS, EPOCH)).toEqual([fresh]);
   });
 
-  it('keeps messages without a timestamp (backward compatibility)', () => {
+  it('drops messages without a timestamp', () => {
     const m = msg({ id: 'no-ts' });
-    expect(trimChatHistory([m], 100, 7 * DAY_MS, EPOCH)).toEqual([m]);
+    expect(trimChatHistory([m], 100, 7 * DAY_MS, EPOCH)).toEqual([]);
   });
 
   it('trims to maxMessages keeping the most recent entries', () => {
     const msgs = Array.from({ length: 5 }, (_, i) =>
-      msg({ id: `m${i}`, content: `msg ${i}` })
+      msg({ id: `m${i}`, content: `msg ${i}`, timestamp: EPOCH - DAY_MS })
     );
     expect(trimChatHistory(msgs, 3, 7 * DAY_MS, EPOCH)).toEqual(msgs.slice(-3));
   });
