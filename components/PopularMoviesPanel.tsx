@@ -116,7 +116,7 @@ export default function PopularMoviesPanel() {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const from = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const to = Math.min(page * PAGE_SIZE, totalCount);
+  const to = from === 0 ? 0 : Math.min(from - 1 + movies.length, totalCount);
 
   const retry = () => {
     const ac = new AbortController();
