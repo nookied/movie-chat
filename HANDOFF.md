@@ -1,5 +1,24 @@
 # Handoff
 
+## Latest pass (2026-04-21 — Newest tab sort fixes + panel layout)
+
+### What changed
+
+**Fix** — Newest tab "Sort by popularity" was actually sorting by `rating` (IMDb score), not popularity. Renamed it to "Sort by rating" and added a genuine "Sort by popularity" option backed by `sort_by=seeds` (active seeders = real-time demand proxy, distinct from all-time `download_count` used by the Most Downloaded tab). The `seeds` sort was already whitelisted in the API route and in `YtsPopularSortBy` — only `NEWEST_SUB_SORTS` in `PopularMoviesPanel.tsx` needed updating.
+
+**Layout** — Tab buttons (Most Downloaded / Newest) and their filter/sort controls were on a single horizontally-scrolling `flex-nowrap` row, so there was no visual separation between the two concerns. Split into two rows: tabs on row 1, controls on row 2.
+
+Files changed: `components/PopularMoviesPanel.tsx`, `CLAUDE.md`, `AGENTS.md` (key-files table updated to reflect both changes).
+
+### Validation
+
+```
+npm run lint   # pass, 0 warnings
+npm test       # 35 files / 632 tests — pass (no new tests needed; changes are UI-only wiring and label corrections)
+```
+
+---
+
 ## Latest pass (2026-04-19 — year range filter + hover strip fix)
 
 ### What changed
