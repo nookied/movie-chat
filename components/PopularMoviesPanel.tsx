@@ -170,7 +170,7 @@ export default function PopularMoviesPanel() {
 
   return (
     <div className="max-w-[1400px] mx-auto p-4 sm:p-6">
-      <div className="flex flex-nowrap gap-3 items-center mb-1 overflow-x-auto pb-1">
+      <div className="flex flex-nowrap gap-3 items-center mb-2 overflow-x-auto pb-1">
         <div className="flex rounded-lg bg-plex-card border border-plex-border overflow-hidden shrink-0">
           {SORT_OPTIONS.map((o) => (
             <button
@@ -187,7 +187,9 @@ export default function PopularMoviesPanel() {
             </button>
           ))}
         </div>
+      </div>
 
+      <div className="flex flex-nowrap gap-3 items-center mb-1 overflow-x-auto pb-1">
         {activeTab === 'year' ? (
           <select
             value={newestSort}
