@@ -1,7 +1,7 @@
 # movie-chat — QA Test Scenarios
 
 Comprehensive test coverage map for the movie-chat application.
-Updated: 2026-04-19 (post bug-hunt + simplify pass)
+Updated: 2026-04-21 (Newest tab sort fixes + panel layout)
 
 ---
 
@@ -288,9 +288,10 @@ Key scenarios: readConfig/writeConfig/cfg caching, sensitive field masking, diag
 | P3 | Select genre → results update | Debounced 300ms; grid re-renders; pagination resets to page 1 | Manual |
 | P4 | Select a year range (e.g. 2020–2024) | Both `minimum_year` and `maximum_year` sent to API; server scans raw YTS pages in 50-item chunks until it can fill the requested filtered page; `totalCount` is exact at end-of-scan or a bounded estimate otherwise | `yts-popular.test.ts` |
 | P5 | Pagination Next/Prev | Updates `page` query param; disables at boundaries; skeleton during load | Manual |
-| P6 | Switch to Newest tab | Genre + year dropdowns disappear; single sort-order dropdown appears defaulted to "Sort by year" | Manual |
-| P7 | Newest + Sort by year | Returns 2026/2027 releases at the top | Manual |
-| P8 | Newest + Sort by popularity | All cards have year ≥ currentYear − 3 (implicit `NEWEST_MIN_YEAR`); no all-time classics leak through | Manual + `yts-popular.test.ts` |
+| P6 | Switch to Newest tab | Genre + year dropdowns disappear; sort-order dropdown appears with 3 options defaulted to "Sort by year" | Manual |
+| P7 | Newest + Sort by year | Returns most recent releases at the top | Manual |
+| P8 | Newest + Sort by popularity | Sends `sort_by=seeds`; all cards have year ≥ currentYear − 3; no all-time classics leak through | Manual + `yts-popular.test.ts` |
+| P8a | Newest + Sort by rating | Sends `sort_by=rating`; results scoped to last 3 years same as P8 | Manual |
 | P9 | Switch tabs back to Most Downloaded | Genre reset to "All genres", minYear reset to "Any year", newestSort reset to `year` | Manual |
 | P10 | Click a card | Navigates to `/?rec=<json>`; chat opens with recommendation card pre-loaded | Manual + `recUrlParam.test.ts` |
 | P11 | YTS upstream failure | `/api/yts/popular` returns 502; panel shows error + "Try again" button | `api-yts-popular.test.ts` |
@@ -307,7 +308,7 @@ Key scenarios: readConfig/writeConfig/cfg caching, sensitive field masking, diag
 ## Running the Tests
 
 ```bash
-npm test                        # run all 623 unit/integration tests once
+npm test                        # run all 632 unit/integration tests once
 npm run test:watch              # watch mode
 npm run test:coverage           # with coverage thresholds
 npm run test:e2e                # built-app HTTP smoke tests

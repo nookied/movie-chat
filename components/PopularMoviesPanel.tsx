@@ -34,20 +34,20 @@ const YEAR_OPTIONS: Array<{ value: string; label: string; min?: number; max?: nu
 })();
 
 // Newest tab's secondary sort. 'year' is the tab's implicit default (most recent
-// releases first); 'rating' lets the user re-rank the same newest-first slice by
-// review score, which is more useful than download_count here because recent
-// releases haven't accumulated downloads yet.
+// releases first); 'seeds' re-ranks by current seeders (real-time popularity proxy);
+// 'rating' re-ranks by IMDb score.
 const NEWEST_SUB_SORTS: Array<{ value: YtsPopularSortBy; label: string }> = [
   { value: 'year', label: 'Sort by year' },
-  { value: 'rating', label: 'Sort by popularity' },
+  { value: 'seeds', label: 'Sort by popularity' },
+  { value: 'rating', label: 'Sort by rating' },
 ];
 
 const PAGE_SIZE = 20;
 const FILTER_DEBOUNCE_MS = 300;
 
 // The Newest tab is implicitly scoped to the last few years. Without this
-// the 'rating' sort surfaces all-time high-rated concerts/kids titles from
-// any decade, which defeats the point of a "Newest" tab.
+// the 'rating' and 'seeds' sorts surface all-time results from any decade,
+// which defeats the point of a "Newest" tab.
 function newestMinYear(): number {
   return new Date().getFullYear() - 3;
 }
@@ -170,7 +170,7 @@ export default function PopularMoviesPanel() {
 
   return (
     <div className="max-w-[1400px] mx-auto p-4 sm:p-6">
-      <div className="flex flex-nowrap gap-3 items-center mb-1 overflow-x-auto pb-1">
+      <div className="flex flex-nowrap gap-3 items-center mb-2 overflow-x-auto pb-1">
         <div className="flex rounded-lg bg-plex-card border border-plex-border overflow-hidden shrink-0">
           {SORT_OPTIONS.map((o) => (
             <button
@@ -187,7 +187,9 @@ export default function PopularMoviesPanel() {
             </button>
           ))}
         </div>
+      </div>
 
+      <div className="flex flex-nowrap gap-3 items-center mb-1 overflow-x-auto pb-1">
         {activeTab === 'year' ? (
           <select
             value={newestSort}
