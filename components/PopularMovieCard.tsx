@@ -56,7 +56,7 @@ export default function PopularMovieCard({ movie }: Props) {
       </div>
 
       <div className="p-2 space-y-1">
-        <h3 className="text-sm text-white font-medium truncate" title={movie.title}>
+        <h3 className="text-sm text-white font-medium line-clamp-2" title={movie.title}>
           {movie.title}
         </h3>
         <div className="text-xs text-gray-400 truncate">
