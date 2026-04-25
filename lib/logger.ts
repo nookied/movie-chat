@@ -6,7 +6,7 @@
  * stdout capture and dev-mode terminal output continue to work.
  *
  * Log directory resolution (first non-empty wins):
- *   1. process.env.MOVIE_CHAT_LOG_DIR  — set by electron/main.js
+ *   1. process.env.MOVIE_CHAT_LOG_DIR  — optional override
  *   2. dirname(CONFIG_PATH)/logs       — same root as config.local.json
  *   3. ./logs                          — bare-metal fallback
  *

@@ -122,5 +122,4 @@ Do not combine any of the above with:
 - New provider integrations
 - State management library adoption
 - Data fetching library adoption
-- Electron lifecycle refactors
 - Changes to Plex/Transmission topology assumptions

@@ -24,7 +24,12 @@ export async function GET(req: NextRequest) {
   ].filter(Boolean) as string[];
 
   const resolved = path.resolve(dirPath);
-  const isAllowed = allowedDirs.some((allowed) => resolved.startsWith(path.resolve(allowed)));
+  // Require exact match or a true child — a bare startsWith lets "/media/lib" also
+  // authorise "/media/library-private", leaking free-space info from unrelated mounts.
+  const isAllowed = allowedDirs.some((allowed) => {
+    const base = path.resolve(allowed);
+    return resolved === base || resolved.startsWith(base + path.sep);
+  });
   if (!isAllowed) {
     return NextResponse.json({ error: 'path is not a configured directory' }, { status: 403 });
   }

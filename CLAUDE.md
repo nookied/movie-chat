@@ -18,6 +18,7 @@
 | `lib/chatTags.ts` | Shared `<recommendation>` / `<download>` parsing, stripping, and tag serialization helpers; carries `strictYear` end-to-end |
 | `NEXT_STEPS.md` | Consolidated planned work — chat route modularization, setup/settings consolidation, refactor risk notes, and follow-ups on shipped features |
 | `lib/logger.ts` | Structured JSONL logger — daily rotation, 7-day retention, 32 KB entry / 50 MB file caps |
+| `lib/version.ts` | Shared `getVersion()` — reads `package.json` at `process.cwd()`; used by `/api/config` and `/api/diagnostics/bundle`. Not cached (tests override fs mid-file) |
 | `app/api/diagnostics/bundle/route.ts` | GET endpoint — token-gated zip-less JSON bundle (logs + redacted config + version) |
 | `components/ChatInterface.tsx` | Chat composition root — wires history, streaming, downloads, and message rendering together |
 | `hooks/useChatSendMessage.ts` | Streaming chat request orchestration — retry/backoff, Ollama fallback, silent recommendation-tag retry |
@@ -50,10 +51,6 @@
 | `update.sh` | Safe updater — dirty-worktree guard, rollback, lock file, optional auto-update cron target |
 | `instrumentation.ts` | Next.js startup hook — starts autoMove poller |
 | `types/index.ts` | All shared TypeScript types |
-| `electron/main.js` | Electron main process — auto-setup → server → window lifecycle |
-| `electron/setup.js` | Silent dependency installer — Homebrew, Plex, Transmission, Ollama |
-| `electron/setup.html` | Static progress screen shown during auto-setup |
-| `electron/preload.js` | IPC bridge between setup.html and main process |
 | `app/setup/page.tsx` | Post-install wizard — summary, Plex token, metadata keys |
 | `app/api/setup/status/route.ts` | Config completeness check (at least one LLM configured) |
 | `app/api/setup/detect/route.ts` | Auto-detect Ollama/Plex/Transmission on network |
@@ -100,18 +97,9 @@ Four mechanisms compensate for unreliable tag emission from small/free LLMs:
 3. **Prescriptive info messages** (`lib/chat/systemMessages.ts` + `ChatInterface.tsx`): Instead of teaching the model 6 response patterns, each `[System]` message includes the exact wording to use. Moves decision logic from the LLM to app code.
 4. **Silent tag retry** (`hooks/useChatSendMessage.ts`): After streaming, if no `<recommendation>` tag is found and the response is substantive, a background follow-up nudges the model to emit the tag. The card appears with a brief delay.
 
-## Electron desktop app
+## Setup wizard
 
-The app can be packaged as a macOS `.dmg` via Electron. The Electron wrapper:
-
-- **First launch**: `electron/setup.js` installs Homebrew → Plex → Transmission (GUI + RPC enabled) → Ollama + model via `brew install`. Progress shown in `electron/setup.html`.
-- **After setup**: Starts the Next.js standalone server as a child process, opens a BrowserWindow to `localhost:3000`. The post-install wizard at `/setup` collects Plex token and optional API keys.
-- **Normal launch**: Detects config exists, skips setup, goes straight to server → window.
-- **Lifecycle**: Window close → minimize to tray (macOS). App quit → kills server + ollama serve processes.
-- **Config storage**: `~/Library/Application Support/MovieChat/config/config.local.json` via `CONFIG_PATH` env var.
-- **Build**: `npm run electron:build` → `.dmg` in `dist-electron/`. Dev: `npm run electron:dev`.
-
-The setup wizard (`app/setup/page.tsx`) serves dual purpose: post-install guided config in Electron, and first-run redirect for bare-metal installs (middleware checks config completeness).
+`app/setup/page.tsx` is a first-run redirect target for bare-metal installs — middleware checks config completeness (at least one LLM configured) and redirects new installs to `/setup` to collect the Plex token and optional API keys before landing on the chat.
 
 ## Architecture notes
 
@@ -142,10 +130,10 @@ Map out the architecture before attempting fixes: what services are involved, wh
 
 - **Sources in use**: `server`, `llm`, `autoMove`, `transmission`, `plex`, `move`, `reviews`, `torrents`. Tag new ones consistently.
 - **Log directory** (resolution order):
-  1. `process.env.MOVIE_CHAT_LOG_DIR` — set by `electron/main.js` to `~/Library/Application Support/MovieChat/logs/`
+  1. `process.env.MOVIE_CHAT_LOG_DIR` — optional override for reverse-proxied / containerised deployments
   2. `dirname(CONFIG_PATH)/logs` — same root as `config.local.json`
   3. `./logs` — bare-metal fallback alongside `pm2-out.log` / `pm2-error.log` (set in `ecosystem.config.js`)
-- **Caps**: 32 KB per entry (truncates with `_truncated: true`), 50 MB per daily file (drops to console-only with one warn), 7-day file retention. Electron's own lifecycle log (`electron.jsonl`) rotates at 2 MB by renaming to `electron.1.jsonl`.
+- **Caps**: 32 KB per entry (truncates with `_truncated: true`), 50 MB per daily file (drops to console-only with one warn), 7-day file retention.
 - **Chat content** is logged in full (user message + assistant response) per turn — useful for prompt debugging, but bundles contain household conversation data. Worth flagging to anyone you ship a bundle to.
 
 ## Diagnostics bundle
@@ -177,16 +165,9 @@ CI runs `npm run lint`, `npm run test:coverage`, `npm run build`, and `npm run t
 - Auto-update: cron runs `update.sh --auto` nightly at 3 AM, logs to `~/.movie-chat-update.log`
 - If server has drifted: `git fetch origin && git reset --hard origin/main && npm run build && pm2 restart movie-chat`
 
-### Electron desktop app
-- Dev: `npm run electron:dev` (requires `npm run build` first for standalone output)
-- Build: `npm run electron:build` → `.dmg` in `dist-electron/`
-- Release: `GH_TOKEN=<token> npm run release` → builds + publishes to GitHub Releases
-- First launch installs deps via Homebrew, then opens the setup wizard
-- Auto-updater checks GitHub Releases every 4h; prompts user to restart when update is ready
-
 ### Landing page
 - Static site at `docs/index.html`, hosted via GitHub Pages at [nookied.github.io/movie-chat](https://nookied.github.io/movie-chat)
-- Download button auto-resolves to latest `.dmg` via GitHub API
+- Primary CTA is the `install.sh` one-liner (copy-to-clipboard code block); secondary links go to the GitHub repo + README
 - Screenshots in `docs/images/` — strip metadata before committing (`sips -d all` or `exiftool -all=`)
 
 ## Documentation maintenance

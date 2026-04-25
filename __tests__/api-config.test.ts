@@ -117,6 +117,15 @@ describe('GET /api/config', () => {
     const body = await res.json();
     expect(body.diagnosticsToken).toBe('abc-123-def');
   });
+
+  it('queries diagnosticsToken under the same env-var name the bundle route reads', async () => {
+    // Regression: /api/config read DIAGNOSTICS_TOKEN while the bundle route
+    // read MOVIE_CHAT_DIAGNOSTICS_TOKEN — an env-var-only operator saw the
+    // token as unset in the UI while the endpoint actually worked.
+    await GET();
+    const diagnosticsCall = cfgMock.mock.calls.find(([key]) => key === 'diagnosticsToken');
+    expect(diagnosticsCall?.[1]).toBe('MOVIE_CHAT_DIAGNOSTICS_TOKEN');
+  });
 });
 
 // ─── POST: merging ──────────────────────────────────────────────────────

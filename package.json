@@ -7,7 +7,6 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
@@ -20,13 +19,9 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "setup": "bash setup.sh",
     "update": "bash update.sh",
-    "uninstall:app": "bash uninstall.sh",
-    "electron:dev": "electron .",
-    "electron:build": "npm run build && electron-builder --mac",
-    "release": "npm run build && electron-builder --mac --publish always"
+    "uninstall:app": "bash uninstall.sh"
   },
   "dependencies": {
-    "electron-updater": "^6.8.3",
     "next": "^15.5.12",
     "qrcode": "^1.5.4",
     "react": "^18.3.0",
@@ -42,8 +37,6 @@
     "@types/react-dom": "^18.3.0",
     "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.0",
-    "electron": "^41.2.0",
-    "electron-builder": "^26.0.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "^15.5.12",
     "postcss": "^8.4.0",

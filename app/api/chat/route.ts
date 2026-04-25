@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`,
-            'HTTP-Referer': 'http://localhost:3000',
+            'HTTP-Referer': 'https://github.com/nookied/movie-chat',
             'X-Title': 'Movie Chat',
           },
           body: JSON.stringify({
