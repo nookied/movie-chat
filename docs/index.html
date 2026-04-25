@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Movie Chat — AI movie recommendations, one click away</title>
+  <title>Movie Chat — AI movie recommendations for your Plex library</title>
   <link rel="icon" type="image/png" href="favicon.png">
-  <meta name="description" content="Download Movie Chat for Mac. It installs everything you need — Plex, Transmission, and a local AI — and you're watching movies in minutes.">
+  <meta name="description" content="Self-hosted AI companion for your Plex library. Chat with it, it recommends movies, checks what you already own, and downloads the rest.">
   <meta property="og:title" content="Movie Chat">
-  <meta property="og:description" content="AI movie recommendations with one-click downloads. Installs everything automatically.">
+  <meta property="og:description" content="Self-hosted AI companion for your Plex library. Chat with it, it recommends movies, checks what you already own, and downloads the rest.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://nookied.github.io/movie-chat">
   <style>
@@ -76,31 +76,106 @@
       margin: 0 auto 40px;
     }
 
-    .cta {
+    .install-block {
+      display: inline-block;
+      text-align: left;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      color: var(--text);
+      max-width: 100%;
+    }
+
+    .install-label {
+      display: block;
+      font-size: 12px;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    }
+
+    .install-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .install-cmd {
+      flex: 1;
+      overflow-x: auto;
+      white-space: nowrap;
+      user-select: all;
+      -webkit-user-select: all;
+    }
+
+    .copy-btn {
+      flex-shrink: 0;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 8px;
+      color: var(--muted);
+      cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 10px;
-      background: var(--accent);
-      color: #000;
-      font-size: 17px;
-      font-weight: 600;
-      padding: 14px 32px;
-      border-radius: 12px;
+      justify-content: center;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    }
+
+    .copy-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .copy-btn svg {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .copy-btn.copied {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .cta-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 24px;
+    }
+
+    .cta-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: transparent;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 500;
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
       text-decoration: none;
-      transition: background 0.2s;
+      transition: border-color 0.2s, color 0.2s;
     }
 
-    .cta:hover { background: var(--accent-hover); }
-
-    .cta svg {
-      width: 20px;
-      height: 20px;
-      fill: currentColor;
-    }
+    .cta-secondary:hover { border-color: var(--accent); color: var(--accent); }
 
     .cta-note {
       display: block;
-      margin-top: 12px;
+      margin-top: 16px;
       font-size: 13px;
       color: var(--dim);
     }
@@ -148,7 +223,8 @@
       padding: 40px 0 80px;
     }
 
-    .features h2 {
+    .features h2,
+    .steps h2 {
       font-size: 14px;
       font-weight: 600;
       text-transform: uppercase;
@@ -196,16 +272,6 @@
       padding: 0 0 80px;
     }
 
-    .steps h2 {
-      font-size: 14px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      color: var(--accent);
-      text-align: center;
-      margin-bottom: 40px;
-    }
-
     .step-list {
       display: flex;
       flex-direction: column;
@@ -248,41 +314,6 @@
       color: var(--muted);
     }
 
-    /* ── Dev section ──────────────────────────────────────────── */
-
-    .dev {
-      border-top: 1px solid var(--border);
-      padding: 60px 0;
-      text-align: center;
-    }
-
-    .dev h2 {
-      font-size: 14px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      color: var(--muted);
-      margin-bottom: 16px;
-    }
-
-    .dev code {
-      display: inline-block;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 20px;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 14px;
-      color: var(--text);
-      user-select: all;
-    }
-
-    .dev p {
-      margin-top: 12px;
-      font-size: 13px;
-      color: var(--dim);
-    }
-
     /* ── Footer ───────────────────────────────────────────────── */
 
     footer {
@@ -313,14 +344,29 @@
       </div>
       <h1>Movie Chat</h1>
       <p class="tagline">
-        An AI companion that manages your Plex library.<br>
+        A self-hosted AI companion for your Plex library.<br>
         Tell it what you want to watch — it handles the rest.
       </p>
-      <a class="cta" id="download-btn" href="https://github.com/nookied/movie-chat/releases/latest">
-        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-        Download for Mac
-      </a>
-      <span class="cta-note">macOS only. Free and open source. Sets up everything automatically.</span>
+      <div class="install-block">
+        <span class="install-label">Install on macOS or Linux</span>
+        <div class="install-row">
+          <code class="install-cmd" id="install-cmd">/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/nookied/movie-chat/main/install.sh)"</code>
+          <button type="button" class="copy-btn" id="copy-btn" aria-label="Copy install command" title="Copy">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="cta-row">
+        <a class="cta-secondary" href="https://github.com/nookied/movie-chat">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          View on GitHub
+        </a>
+        <a class="cta-secondary" href="https://github.com/nookied/movie-chat/blob/main/README.md">Read the docs</a>
+      </div>
+      <span class="cta-note">Free and open source. Runs locally, stays on your network.</span>
     </div>
   </section>
 
@@ -358,9 +404,9 @@
           </div>
         </div>
         <div class="feature">
-          <div class="feature-title">Open it and it just works</div>
+          <div class="feature-title">Browse what's popular</div>
           <div class="feature-desc">
-            No setup guides. No Terminal. The app installs Plex, a download manager, and a local AI on its own. You just wait a few minutes.
+            Dedicated browse page for the most-downloaded and newest movies on YTS. Click a poster to pull the title straight into chat.
           </div>
         </div>
         <div class="feature">
@@ -372,7 +418,7 @@
         <div class="feature">
           <div class="feature-title">Nothing leaves your house</div>
           <div class="feature-desc">
-            The AI runs on your computer. Your movie taste, your library, your conversations — all private, all local.
+            The AI can run locally on your machine via Ollama. Your movie taste, your library, your conversations — all private, all local.
           </div>
         </div>
       </div>
@@ -382,27 +428,27 @@
   <!-- Steps -->
   <section class="steps">
     <div class="container">
-      <h2>From download to movie night in 5 minutes</h2>
+      <h2>From install to movie night</h2>
       <div class="step-list">
         <div class="step">
           <div class="step-num">1</div>
           <div class="step-content">
-            <div class="step-title">Download and open the app</div>
-            <div class="step-desc">Drag to Applications, double-click. No account needed.</div>
+            <div class="step-title">Set up Plex, Transmission, and Node.js</div>
+            <div class="step-desc">All three are free. Movie Chat sits on top of your existing Plex server and Transmission download client.</div>
           </div>
         </div>
         <div class="step">
           <div class="step-num">2</div>
           <div class="step-content">
-            <div class="step-title">Wait while it sets up</div>
-            <div class="step-desc">A progress bar installs everything behind the scenes. Plex, a download manager, a local AI. You don't touch anything.</div>
+            <div class="step-title">Run the install command</div>
+            <div class="step-desc">It clones the repo, installs dependencies, builds the app, and optionally sets up pm2 for auto-start on boot.</div>
           </div>
         </div>
         <div class="step">
           <div class="step-num">3</div>
           <div class="step-content">
-            <div class="step-title">A short wizard finishes up</div>
-            <div class="step-desc">Connect your Plex library and add a couple of free keys for movie posters and ratings. Everything else is already done.</div>
+            <div class="step-title">Open Settings and add your keys</div>
+            <div class="step-desc">OpenRouter (or local Ollama), TMDB, OMDB. All three have generous free tiers. Saved locally — nothing leaves the machine.</div>
           </div>
         </div>
         <div class="step">
@@ -416,35 +462,52 @@
     </div>
   </section>
 
-  <!-- Developer install -->
-  <section class="dev">
-    <div class="container">
-      <h2>Or install from the command line</h2>
-      <code>/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/nookied/movie-chat/main/install.sh)"</code>
-      <p>Requires Node.js 18.18+ and git. See <a href="https://github.com/nookied/movie-chat">GitHub</a> for full docs.</p>
-    </div>
-  </section>
-
   <!-- Footer -->
   <footer>
     <div class="container">
       <a href="https://github.com/nookied/movie-chat">GitHub</a>
       &nbsp;&middot;&nbsp;
-      <a href="https://github.com/nookied/movie-chat/releases">Releases</a>
+      <a href="https://github.com/nookied/movie-chat/blob/main/README.md">Docs</a>
       &nbsp;&middot;&nbsp;
       <a href="https://github.com/nookied/movie-chat/blob/main/CHANGELOG.md">Changelog</a>
     </div>
   </footer>
 
   <script>
-    // Point download button directly to the latest .dmg asset
-    fetch('https://api.github.com/repos/nookied/movie-chat/releases/latest')
-      .then(r => r.json())
-      .then(release => {
-        const dmg = release.assets?.find(a => a.name.endsWith('.dmg'));
-        if (dmg) document.getElementById('download-btn').href = dmg.browser_download_url;
-      })
-      .catch(() => {}); // falls back to releases page
+    (function () {
+      var btn = document.getElementById('copy-btn');
+      var cmd = document.getElementById('install-cmd');
+      if (!btn || !cmd) return;
+      var resetTimer;
+      btn.addEventListener('click', function () {
+        var text = cmd.textContent.trim();
+        var done = function () {
+          btn.classList.add('copied');
+          btn.setAttribute('aria-label', 'Copied');
+          btn.setAttribute('title', 'Copied');
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(function () {
+            btn.classList.remove('copied');
+            btn.setAttribute('aria-label', 'Copy install command');
+            btn.setAttribute('title', 'Copy');
+          }, 1600);
+        };
+        var fallback = function () {
+          var range = document.createRange();
+          range.selectNodeContents(cmd);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+          try { if (document.execCommand('copy')) done(); } catch (e) {}
+          sel.removeAllRanges();
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(fallback);
+        } else {
+          fallback();
+        }
+      });
+    })();
   </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 # Movie Chat
 
-**v2.2.0** — An AI companion that manages your Plex library. Tell it what you want to watch — it handles the rest.
+**v2.3.0** — A self-hosted AI companion for your Plex library. Tell it what you want to watch — it handles the rest.
 
 **Website:** [nookied.github.io/movie-chat](https://nookied.github.io/movie-chat)
 
@@ -28,9 +28,7 @@
 
 ## Prerequisites
 
-**Desktop app (Option A):** Just a Mac. The app installs everything else automatically on first launch.
-
-**Manual install (Options B & C):** You'll need these set up beforehand:
+You'll need these set up beforehand:
 
 | Service | What it's for | Cost |
 |---|---|---|
@@ -46,13 +44,7 @@
 
 ## Installation
 
-### Option A — Desktop app (recommended)
-
-Download the `.dmg` from [Releases](https://github.com/nookied/movie-chat/releases), open it, and drag Movie Chat to your Applications folder. On first launch, the app automatically installs Plex, Transmission, Ollama, and a local AI model — no Terminal required. A setup wizard walks you through the final configuration.
-
-> **Note:** The app is not yet signed with an Apple Developer certificate. On first open, right-click the app → Open → Open to bypass Gatekeeper.
-
-### Option B — one-liner (for developers)
+### One-liner (recommended)
 
 Paste this into your terminal. It clones the repo, installs dependencies, builds, and optionally sets up auto-start:
 
@@ -60,9 +52,9 @@ Paste this into your terminal. It clones the repo, installs dependencies, builds
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/nookied/movie-chat/main/install.sh)"
 ```
 
-You'll need [git](https://git-scm.com) and [Node.js](https://nodejs.org) 20+ installed first. The one-liner installs Node.js automatically if it's missing.
+You'll need [git](https://git-scm.com) and [Node.js](https://nodejs.org) 20+ installed first. The one-liner installs Node.js automatically if it's missing (via Homebrew on macOS, NodeSource on Linux).
 
-### Option C — manual
+### Manual
 
 ```bash
 git clone https://github.com/nookied/movie-chat.git
@@ -331,11 +323,7 @@ Switch to a specific model in Settings (e.g. `mistralai/mistral-small-3.1-24b-in
 
 ## Updating
 
-### Desktop app
-
-Updates are automatic. The app checks for new versions every 4 hours. When an update is available, it downloads in the background and prompts you to restart.
-
-### Manual install — manual update
+### Manual update
 
 Run this from inside the app folder:
 
@@ -347,7 +335,7 @@ It checks if a newer version is available, shows what changed, and — if you co
 
 > Maintainer note: if a change touches install/update/deployment behavior, always inspect `update.sh` and keep the shell-script tests green.
 
-### Manual install — automatic updates
+### Automatic updates
 
 During setup (`npm run setup` or the one-liner installer) you're offered the option to enable **nightly auto-updates**. This adds a cron job that silently checks for updates every night at 3 AM and applies them if found. If the checkout has local tracked changes, the nightly run skips and writes the reason to the log instead of forcing a merge.
 
@@ -372,12 +360,6 @@ crontab -e   # delete the movie-chat line and save
 ---
 
 ## Uninstalling
-
-### Desktop app
-
-Drag Movie Chat from Applications to the Trash. Your configuration is stored in `~/Library/Application Support/MovieChat/` — delete that folder too if you want a clean removal. Plex, Transmission, and Ollama were installed as separate apps and can be removed individually.
-
-### Manual install
 
 **One-liner (if you installed with the one-liner):**
 
@@ -436,12 +418,8 @@ npm run start          # production server (requires a build first)
 npm run lint           # ESLint (CI-safe, non-interactive)
 npm test               # Vitest unit + integration suite
 npm run test:coverage  # Vitest with enforced global coverage thresholds
-npm run build          # production build + typecheck
 npm run test:e2e       # production HTTP smoke tests against a built app
 npm run ci             # local mirror of the CI pipeline
-npm run electron:dev   # launch Electron app in dev mode (requires build first)
-npm run electron:build # build macOS .dmg in dist-electron/
-npm run release        # build + publish to GitHub Releases (needs GH_TOKEN)
 ```
 
 All configuration is read from `config.local.json` at runtime — no server restart needed after saving settings (except system prompt changes, which require `pm2 restart movie-chat`).

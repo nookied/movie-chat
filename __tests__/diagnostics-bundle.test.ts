@@ -240,8 +240,8 @@ describe('log collection', () => {
     fsMock.readdirSync.mockReturnValue([
       'movie-chat-2026-04-13.jsonl',
       'movie-chat-2026-04-12.jsonl',
-      'electron.jsonl',
-      'electron.1.jsonl',
+      'custom.jsonl',
+      'custom.1.jsonl',
       'pm2-out.log',
       'pm2-error.log',
       'README.txt', // excluded by extension
@@ -254,8 +254,8 @@ describe('log collection', () => {
     const body = await res.json();
     expect(body.logs).toHaveProperty('movie-chat-2026-04-13.jsonl');
     expect(body.logs).toHaveProperty('movie-chat-2026-04-12.jsonl');
-    expect(body.logs).toHaveProperty('electron.jsonl');
-    expect(body.logs).toHaveProperty('electron.1.jsonl');
+    expect(body.logs).toHaveProperty('custom.jsonl');
+    expect(body.logs).toHaveProperty('custom.1.jsonl');
     expect(body.logs).toHaveProperty('pm2-out.log');
     expect(body.logs).toHaveProperty('pm2-error.log');
     expect(body.logs).not.toHaveProperty('README.txt');

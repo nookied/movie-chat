@@ -1,6 +1,96 @@
 # Handoff
 
-## Latest pass (2026-04-21 — Newest tab sort fixes + panel layout)
+## Latest pass (2026-04-24 — bug-hunt + refactor sweep)
+
+### What changed
+
+Following the Electron removal, the same session did a repo-wide review: explore agent + plan agent produced 20 candidate findings; 6 were validated as real fixes, the rest were rejected (speculative, minor, or already intentional).
+
+**Security**
+- `app/api/files/diskspace/route.ts` — Path-prefix bypass: the allowlist check was bare `startsWith()`, so a configured `libraryDir=/media/lib` authorised `/media/library-private`. Now uses `path.resolve()` + `startsWith(base + path.sep)` for exact or true-child matches only. New `__tests__/api-diskspace.test.ts` locks the behaviour.
+
+**Fixes**
+- `app/api/setup/status/route.ts` — Was reading via `readConfig()`, which ignores env-var installs. Switched to `cfg()` so `OPENROUTER_API_KEY` / `OLLAMA_MODEL` count toward "complete" and stop triggering the `/setup` redirect.
+- `app/api/config/route.ts` — Looked up `diagnosticsToken` under env var `DIAGNOSTICS_TOKEN`, while `/api/diagnostics/bundle` reads `MOVIE_CHAT_DIAGNOSTICS_TOKEN`. Aligned both on `MOVIE_CHAT_DIAGNOSTICS_TOKEN`.
+- `lib/directTitleLookup.ts` — `"What's Up, Doc?"` was being rejected because the early-return guard dropped any title ending in `?`. Added an internal `allowQuestionMark` option gated on the quoted call sites — unquoted question-shaped input is still rejected.
+- `app/api/chat/route.ts`, `app/api/openrouter/test/route.ts` — `HTTP-Referer` is now the stable `https://github.com/nookied/movie-chat` instead of a dynamic value.
+
+**Refactor**
+- `lib/version.ts` (new) — Extracted the duplicate `getVersion()` that both `/api/config` and `/api/diagnostics/bundle` carried inline. Intentionally not cached — tests override `fs` mid-file, so a module-load cache breaks test isolation (hit this once and reverted).
+
+**Tests added**
+- `__tests__/api-diskspace.test.ts` — 5 tests (exact match, true child, sibling-prefix rejection, relative path, missing param).
+- `__tests__/api-config.test.ts` — asserts `cfg()` is invoked with `['diagnosticsToken', 'MOVIE_CHAT_DIAGNOSTICS_TOKEN']`.
+- `__tests__/setup.test.ts` — 3 tests under `/api/setup/status route — env-var fallback`.
+- `__tests__/direct-title-lookup.test.ts` — 3 tests for quoted-title question-mark handling.
+
+**Rejected findings (worth recording)**
+Out of 20 candidate issues, 14 were rejected after verification:
+- `autoMove` `movedCount` increment — documented deliberate behaviour, not a bug.
+- OAuth PKCE verifier "unused" — verifier is used by the callback per PKCE spec.
+- Regex "ReDoS" on the strip regex — not backtracking quadratically when measured.
+- Other speculative cleanup / micro-opts that didn't justify the churn.
+
+### Validation
+
+```
+npm run lint   # pass, 0 warnings
+npm test       # 36 files / 644 tests — all green (up from 632)
+npm run build  # clean
+```
+
+### Known follow-ups
+
+- `version.ts` could be cached if test isolation is handled (e.g. via `vi.resetModules()` awareness). Not worth the complexity right now — the fs read is negligible.
+- 14 rejected findings are not silently dropped — they're captured in this block so the next pass doesn't re-surface them as "new" signal.
+
+---
+
+## Previous pass (2026-04-24 — Electron desktop app removed)
+
+### What changed
+
+**Removal** — Dropped the `.dmg` distribution path entirely. Install `.sh` one-liner is now the only supported route.
+
+Deleted:
+- `electron/` (main.js, setup.js, setup.html, preload.js, icon.icns)
+- `electron-builder.yml`
+
+Edited:
+- `package.json` — dropped `main`, `electron:dev`, `electron:build`, `release` scripts; dropped `electron`, `electron-builder`, `electron-updater` deps. Lockfile regenerated (437 packages, down from previous tree with Electron)
+- `docs/index.html` — rewrote landing page around the `install.sh` one-liner; removed the GitHub-API-based `.dmg` asset lookup and the "no Terminal" messaging; secondary CTAs now point at the repo and README
+- `README.md` — removed Option A (desktop app) and collapsed the three-option install section into a single "one-liner + manual" pair; dropped desktop-updater / desktop-uninstall sub-sections; dropped `electron:*` / `release` from the scripts reference; bumped version banner 2.2.0 → 2.3.0
+- `CLAUDE.md` + `AGENTS.md` — dropped the 4 `electron/` rows from the key-files table; replaced the "Electron desktop app" section with a minimal "Setup wizard" note; dropped the "Electron desktop app" deployment subsection; trimmed the landing-page deployment entry to reflect the install-command CTA; rewrote the logger log-directory resolution entry so `MOVIE_CHAT_LOG_DIR` is described as a generic override rather than Electron-specific; dropped the `electron.jsonl` caps sentence
+- `NEXT_STEPS.md` — dropped "Electron lifecycle refactors" from the Non-goals list
+- `CHANGELOG.md` — added `[Unreleased] → Removed` entry capturing the rationale (Gatekeeper without code signing, Homebrew-based first-run brittleness, single-maintainer test footprint)
+- `lib/logger.ts` — removed stale "set by electron/main.js" comment in the log-dir resolution header
+- `next.config.mjs` — updated stale "Required for Electron packaging" comment; `output: 'standalone'` is kept because pm2 deploys still benefit from the self-contained server bundle
+- `.gitignore` + `.eslintignore` — dropped `dist-electron` entries
+- `__tests__/setup.test.ts` — landing-page integrity test now checks for the `install.sh` one-liner CTA instead of a `.dmg` GitHub-API script
+- `__tests__/diagnostics-bundle.test.ts` + `__tests__/logger.test.ts` — replaced `electron.jsonl` / `electron.1.jsonl` fixture filenames with generic `custom.jsonl` / `custom.1.jsonl` (no behaviour change — tests exercise directory-reading and prune-regex logic with any non-matching filename)
+
+### Rationale
+
+Three structural issues drove the decision, not a single install bug: (1) `electron-builder.yml` had `identity: null`, so every first-open hit macOS Gatekeeper; fixing this requires an Apple Developer cert ($99/year) plus a notarization flow. (2) `electron/setup.js` tried to install Plex, Transmission, and Ollama via Homebrew across arbitrary Mac configurations — the testing matrix (clean VM, partial pre-install, multiple macOS versions) is impractical for a single maintainer with no macOS CI runner. (3) Every release required a manual `GH_TOKEN=<token> npm run release` from one machine, so regressions were caught by users rather than CI.
+
+The bare-metal `install.sh` path was already tested in CI (`__tests__/shell-scripts.test.ts`) and is architecturally simpler.
+
+### Validation
+
+```
+npm install    # 437 packages (down from ~600+ with Electron)
+npm run lint   # pending — see below
+npm test       # pending — see below
+```
+
+### Known follow-ups
+
+- No off-ramp shipped for any existing `.dmg` users still on the auto-updater. If anyone has the old build installed, they'll silently stop receiving updates. Release was already taken down by the user before this pass, so any existing installs are already detached from the update feed.
+- Memory entry describing the `npm run release` / `GH_TOKEN` workflow needs to be deleted (handled during this pass).
+
+---
+
+## Previous pass (2026-04-21 — Newest tab sort fixes + panel layout)
 
 ### What changed
 

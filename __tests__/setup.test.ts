@@ -47,6 +47,61 @@ describe('/api/setup/status logic', () => {
   });
 });
 
+describe('/api/setup/status route — env-var fallback', () => {
+  // Regression: env-var-only installs were treated as incomplete because
+  // the route used readConfig() directly instead of cfg().
+  it('honors OPENROUTER_API_KEY env var when no config file key is set', async () => {
+    vi.resetModules();
+    vi.doMock('@/lib/config', () => ({
+      cfg: (_key: string, envVar: string) => process.env[envVar] ?? '',
+    }));
+    const original = process.env.OPENROUTER_API_KEY;
+    process.env.OPENROUTER_API_KEY = 'sk-or-env-only';
+    try {
+      const mod = await import('@/app/api/setup/status/route');
+      const res = await mod.GET();
+      const body = await res.json();
+      expect(body.complete).toBe(true);
+    } finally {
+      if (original === undefined) delete process.env.OPENROUTER_API_KEY;
+      else process.env.OPENROUTER_API_KEY = original;
+      vi.doUnmock('@/lib/config');
+    }
+  });
+
+  it('honors OLLAMA_MODEL env var when no config file key is set', async () => {
+    vi.resetModules();
+    vi.doMock('@/lib/config', () => ({
+      cfg: (_key: string, envVar: string) => process.env[envVar] ?? '',
+    }));
+    const original = process.env.OLLAMA_MODEL;
+    process.env.OLLAMA_MODEL = 'llama3.2';
+    try {
+      const mod = await import('@/app/api/setup/status/route');
+      const res = await mod.GET();
+      const body = await res.json();
+      expect(body.complete).toBe(true);
+    } finally {
+      if (original === undefined) delete process.env.OLLAMA_MODEL;
+      else process.env.OLLAMA_MODEL = original;
+      vi.doUnmock('@/lib/config');
+    }
+  });
+
+  it('returns incomplete when neither config nor env vars are set', async () => {
+    vi.resetModules();
+    vi.doMock('@/lib/config', () => ({ cfg: () => '' }));
+    try {
+      const mod = await import('@/app/api/setup/status/route');
+      const res = await mod.GET();
+      const body = await res.json();
+      expect(body.complete).toBe(false);
+    } finally {
+      vi.doUnmock('@/lib/config');
+    }
+  });
+});
+
 // ── /api/setup/detect probe logic ───────────────────────────────────────────
 
 describe('/api/setup/detect probe logic', () => {
@@ -142,14 +197,14 @@ describe('landing page (docs/index.html)', () => {
     expect(html).toContain('<title>Movie Chat');
   });
 
-  it('has a download button linking to GitHub releases', () => {
-    expect(html).toContain('id="download-btn"');
-    expect(html).toContain('github.com/nookied/movie-chat/releases');
+  it('advertises the install.sh one-liner', () => {
+    expect(html).toContain('install.sh');
+    expect(html).toContain('curl -fsSL');
   });
 
-  it('has the dynamic download URL script', () => {
-    expect(html).toContain('api.github.com/repos/nookied/movie-chat/releases/latest');
-    expect(html).toContain('.dmg');
+  it('links to the GitHub repo and README', () => {
+    expect(html).toContain('github.com/nookied/movie-chat');
+    expect(html).toContain('README.md');
   });
 
   it('has a favicon', () => {
@@ -189,7 +244,7 @@ describe('landing page (docs/index.html)', () => {
 
   it('has the GitHub footer links', () => {
     expect(html).toContain('GitHub');
-    expect(html).toContain('Releases');
+    expect(html).toContain('Docs');
     expect(html).toContain('Changelog');
   });
 });

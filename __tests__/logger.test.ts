@@ -342,8 +342,8 @@ describe('logger', () => {
     it('ignores non-matching filenames during prune', async () => {
       fsMock.readdirSync.mockReturnValue([
         'README.md',
-        'electron.jsonl',          // different pattern
-        'electron.1.jsonl',
+        'custom.jsonl',            // different pattern
+        'custom.1.jsonl',
         'pm2-out.log',
         'movie-chat-backup.jsonl', // malformed date
       ]);

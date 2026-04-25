@@ -24,9 +24,6 @@ app-torrents.json
 # Claude Code
 .claude/
 
-# electron build output
-/dist-electron
-
 # misc
 .DS_Store
 *.pem

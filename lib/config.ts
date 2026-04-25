@@ -34,7 +34,8 @@ export const SENSITIVE: Array<keyof AppConfig> = [
   'transmissionPassword',
 ];
 
-// Configurable via env var so Electron can store config in ~/Library/Application Support/MovieChat/
+// Configurable via env var for reverse-proxied / containerised deployments where
+// the config file lives outside the working directory.
 const CONFIG_PATH = process.env.CONFIG_PATH ?? path.join(process.cwd(), 'config.local.json');
 
 // Cache config for 30 s to avoid a sync disk read on every cfg() call.

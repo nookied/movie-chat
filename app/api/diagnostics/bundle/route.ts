@@ -20,6 +20,7 @@ import fs from 'fs';
 import path from 'path';
 import { cfg, readConfig, SENSITIVE, type AppConfig } from '@/lib/config';
 import { getLogDir } from '@/lib/logger';
+import { getVersion } from '@/lib/version';
 
 const MAX_BUNDLE_BYTES = 50 * 1024 * 1024;
 
@@ -36,18 +37,6 @@ function filenameTimestamp(): string {
   const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const time = `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
   return `${date}_${time}`;
-}
-
-function getVersion(): string {
-  // process.env.npm_package_version is only set when started via npm —
-  // Electron spawns the server directly, so read package.json explicitly.
-  try {
-    const pkgPath = path.join(process.cwd(), 'package.json');
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version?: string };
-    return pkg.version ?? 'unknown';
-  } catch {
-    return process.env.npm_package_version ?? 'unknown';
-  }
 }
 
 function redactedConfig(): Record<string, string> {

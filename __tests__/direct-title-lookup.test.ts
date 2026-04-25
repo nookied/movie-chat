@@ -92,6 +92,26 @@ describe('extractDirectTitleLookup', () => {
   it('does not short-circuit when multiple quoted titles are present', () => {
     expect(extractDirectTitleLookup('between "alien" and "aliens", which should i watch?')).toBeNull();
   });
+
+  it('accepts a fully quoted title ending in a question mark', () => {
+    expect(extractDirectTitleLookup('"What\'s Up, Doc?"')).toEqual({
+      title: "What's Up, Doc?",
+      type: 'movie',
+      year: undefined,
+    });
+  });
+
+  it('accepts a quoted title with question mark embedded in a command', () => {
+    expect(extractDirectTitleLookup('find me "Who Framed Roger Rabbit?"')).toEqual({
+      title: 'Who Framed Roger Rabbit?',
+      type: 'movie',
+      year: undefined,
+    });
+  });
+
+  it('still rejects unquoted question-shaped input', () => {
+    expect(extractDirectTitleLookup('what is the best horror movie?')).toBeNull();
+  });
 });
 
 describe('recommendationTag', () => {

@@ -68,10 +68,13 @@ function extractYearSuffix(title: string): { title: string; year?: number } {
 function buildRecommendation(
   rawTitle: string,
   type: 'movie' | 'tv' = 'movie',
-  forcedYear?: number
+  forcedYear?: number,
+  options: { allowQuestionMark?: boolean } = {}
 ): Recommendation | null {
   const trimmed = stripOuterQuotes(rawTitle).replace(/[.!]+$/, '').replace(/\s+/g, ' ').trim();
-  if (!trimmed || trimmed.endsWith('?')) return null;
+  // Reject question-mark endings only for unquoted inputs — a bare "is interstellar any good?"
+  // is a question, but an explicitly quoted title like `"What's Up, Doc?"` should still resolve.
+  if (!trimmed || (!options.allowQuestionMark && trimmed.endsWith('?'))) return null;
 
   const cased = maybeTitleCase(trimmed);
   const { title, year } = forcedYear !== undefined
@@ -95,7 +98,7 @@ export function extractDirectTitleLookup(text: string): Recommendation | null {
   if (quotedOnly) {
     const title = quotedOnly[1] ?? quotedOnly[2] ?? quotedOnly[3] ?? quotedOnly[4];
     const year = quotedOnly[5] ? Number(quotedOnly[5]) : undefined;
-    return buildRecommendation(title, 'movie', year);
+    return buildRecommendation(title, 'movie', year, { allowQuestionMark: true });
   }
 
   const quotedSegments = Array.from(trimmed.matchAll(QUOTED_SEGMENT));
@@ -105,7 +108,7 @@ export function extractDirectTitleLookup(text: string): Recommendation | null {
     const afterQuote = trimmed.slice(match.index! + match[0].length);
     const trailingYear = afterQuote.match(/^\s+\(?((?:18|19|20)\d{2})\)?(?:[.!])?\s*$/);
     const year = trailingYear?.[1] ? Number(trailingYear[1]) : undefined;
-    return buildRecommendation(title, inferTypeFromContext(trimmed), year);
+    return buildRecommendation(title, inferTypeFromContext(trimmed), year, { allowQuestionMark: true });
   }
 
   const explicitPatterns = [
@@ -128,7 +131,8 @@ export function extractDirectTitleLookup(text: string): Recommendation | null {
     return buildRecommendation(
       quotedCommand.groups.title,
       inferTypeFromContext(trimmed),
-      quotedCommand.groups.year ? Number(quotedCommand.groups.year) : undefined
+      quotedCommand.groups.year ? Number(quotedCommand.groups.year) : undefined,
+      { allowQuestionMark: true }
     );
   }
 

@@ -12,7 +12,7 @@ export async function GET() {
     const res = await fetch('https://openrouter.ai/api/v1/models', {
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer': 'http://localhost:3000',
+        'HTTP-Referer': 'https://github.com/nookied/movie-chat',
         'X-Title': 'Movie Chat',
       },
       signal: AbortSignal.timeout(8000),

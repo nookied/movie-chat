@@ -10,8 +10,8 @@ Updated: 2026-04-21 (Newest tab sort fixes + panel layout)
 | File | Suite | Count | Status |
 |------|-------|-------|--------|
 | `__tests__/eztv.test.ts` | TV torrent search + scoring (incl. `&` → `and` normalisation) | 58 | Implemented |
-| `__tests__/api-config.test.ts` | Config API CRUD + redaction | 52 | Implemented |
-| `__tests__/setup.test.ts` | Setup wizard, probes, middleware | 37 | Implemented |
+| `__tests__/api-config.test.ts` | Config API CRUD + redaction (incl. `MOVIE_CHAT_DIAGNOSTICS_TOKEN` env-var name assertion) | 53 | Implemented |
+| `__tests__/setup.test.ts` | Setup wizard, probes, middleware (incl. env-var fallback for `/api/setup/status`) | 40 | Implemented |
 | `__tests__/middleware.test.ts` | IP extraction, RFC-1918, LAN guard | 33 | Implemented |
 | `__tests__/plex.test.ts` | Plex library search + TV seasons (incl. `&` → `and` on subtitle variants) | 31 | Implemented |
 | `__tests__/logger.test.ts` | JSONL logger rotation + caps | 27 | Implemented |
@@ -27,7 +27,7 @@ Updated: 2026-04-21 (Newest tab sort fixes + panel layout)
 | `__tests__/autoMove.test.ts` | Auto-move poller logic | 16 | Implemented |
 | `__tests__/config.test.ts` | Config read/write/cache | 16 | Implemented |
 | `__tests__/api-transmission-add.test.ts` | Transmission add + validation | 13 | Implemented |
-| `__tests__/direct-title-lookup.test.ts` | Direct title parser (incl. Unicode title-casing via `\p{Ll}`) | 13 | Implemented |
+| `__tests__/direct-title-lookup.test.ts` | Direct title parser (incl. Unicode title-casing via `\p{Ll}`; quoted titles ending in `?` permitted) | 16 | Implemented |
 | `__tests__/media-keys.test.ts` | Media key normalisation (incl. movie-vs-TV separation, optional season suffix on `torrentKey`) | 13 | Implemented |
 | `__tests__/openrouter-callback.test.ts` | OAuth exchange + CSRF state (always required) | 13 | Implemented |
 | `__tests__/api-files-move.test.ts` | File move API route | 12 | Implemented |
@@ -42,10 +42,11 @@ Updated: 2026-04-21 (Newest tab sort fixes + panel layout)
 | `__tests__/api-plex-check.test.ts` | Plex check API route | 6 | Implemented |
 | `__tests__/request-ip.test.ts` | IP extraction from headers | 6 | Implemented |
 | `__tests__/api-transmission-status.test.ts` | Transmission status API route | 5 | Implemented |
+| `__tests__/api-diskspace.test.ts` | Diskspace API — path allowlist rejects sibling prefix bypass, requires absolute path | 5 | Implemented |
 | `__tests__/shell-scripts.test.ts` | `install.sh` / `update.sh` contract tests — fresh install, successful update, dirty skip, rollback, any-Node-version proceed | 5 | Implemented |
 | `__tests__/rate-limit.test.ts` | Shared `createRateLimiter` — per-IP limit enforcement, independent per-route instances, window reset | 4 | Implemented |
 
-**Total: 35 files / 632 tests** (plus `__e2e__/app-smoke.test.ts` — 4 production HTTP smoke tests via `npm run test:e2e`)
+**Total: 36 files / 644 tests** (plus `__e2e__/app-smoke.test.ts` — 4 production HTTP smoke tests via `npm run test:e2e`)
 
 ---
 
@@ -248,7 +249,7 @@ Key scenarios: season pack detection, complete-series detection, quality scoring
 
 ### 11. Config & Diagnostics
 
-**Covered by:** `config.test.ts` (16 tests), `api-config.test.ts` (52 tests), `diagnostics-bundle.test.ts` (21 tests)
+**Covered by:** `config.test.ts` (16 tests), `api-config.test.ts` (53 tests), `diagnostics-bundle.test.ts` (21 tests)
 
 Key scenarios: readConfig/writeConfig/cfg caching, sensitive field masking, diagnostics token redaction, bundle token validation, log file inclusion.
 
@@ -308,7 +309,7 @@ Key scenarios: readConfig/writeConfig/cfg caching, sensitive field masking, diag
 ## Running the Tests
 
 ```bash
-npm test                        # run all 632 unit/integration tests once
+npm test                        # run all 644 unit/integration tests once
 npm run test:watch              # watch mode
 npm run test:coverage           # with coverage thresholds
 npm run test:e2e                # built-app HTTP smoke tests
