@@ -1,11 +1,49 @@
 # Handoff
 
+## Latest pass (2026-04-30 — popular layout review + cleanup)
+
+### What changed
+
+Reviewed the uncommitted Popular page layout changes from the Antigravity/Gemini pass. The core fixes were directionally right, but the component still had fragile inline layout markup and a few mobile shrink risks.
+
+**Fixes**
+- `components/PopularMovieCard.tsx` — Kept the fixed two-line title slot, added `min-w-0` to the card itself as well as the text column, and kept the poster crop boundary intact so hover zoom and long titles cannot push the grid wider than the viewport.
+- `components/PopularMoviesPanel.tsx` — Reworked the tab/filter controls into shrink-safe mobile layouts. The Most Downloaded filters now use a two-column mobile grid with `min-w-0` selects, and the loading skeleton now matches the real card title/metadata height so the grid does not jump when results arrive.
+
+**Cleanup**
+- `components/PopularMoviesPanel.tsx` — Split the panel markup into named helper components (`PopularTabs`, `NewestSortSelect`, `DownloadedFilters`, `ResultCount`, `LoadingGrid`) and moved query-string construction into `buildPopularMoviesParams()`.
+- `CHANGELOG.md` — Replaced the overly detailed attempted-fix narrative with concise release-note entries, and added the panel cleanup to the simplify section.
+
+### Forensic notes
+
+The concern was valid: the layout issue had already gone through several partially-correct fixes, each fixing one symptom while creating another.
+
+1. `line-clamp-2` on the bare title fixed one-line truncation, but left short and long titles with different vertical rhythm, so the year/genre row floated at inconsistent heights.
+2. Moving the card body to flexbox and using `min-h-[2.5rem]` stabilized the metadata row, but the clamped title could still clip descenders in WebKit/Chrome because the clamp boundary and the intrinsic flex height disagreed.
+3. Wrapping the title in a fixed `h-11` slot with `leading-tight` and `pb-1` gave the title enough paint room, but any shrink-unsafe parent (`min-width: auto`) could still let long unbroken titles influence grid column width.
+4. The durable fix is the combination now in place: fixed title slot for vertical rhythm, `pb-1` for descenders, and `min-w-0` on the card/text containers so CSS Grid owns the column width.
+5. The filter row had the same family of risk: individual `shrink-0` controls worked on roomy screens, but could wrap one control at a time on narrow viewports. The current mobile layout treats genre/year as a two-column group, then lets them return to intrinsic width at `sm` and above.
+6. The loading skeleton was also adjusted because a shorter skeleton body can hide row-height jumps during manual testing; matching the real card title slot makes that state honest.
+
+### Validation
+
+```
+npm run lint    # pass
+npm test        # 36 files / 644 tests — pass
+npm run build   # pass
+GET /popular on local dev server 3002       # 200
+GET /api/yts/popular?sort_by=download_count&page=1&limit=2  # 200, returned 2 movies
+```
+
+Browser automation/screenshots were not available in this environment, so the frontend verification was code review + rendered HTML/API smoke rather than pixel screenshots.
+
 ## Latest pass (2026-04-30 — text wrap fix)
 
 ### What changed
 
 **Fixes**
-- `components/PopularMovieCard.tsx` — Text wrapping clip: Replaced block layout with flexbox and set a strict `min-h-[2.5rem]` on the title. This prevents WebKit grid intrinsic height bugs from horizontally cropping titles that wrap to a second line.
+- `components/PopularMovieCard.tsx` — Text wrapping clip: Increased title wrapper height to `h-11` (44px) and tightened line-height (`leading-tight`) to guarantee that 2-line titles never exceed the container bounds, preventing WebKit's `-webkit-line-clamp` from horizontally cropping descenders on iOS/macOS Safari. Added `pb-1` to the `h3` to push the `overflow: hidden` boundary down, and applied `min-w-0` to the parent flex container to prevent horizontal flexbox blowout.
+- `components/PopularMoviesPanel.tsx` — Header control wrapping: Grouped the genre and year dropdowns into a single `flex` container (`w-full sm:w-auto`) with `flex-1` children, updated the tab selector to `w-full sm:w-auto` with `flex-1` buttons, and made the "Newest" tab's sort dropdown `w-full sm:w-auto` instead of `shrink-0`. This ensures the filter panel components wrap gracefully on narrow mobile screens (or when DevTools is open), dropping the dropdowns onto their own shared row where they span the full width evenly.
 
 ## Previous pass (2026-04-24 — bug-hunt + refactor sweep)
 

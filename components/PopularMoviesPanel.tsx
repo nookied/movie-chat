@@ -5,10 +5,12 @@ import type { YtsMovieEntry, YtsPopularResult, YtsPopularSortBy } from '@/types'
 import { YTS_GENRES } from '@/lib/ytsGenres';
 import PopularMovieCard from './PopularMovieCard';
 
+type PopularTab = 'download_count' | 'year';
+
 // Top-level tabs. The Newest tab's actual sort_by is driven by NEWEST_SUB_SORTS
 // below; this value (`year`) is only used to identify the tab and as its
 // initial sub-sort.
-const SORT_OPTIONS: Array<{ value: 'download_count' | 'year'; label: string }> = [
+const SORT_OPTIONS: Array<{ value: PopularTab; label: string }> = [
   { value: 'download_count', label: 'Most Downloaded' },
   { value: 'year', label: 'Newest' },
 ];
@@ -44,6 +46,9 @@ const NEWEST_SUB_SORTS: Array<{ value: YtsPopularSortBy; label: string }> = [
 
 const PAGE_SIZE = 20;
 const FILTER_DEBOUNCE_MS = 300;
+const SELECT_CLASS =
+  'h-9 min-w-0 rounded-lg bg-plex-card border border-plex-border text-sm text-gray-200 px-3 py-1.5 focus:outline-none focus:border-plex-accent';
+const GRID_CLASS = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4';
 
 // The Newest tab is implicitly scoped to the last few years. Without this
 // the 'rating' and 'seeds' sorts surface all-time results from any decade,
@@ -52,8 +57,170 @@ function newestMinYear(): number {
   return new Date().getFullYear() - 3;
 }
 
+function buildPopularMoviesParams({
+  activeTab,
+  genre,
+  page,
+  sortBy,
+  yearValue,
+}: {
+  activeTab: PopularTab;
+  genre: string;
+  page: number;
+  sortBy: YtsPopularSortBy;
+  yearValue: string;
+}) {
+  const params = new URLSearchParams({
+    sort_by: sortBy,
+    page: String(page),
+    limit: String(PAGE_SIZE),
+  });
+
+  if (activeTab === 'download_count') {
+    if (genre) params.set('genre', genre);
+    const yearOpt = YEAR_OPTIONS.find((o) => o.value === yearValue);
+    if (yearOpt?.min !== undefined) params.set('minimum_year', String(yearOpt.min));
+    if (yearOpt?.max !== undefined) params.set('maximum_year', String(yearOpt.max));
+  } else {
+    params.set('minimum_year', String(newestMinYear()));
+  }
+
+  return params;
+}
+
+function PopularTabs({
+  activeTab,
+  onChange,
+}: {
+  activeTab: PopularTab;
+  onChange: (value: PopularTab) => void;
+}) {
+  return (
+    <div className="grid w-full shrink-0 grid-cols-2 overflow-hidden rounded-lg border border-plex-border bg-plex-card sm:flex sm:w-auto">
+      {SORT_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={activeTab === option.value}
+          onClick={() => onChange(option.value)}
+          className={`h-9 min-w-0 px-3 text-sm transition-colors ${
+            activeTab === option.value
+              ? 'bg-plex-accent font-medium text-black'
+              : 'text-gray-300 hover:bg-gray-700'
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function NewestSortSelect({
+  newestSort,
+  onChange,
+}: {
+  newestSort: YtsPopularSortBy;
+  onChange: (value: YtsPopularSortBy) => void;
+}) {
+  return (
+    <select
+      value={newestSort}
+      onChange={(e) => onChange(e.target.value as YtsPopularSortBy)}
+      className={`${SELECT_CLASS} w-full sm:w-auto`}
+      aria-label="Newest sort order"
+    >
+      {NEWEST_SUB_SORTS.map((option) => (
+        <option key={option.value} value={option.value}>{option.label}</option>
+      ))}
+    </select>
+  );
+}
+
+function DownloadedFilters({
+  genre,
+  onGenreChange,
+  onYearValueChange,
+  yearValue,
+}: {
+  genre: string;
+  onGenreChange: (value: string) => void;
+  onYearValueChange: (value: string) => void;
+  yearValue: string;
+}) {
+  return (
+    <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto">
+      <select
+        value={genre}
+        onChange={(e) => onGenreChange(e.target.value)}
+        className={`${SELECT_CLASS} w-full sm:w-auto`}
+        aria-label="Filter by genre"
+      >
+        <option value="">All genres</option>
+        {YTS_GENRES.map((genreOption) => (
+          <option key={genreOption} value={genreOption}>{genreOption}</option>
+        ))}
+      </select>
+
+      <select
+        value={yearValue}
+        onChange={(e) => onYearValueChange(e.target.value)}
+        className={`${SELECT_CLASS} w-full sm:w-auto`}
+        aria-label="Release year range"
+      >
+        {YEAR_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function ResultCount({
+  error,
+  from,
+  to,
+  totalCount,
+}: {
+  error: string | null;
+  from: number;
+  to: number;
+  totalCount: number;
+}) {
+  return (
+    <div className="mb-3 flex h-4 justify-end">
+      <span className="text-xs text-gray-400">
+        {totalCount > 0 && !error
+          ? `Showing ${from.toLocaleString()}–${to.toLocaleString()} of ${totalCount.toLocaleString()}`
+          : null}
+      </span>
+    </div>
+  );
+}
+
+function LoadingGrid() {
+  return (
+    <div className={GRID_CLASS}>
+      {Array.from({ length: PAGE_SIZE }, (_, i) => (
+        <div
+          key={`skeleton-${i}`}
+          className="overflow-hidden rounded-lg border border-plex-border bg-plex-card"
+        >
+          <div className="aspect-[2/3] animate-pulse bg-gray-800" />
+          <div className="p-2">
+            <div className="mb-1 h-11">
+              <div className="h-3 w-3/4 animate-pulse rounded bg-gray-700" />
+            </div>
+            <div className="h-2 w-1/2 animate-pulse rounded bg-gray-800" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function PopularMoviesPanel() {
-  const [activeTab, setActiveTab] = useState<'download_count' | 'year'>('download_count');
+  const [activeTab, setActiveTab] = useState<PopularTab>('download_count');
   const [newestSort, setNewestSort] = useState<YtsPopularSortBy>('year');
   const [genre, setGenre] = useState<string>('');
   const [yearValue, setYearValue] = useState<string>('');
@@ -61,7 +228,7 @@ export default function PopularMoviesPanel() {
 
   const sortBy: YtsPopularSortBy = activeTab === 'download_count' ? 'download_count' : newestSort;
 
-  const handleTabChange = (next: 'download_count' | 'year') => {
+  const handleTabChange = (next: PopularTab) => {
     if (next === activeTab) return;
     setActiveTab(next);
     setGenre('');
@@ -105,18 +272,8 @@ export default function PopularMoviesPanel() {
 
       setLoading(true);
       setError(null);
-      const params = new URLSearchParams();
-      params.set('sort_by', sortBy);
-      params.set('page', String(page));
-      params.set('limit', String(PAGE_SIZE));
-      if (activeTab === 'download_count') {
-        if (genre) params.set('genre', genre);
-        const yearOpt = YEAR_OPTIONS.find((o) => o.value === yearValue);
-        if (yearOpt?.min) params.set('minimum_year', String(yearOpt.min));
-        if (yearOpt?.max) params.set('maximum_year', String(yearOpt.max));
-      } else {
-        params.set('minimum_year', String(newestMinYear()));
-      }
+      const params = buildPopularMoviesParams({ activeTab, genre, page, sortBy, yearValue });
+
       try {
         const res = await fetch(`/api/yts/popular?${params.toString()}`, { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -165,75 +322,27 @@ export default function PopularMoviesPanel() {
     void loadPage();
   };
 
-  const selectClass =
-    'rounded-lg bg-plex-card border border-plex-border text-sm text-gray-200 px-3 py-1.5 focus:outline-none focus:border-plex-accent';
-
   return (
     <div className="max-w-[1400px] mx-auto p-4 sm:p-6">
       <div className="flex flex-wrap gap-3 items-center mb-3">
-        <div className="flex rounded-lg bg-plex-card border border-plex-border overflow-hidden shrink-0">
-          {SORT_OPTIONS.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => handleTabChange(o.value)}
-              className={`px-3 py-1.5 text-sm transition-colors ${
-                activeTab === o.value
-                  ? 'bg-plex-accent text-black font-medium'
-                  : 'text-gray-300 hover:bg-gray-700'
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
+        <PopularTabs activeTab={activeTab} onChange={handleTabChange} />
 
         {activeTab === 'year' ? (
-          <select
-            value={newestSort}
-            onChange={(e) => handleNewestSortChange(e.target.value as YtsPopularSortBy)}
-            className={`${selectClass} shrink-0`}
-            aria-label="Newest sort order"
-          >
-            {NEWEST_SUB_SORTS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+          <NewestSortSelect
+            newestSort={newestSort}
+            onChange={handleNewestSortChange}
+          />
         ) : (
-          <>
-            <select
-              value={genre}
-              onChange={(e) => handleGenreChange(e.target.value)}
-              className={`${selectClass} shrink-0`}
-              aria-label="Filter by genre"
-            >
-              <option value="">All genres</option>
-              {YTS_GENRES.map((g) => (
-                <option key={g} value={g}>{g}</option>
-              ))}
-            </select>
-
-            <select
-              value={yearValue}
-              onChange={(e) => handleYearValueChange(e.target.value)}
-              className={`${selectClass} shrink-0`}
-              aria-label="Release year range"
-            >
-              {YEAR_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </>
+          <DownloadedFilters
+            genre={genre}
+            onGenreChange={handleGenreChange}
+            onYearValueChange={handleYearValueChange}
+            yearValue={yearValue}
+          />
         )}
       </div>
 
-      <div className="flex justify-end mb-3">
-        <span className="text-xs text-gray-400">
-          {totalCount > 0 && !error
-            ? `Showing ${from.toLocaleString()}–${to.toLocaleString()} of ${totalCount.toLocaleString()}`
-            : null}
-        </span>
-      </div>
+      <ResultCount error={error} from={from} to={to} totalCount={totalCount} />
 
       {error ? (
         <div className="rounded-lg border border-plex-border bg-plex-card p-6 text-center">
@@ -249,24 +358,13 @@ export default function PopularMoviesPanel() {
       ) : showEmptyState ? (
         <div className="rounded-lg border border-plex-border bg-plex-card p-10 text-center">
           <p className="text-gray-300 mb-1">No matches for this filter.</p>
-          <p className="text-gray-500 text-sm">Try a different genre or loosen the minimum year.</p>
+          <p className="text-gray-500 text-sm">Try a different genre or year range.</p>
         </div>
+      ) : loading ? (
+        <LoadingGrid />
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-          {loading
-            ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
-                <div
-                  key={`skeleton-${i}`}
-                  className="rounded-lg overflow-hidden bg-plex-card border border-plex-border"
-                >
-                  <div className="aspect-[2/3] bg-gray-800 animate-pulse" />
-                  <div className="p-2 space-y-2">
-                    <div className="h-3 bg-gray-700 rounded animate-pulse w-3/4" />
-                    <div className="h-2 bg-gray-800 rounded animate-pulse w-1/2" />
-                  </div>
-                </div>
-              ))
-            : movies.map((m) => <PopularMovieCard key={m.ytsId} movie={m} />)}
+        <div className={GRID_CLASS}>
+          {movies.map((m) => <PopularMovieCard key={m.ytsId} movie={m} />)}
         </div>
       )}
 

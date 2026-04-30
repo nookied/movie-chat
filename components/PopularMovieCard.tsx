@@ -18,10 +18,10 @@ export default function PopularMovieCard({ movie }: Props) {
   return (
     <Link
       href={`/?rec=${rec}`}
-      className="group flex flex-col h-full rounded-lg overflow-hidden bg-plex-card border border-plex-border hover:border-plex-accent transition-colors"
+      className="group flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-plex-border bg-plex-card transition-colors hover:border-plex-accent"
       aria-label={`Send "${movie.title}" to chat`}
     >
-      <div className="relative aspect-[2/3] bg-gray-800 overflow-hidden shrink-0">
+      <div className="relative aspect-[2/3] shrink-0 overflow-hidden bg-gray-800">
         {movie.poster && !imgFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -29,10 +29,10 @@ export default function PopularMovieCard({ movie }: Props) {
             alt={`${movie.title} poster`}
             loading="lazy"
             onError={() => setImgFailed(true)}
-            className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-600">
+          <div className="flex h-full w-full items-center justify-center text-gray-600">
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-10 h-10">
               <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z" />
             </svg>
@@ -49,17 +49,19 @@ export default function PopularMovieCard({ movie }: Props) {
         )}
 
         {movie.synopsis && (
-          <div className="absolute inset-0 bg-black/85 p-3 opacity-0 group-hover:opacity-100 transition-opacity flex items-end">
+          <div className="absolute inset-0 flex items-end bg-black/85 p-3 opacity-0 transition-opacity group-hover:opacity-100">
             <p className="text-xs text-gray-200 line-clamp-6">{movie.synopsis}</p>
           </div>
         )}
       </div>
 
-      <div className="p-2 flex flex-col grow">
-        <h3 className="text-sm text-white font-medium line-clamp-2 min-h-[2.5rem] mb-1" title={movie.title}>
-          {movie.title}
-        </h3>
-        <div className="text-xs text-gray-400 truncate mt-auto">
+      <div className="flex min-w-0 grow flex-col p-2">
+        <div className="mb-1 h-11 min-w-0">
+          <h3 className="line-clamp-2 pb-1 text-sm font-medium leading-tight text-white" title={movie.title}>
+            {movie.title}
+          </h3>
+        </div>
+        <div className="mt-auto truncate text-xs text-gray-400">
           {movie.year}
           {firstGenre ? ` · ${firstGenre}` : ''}
         </div>
