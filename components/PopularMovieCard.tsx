@@ -18,10 +18,10 @@ export default function PopularMovieCard({ movie }: Props) {
   return (
     <Link
       href={`/?rec=${rec}`}
-      className="group block rounded-lg overflow-hidden bg-plex-card border border-plex-border hover:border-plex-accent transition-colors"
+      className="group flex flex-col h-full rounded-lg overflow-hidden bg-plex-card border border-plex-border hover:border-plex-accent transition-colors"
       aria-label={`Send "${movie.title}" to chat`}
     >
-      <div className="relative aspect-[2/3] bg-gray-800 overflow-hidden">
+      <div className="relative aspect-[2/3] bg-gray-800 overflow-hidden shrink-0">
         {movie.poster && !imgFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -55,11 +55,11 @@ export default function PopularMovieCard({ movie }: Props) {
         )}
       </div>
 
-      <div className="p-2 space-y-1">
-        <h3 className="text-sm text-white font-medium line-clamp-2" title={movie.title}>
+      <div className="p-2 flex flex-col grow">
+        <h3 className="text-sm text-white font-medium line-clamp-2 min-h-[2.5rem] mb-1" title={movie.title}>
           {movie.title}
         </h3>
-        <div className="text-xs text-gray-400 truncate">
+        <div className="text-xs text-gray-400 truncate mt-auto">
           {movie.year}
           {firstGenre ? ` · ${firstGenre}` : ''}
         </div>

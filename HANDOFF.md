@@ -1,6 +1,13 @@
 # Handoff
 
-## Latest pass (2026-04-24 — bug-hunt + refactor sweep)
+## Latest pass (2026-04-30 — text wrap fix)
+
+### What changed
+
+**Fixes**
+- `components/PopularMovieCard.tsx` — Text wrapping clip: Replaced block layout with flexbox and set a strict `min-h-[2.5rem]` on the title. This prevents WebKit grid intrinsic height bugs from horizontally cropping titles that wrap to a second line.
+
+## Previous pass (2026-04-24 — bug-hunt + refactor sweep)
 
 ### What changed
 
