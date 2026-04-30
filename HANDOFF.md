@@ -1,5 +1,28 @@
 # Handoff
 
+## Latest pass (2026-04-30 — YTS title mismatch fix)
+
+### What changed
+
+**Fix**
+- `lib/yts.ts` — Added `isPrefixMatch()` helper and four new match candidates (`prefixWithYear`, `prefixAnyYear`) inside `queryYts`. After the exact-title match fails, the function now checks whether the normalized search title and the normalized YTS title are a prefix of each other, subject to two guards: both strings must be ≥ 8 chars and differ by ≤ 2 chars. This catches TMDB vs YTS wording divergence at the singular/plural boundary (e.g. "Forbidden Fruit" → YTS "Forbidden Fruits") without creating false-positive matches like "The Dark" latching onto "The Dark Knight".
+- `__tests__/yts.test.ts` — Three new test cases: singular/plural match succeeds; length-difference > 2 is rejected; shorter title < 8 chars is rejected. 27 → 30 tests, all passing.
+- `CHANGELOG.md` — Added `Fixed` entry.
+
+### Root cause analysis
+
+Querying `movies-api.accel.li` directly for "Forbidden Fruit 2026" returns a single result titled "Forbidden Fruits" with two 1080p torrents (x264 and x265, 100 seeds each). The existing `normalizeTitle` pipeline produces `forbidden fruit` vs `forbidden fruits` — one character difference, no match. None of the three fallback strategies in `searchTorrents` fire because: the title has no punctuation to strip (Fallback 1 skipped) and no `: ` / ` - ` subtitle separator (Fallback 2 skipped). So the function returns `{ torrents: [], noSuitableQuality: false }` and the card displays "Not available to download".
+
+Secondary observation: a `curl` to the local `/api/torrents/search` endpoint hung for 2+ minutes despite `AbortSignal.timeout(8000)` in `queryYts`. The external API responds in ~0 ms from the same machine, so this appears to be `AbortSignal.timeout()` behaving unexpectedly in the Next.js dev runtime. It does not affect production behaviour (would just be slow to time out rather than fast), but is worth a separate look.
+
+### Validation
+
+```
+npm test __tests__/yts.test.ts   # 30 tests — pass
+```
+
+Production pickup: `npm run build && pm2 restart movie-chat` on the server.
+
 ## Latest pass (2026-04-30 — popular layout review + cleanup)
 
 ### What changed

@@ -6,7 +6,7 @@ Consolidated planned refactors and features. For session-specific follow-ups and
 
 ## Refactor: Chat Route Modularization
 
-**Target:** `app/api/chat/route.ts` (~344 lines).
+**Target:** `app/api/chat/route.ts` (~322 lines).
 
 The route currently owns: direct-title shortcut, rate limiting, prompt selection, request shaping for two providers, retry/backoff, provider fallback, think-tag filtering, SSE token extraction, and per-turn logging. That is workable but hard to evolve cleanly when provider behavior changes.
 
@@ -19,6 +19,7 @@ The route currently owns: direct-title shortcut, rate limiting, prompt selection
 - `lib/chat/streamSseText.ts` — provider-independent SSE-to-text stream adapter
 - `lib/chat/thinkFilter.ts` — extracted `ThinkFilter`
 - ~~`lib/chat/rateLimit.ts` — small reusable in-memory limiter~~ **DONE** 2026-04-19: extracted to `lib/rateLimit.ts`, already shared between `/api/chat` and `/api/yts/popular`, soft-capped at 10k tracked IPs
+- ~~`lib/chat/systemMessages.ts`~~ **DONE** (earlier session): prescriptive `[System]` injection messages already live here; the `lib/chat/` directory exists and is ready for the remaining splits
 
 ### Acceptance
 

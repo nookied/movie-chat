@@ -70,6 +70,16 @@ function normalizeTitle(t: string): string {
   return t.toLowerCase().replace(/\s*&\s*/g, ' and ').replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
 }
 
+// Catches singular/plural and minor wording differences where one title is a
+// prefix of the other (e.g. "Forbidden Fruit" vs "Forbidden Fruits").
+// Guards: both titles must be ≥8 chars and differ by ≤2 chars to avoid
+// false positives like "The Dark" matching "The Dark Knight".
+function isPrefixMatch(a: string, b: string): boolean {
+  if (Math.min(a.length, b.length) < 8) return false;
+  if (Math.abs(a.length - b.length) > 2) return false;
+  return a.startsWith(b) || b.startsWith(a);
+}
+
 // Query YTS and return matching torrents, or null if no exact-title match found.
 async function queryYts(
   searchTitle: string,
@@ -96,7 +106,13 @@ async function queryYts(
   const exactAnyYear = year !== undefined && options.strictYear
     ? undefined
     : movies.find((m) => normalizeTitle(m.title) === norm);
-  const match = exactWithYear ?? exactAnyYear;
+  const prefixWithYear = movies.find(
+    (m) => isPrefixMatch(normalizeTitle(m.title), norm) && (year === undefined || Math.abs(m.year - year) <= 1)
+  );
+  const prefixAnyYear = year !== undefined && options.strictYear
+    ? undefined
+    : movies.find((m) => isPrefixMatch(normalizeTitle(m.title), norm));
+  const match = exactWithYear ?? exactAnyYear ?? prefixWithYear ?? prefixAnyYear;
 
   if (!match?.torrents || match.torrents.length === 0) return null;
 

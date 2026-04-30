@@ -137,6 +137,25 @@ describe('searchTorrents() — title matching', () => {
     const result = await searchTorrents('Rosencrantz and Guildenstern Are Dead', 1990);
     expect(result.torrents).toHaveLength(1);
   });
+
+  it('matches singular/plural difference (e.g. "Forbidden Fruit" vs YTS "Forbidden Fruits")', async () => {
+    mockYts([makeMovie('Forbidden Fruits', 2026, [makeTorrent('1080p', 'web', 'x265', 100)])]);
+    const result = await searchTorrents('Forbidden Fruit', 2026);
+    expect(result.torrents).toHaveLength(1);
+    expect(result.torrents[0].movieTitle).toBe('Forbidden Fruits');
+  });
+
+  it('does not prefix-match when length difference exceeds 2 chars', async () => {
+    mockYts([makeMovie('The Dark Knight', 2008, [makeTorrent('1080p', 'bluray', 'x265', 100)])]);
+    const result = await searchTorrents('The Dark', 2008);
+    expect(result.torrents).toHaveLength(0);
+  });
+
+  it('does not prefix-match when the shorter title is under 8 chars', async () => {
+    mockYts([makeMovie('Parasite', 2019, [makeTorrent('1080p', 'bluray', 'x265', 100)])]);
+    const result = await searchTorrents('Parasit', 2019);
+    expect(result.torrents).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
